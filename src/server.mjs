@@ -1,0 +1,135 @@
+#!/usr/bin/env node
+// MCP server over stdio (newline-delimited JSON-RPC 2.0), no dependencies.
+import readline from 'node:readline'
+import * as core from './core.mjs'
+
+const SERVER = { name: 'dsh-bridge', version: '0.2.0' }
+const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
+
+const str = (description) => ({ type: 'string', description })
+const int = (description, d) => ({ type: 'integer', description, default: d })
+
+const TOOLS = [
+  {
+    name: 'dsh_list_workspaces',
+    description: 'List the workspaces (project folders) shown in the DeepSeek Harness sidebar. Needs the dsh-bridge-host plugin.',
+    inputSchema: { type: 'object', properties: {} },
+    run: () => core.api.workspaces(),
+  },
+  {
+    name: 'dsh_create_workspace',
+    description: 'Register a folder as a workspace in the DeepSeek Harness sidebar (creates the folder unless create_dir is false). Idempotent: an already registered folder returns its existing workspace. Needs the dsh-bridge-host plugin.',
+    inputSchema: { type: 'object', required: ['path'], properties: { path: str('Absolute folder path (~ allowed)'), title: str('Sidebar title; defaults to the folder name'), create_dir: { type: 'boolean', description: 'Create the folder if missing', default: true } } },
+    run: (a) => core.api.create_workspace(a),
+  },
+  {
+    name: 'dsh_list_sessions',
+    description: 'List saved DeepSeek Harness sessions, newest first, with title, workspace folder (cwd) and whether a run is active. Use it to find the session_id to continue.',
+    inputSchema: { type: 'object', properties: { cwd: str('Only sessions of this workspace folder'), query: str('Filter by text in title or folder'), limit: int('Max sessions', 20), include_subagents: { type: 'boolean', description: 'Also list sub-agent sessions', default: false } } },
+    run: (a) => core.api.list_sessions(a),
+  },
+  {
+    name: 'dsh_read_session',
+    description: 'Read the recent visible conversation (user prompts and assistant replies, with tool names) of one session.',
+    inputSchema: { type: 'object', required: ['session_id'], properties: { session_id: str('Session id, e.g. session-…'), last: int('How many recent messages', 10) } },
+    run: (a) => core.api.read_session(a),
+  },
+  {
+    name: 'dsh_send',
+    description: 'Send a message to DeepSeek Harness. With session_id it continues that existing session (same context, no new session); with cwd or workspace_id it starts a new session there (a cwd that is not a workspace yet is registered in the sidebar first). Returns immediately with a run_id; the turn runs in the background. If the session is already working, mode followup (default) queues the message after the current turn and steer adds it to the running turn; each message gets its own run_id. The message is delivered verbatim as a user message, with no prefix or label added: write it in the language the user works in, self-contained (Harness does not see this conversation), and say who is asking only if it matters. Follow up with dsh_wait or dsh_status.',
+    inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: 'followup queues after the current turn (default); steer injects into a running turn', default: 'followup' } } },
+    run: async (a) => {
+      const st = await core.api.send(a)
+      return { ...st, hint: `Run started. Wait with dsh_wait {"run_id":"${st.run_id}"}, or run \`dsh-bridge wait ${st.run_id}\` as a background shell command to be woken when it ends.` }
+    },
+  },
+  {
+    name: 'dsh_status',
+    description: 'Progress of a run: state (queued/running/waiting/completed/failed/cancelled), session_id, recent events (text, tool calls), final reply, and waiting_on when the turn is over but sub-agents or background jobs are still working.',
+    inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send'), tail: int('How many recent events', 20) } },
+    run: (a) => core.api.status(a),
+  },
+  {
+    name: 'dsh_wait',
+    description: 'Block until a run finishes (or the timeout passes) and return its final status and reply.',
+    inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send'), timeout_s: int('Seconds to wait before returning with timed_out', 300) } },
+    run: (a) => core.api.wait(a),
+  },
+  {
+    name: 'dsh_rename_session',
+    description: 'Rename a DeepSeek Harness session (shown in the sidebar).',
+    inputSchema: { type: 'object', required: ['session_id', 'title'], properties: { session_id: str('Session id'), title: str('New title') } },
+    run: (a) => core.api.rename_session(a),
+  },
+  {
+    name: 'dsh_rename_workspace',
+    description: 'Rename a DeepSeek Harness workspace (sidebar title only; the folder is not moved). Identify it by workspace_id or path.',
+    inputSchema: { type: 'object', required: ['title'], properties: { workspace_id: str('Workspace id'), path: str('Workspace folder'), title: str('New title') } },
+    run: (a) => core.api.rename_workspace(a),
+  },
+  {
+    name: 'dsh_session_activity',
+    description: 'What a session is doing right now: its running turn, sub-agents (any depth), background jobs and reminders, plus bridge runs. Check this before sending to a session that might be busy.',
+    inputSchema: { type: 'object', required: ['session_id'], properties: { session_id: str('Session id') } },
+    run: (a) => core.api.activity(a),
+  },
+  {
+    name: 'dsh_cancel',
+    description: 'Stop everything a session is doing (running turn, sub-agents, background jobs), by run_id or session_id. Messages still waiting in the queue are not removed.',
+    inputSchema: { type: 'object', properties: { run_id: str('Run id'), session_id: str('Session id (to stop work the bridge did not start)') } },
+    run: (a) => core.api.cancel(a),
+  },
+  {
+    name: 'dsh_list_runs',
+    description: 'List recent runs started through this bridge, newest first.',
+    inputSchema: { type: 'object', properties: { limit: int('Max runs', 10) } },
+    run: (a) => core.api.list_runs(a),
+  },
+]
+
+function send(msg) {
+  process.stdout.write(JSON.stringify(msg) + '\n')
+}
+
+async function handle(req) {
+  switch (req.method) {
+    case 'initialize': {
+      const asked = req.params?.protocolVersion
+      return {
+        protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
+        capabilities: { tools: {} },
+        serverInfo: SERVER,
+        instructions: 'Bridge to a local DeepSeek Harness. Find a session with dsh_list_sessions, continue it with dsh_send {session_id, message}, then dsh_wait for the reply. A run in state "waiting" needs a person to answer in the Harness UI.',
+      }
+    }
+    case 'ping':
+      return {}
+    case 'tools/list':
+      return { tools: TOOLS.map(({ run, ...t }) => t) }
+    case 'tools/call': {
+      const tool = TOOLS.find((t) => t.name === req.params?.name)
+      if (!tool) throw Object.assign(new Error(`Unknown tool: ${req.params?.name}`), { code: -32602 })
+      try {
+        const result = await tool.run(req.params.arguments || {})
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+      } catch (e) {
+        return { content: [{ type: 'text', text: e.message }], isError: true }
+      }
+    }
+    default:
+      throw Object.assign(new Error(`Method not found: ${req.method}`), { code: -32601 })
+  }
+}
+
+const rl = readline.createInterface({ input: process.stdin })
+rl.on('line', async (line) => {
+  if (!line.trim()) return
+  let req
+  try { req = JSON.parse(line) } catch { return send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }) }
+  if (req.id === undefined) return // notification
+  try {
+    send({ jsonrpc: '2.0', id: req.id, result: await handle(req) })
+  } catch (e) {
+    send({ jsonrpc: '2.0', id: req.id, error: { code: e.code || -32603, message: e.message } })
+  }
+})

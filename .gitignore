@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+*.tmp
+
+# Local working notes (contain machine-specific paths and session ids)
+docs/HANDOFF.md
+docs/DEMO_PLAN.md
+docs/CODEX_TEST_REPORT.md
+docs/CODEX_TEST_EVIDENCE.json

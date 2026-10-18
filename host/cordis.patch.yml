@@ -1,0 +1,4 @@
+# dsh-bridge-host bundle layer: mounts the single host plugin row.
+- insert:
+    - id: dsh-bridge-host
+      name: dsh-bridge-host

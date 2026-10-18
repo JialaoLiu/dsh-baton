@@ -1,0 +1,42 @@
+{
+  "name": "dsh-bridge-mcp",
+  "version": "0.2.0",
+  "description": "MCP server that lets Claude Code, Codex and other MCP clients hand tasks to a local DeepSeek Harness: create workspaces and sessions, continue a specific session, and wait for results.",
+  "type": "module",
+  "bin": {
+    "dsh-bridge": "src/cli.mjs",
+    "dsh-bridge-mcp": "src/server.mjs"
+  },
+  "files": [
+    "src",
+    "patches",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.15"
+  },
+  "keywords": [
+    "mcp",
+    "deepseek",
+    "deepseek-harness",
+    "claude-code",
+    "codex",
+    "multi-agent",
+    "orchestration"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "test:live": "node tests/live.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JialaoLiu/dsh-bridge.git"
+  },
+  "homepage": "https://github.com/JialaoLiu/dsh-bridge#readme",
+  "bugs": {
+    "url": "https://github.com/JialaoLiu/dsh-bridge/issues"
+  }
+}

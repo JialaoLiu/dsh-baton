@@ -1,0 +1,45 @@
+{
+  "name": "dsh-bridge-host",
+  "version": "0.2.0",
+  "description": "DeepSeek Harness plugin that serves a local, owner-only control socket so dsh-bridge (an MCP server) can list sessions, continue a specific session, and wait for its turn to finish, all through the host's own session controller.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "manifestVersion": 1,
+    "engines": {
+      "dsh": ">=0.2.1-rc.2"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "mcp",
+    "bridge"
+  ],
+  "engines": {
+    "node": ">=22.15"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JialaoLiu/dsh-bridge.git",
+    "directory": "host"
+  },
+  "homepage": "https://github.com/JialaoLiu/dsh-bridge#readme"
+}
