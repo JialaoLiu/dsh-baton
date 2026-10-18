@@ -11,6 +11,16 @@ import zlib from 'node:zlib'
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-core-'))
 process.env.DSH_HOME = path.join(home, 'dsh')
 process.env.DSH_BRIDGE_SOCKET = path.join(home, 's.sock')
+process.env.DSH_BRIDGE_HOME = path.join(home, 'bridge')
+process.env.DSH_BRIDGE_ACCOUNT = '0'
+// A fake `dsh` that announces a session, then works for a while.
+const fakeDsh = path.join(home, 'fake-dsh')
+fs.writeFileSync(fakeDsh, `#!${process.execPath}
+process.stdin.resume()
+console.log(JSON.stringify({ type: 'session', sessionId: 'session-fake' }))
+setTimeout(() => { console.log(JSON.stringify({ type: 'final', text: 'fake done' })); process.exit(0) }, 8000)
+`, { mode: 0o755 })
+process.env.DSH_BIN = fakeDsh
 const core = await import('../src/core.mjs')
 test.after(() => fs.rmSync(home, { recursive: true, force: true }))
 
@@ -61,4 +71,50 @@ test('normalizePath expands ~ and follows symlinks', () => {
   fs.symlinkSync(real, `${real}-l`)
   assert.equal(core.normalizePath(`${real}-l`), real)
   fs.unlinkSync(`${real}-l`); fs.rmSync(real, { recursive: true })
+})
+
+test('hostCall rejects a null reply', async () => {
+  const server = await fakeServer((c) => c.write('null\n'))
+  await assert.rejects(core.hostCall('ping', {}, { timeoutMs: 2000 }), /unreadable reply/)
+  server.close()
+})
+
+const waitFor = async (cond, ms = 5000) => {
+  for (const end = Date.now() + ms; Date.now() < end; await new Promise((r) => setTimeout(r, 50))) if (cond()) return true
+  return false
+}
+
+test('headless: a cancel before the child starts stops the run and records cancelled', async () => {
+  const cwd = fs.mkdtempSync(path.join(home, 'w-'))
+  const runId = core.startRun({ cwd, message: 'x' })
+  core.cancelRun(runId)
+  const st = await core.waitRun(runId, { timeout_s: 15, poll_ms: 100 })
+  assert.equal(st.state, 'cancelled')
+  const exit = JSON.parse(fs.readFileSync(path.join(process.env.DSH_BRIDGE_HOME, 'runs', runId, 'exit.json'), 'utf8'))
+  assert.equal(exit.state, 'cancelled')
+})
+
+test('headless: cancelling a running child keeps the runner to record cancelled', async () => {
+  const cwd = fs.mkdtempSync(path.join(home, 'w-'))
+  const runId = core.startRun({ cwd, message: 'x' })
+  const dir = path.join(process.env.DSH_BRIDGE_HOME, 'runs', runId)
+  assert.ok(await waitFor(() => fs.existsSync(path.join(dir, 'pid.json'))), 'runner never started')
+  core.cancelRun(runId)
+  const st = await core.waitRun(runId, { timeout_s: 15, poll_ms: 100 })
+  assert.equal(st.state, 'cancelled')
+  assert.ok(fs.existsSync(path.join(dir, 'exit.json')), 'runner must write exit.json')
+})
+
+test('headless: run records are private to the user', async () => {
+  const cwd = fs.mkdtempSync(path.join(home, 'w-'))
+  const runId = core.startRun({ cwd, message: 'secret task' })
+  const dir = path.join(process.env.DSH_BRIDGE_HOME, 'runs', runId)
+  const mode = (p) => fs.statSync(p).mode & 0o777
+  assert.equal(mode(process.env.DSH_BRIDGE_HOME), 0o700)
+  assert.equal(mode(path.join(process.env.DSH_BRIDGE_HOME, 'runs')), 0o700)
+  assert.equal(mode(dir), 0o700)
+  assert.equal(mode(path.join(dir, 'message.txt')), 0o600)
+  assert.equal(mode(path.join(dir, 'meta.json')), 0o600)
+  core.cancelRun(runId)
+  await core.waitRun(runId, { timeout_s: 15, poll_ms: 100 })
 })

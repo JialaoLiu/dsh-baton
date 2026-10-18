@@ -44,6 +44,18 @@ Method: open-code-review in delegate mode (`ocr delegate preview` / `ocr delegat
 - **Cancel lost during sub-agent startup** (live test) — a stop that arrived while sub-agents were starting was dropped; the turn carried on and started them again. `cancel` now re-issues the stop until the session is quiet (up to 3 times, `CANCEL_ATTEMPTS`). Live re-test: stopped in 17 s.
 - **Followup result overwrote the previous run** (Codex test, fixed in the forked session) — runs now finish with their own result and `superseded_by`.
 
+## Second review (Codex, open-code-review delegate) — all fixed
+
+- **High — a followup completed an earlier run while its sub-agents were still working.** Superseded runs are now only closed for output; they complete once their background work (sub-agents, jobs, reminders) is gone. A bridge `steer` never closes earlier runs, including in a turn woken by sub-agents. Runs only complete after their own turn ended or the agent was seen idle.
+- **Medium — activity read failure treated as idle.** A failed read keeps the run waiting and retries every 3 s; after 10 consecutive failures the run completes with an explicit error.
+- **Medium — `null` reply crashed the MCP client; `null` request crashed the MCP server.** Both now validate the message shape and answer with an error (`-32600 Invalid Request` on the server).
+- **Medium — headless cancel during startup was lost.** The runner checks the cancel flag before and right after starting `dsh`.
+- **Medium — headless cancel killed the runner, losing the `cancelled` state.** Cancel now signals only the `dsh` child; the runner records `cancelled`.
+- **Medium — headless run records readable by other users.** Bridge home, `runs/` and run folders are `0700`; message, metadata and logs are `0600`.
+- **Test — symlink cleanup failed and the suite hung.** Already fixed before this review landed (`unlinkSync` for links).
+
+Simulation suite after these fixes: 32/32.
+
 ## Not issues (checked)
 
 - Socket protocol output: `JSON.stringify` never emits raw newlines, so line framing is safe.

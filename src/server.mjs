@@ -126,6 +126,9 @@ rl.on('line', async (line) => {
   if (!line.trim()) return
   let req
   try { req = JSON.parse(line) } catch { return send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }) }
+  if (req === null || typeof req !== 'object' || Array.isArray(req) || typeof req.method !== 'string') {
+    return send({ jsonrpc: '2.0', id: req?.id ?? null, error: { code: -32600, message: 'Invalid Request' } })
+  }
   if (req.id === undefined) return // notification
   try {
     send({ jsonrpc: '2.0', id: req.id, result: await handle(req) })

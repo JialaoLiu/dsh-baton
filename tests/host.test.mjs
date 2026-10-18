@@ -262,3 +262,61 @@ test('list_sessions cwd filter follows symlinks', async (t) => {
   const h = startHost({ sessions: [{ sessionId: 'a', cwd: real }, { sessionId: 'b', cwd: '/elsewhere' }] }); t.after(h.close); await h.ready
   assert.deepEqual((await h.call('list_sessions', { cwd: link })).map((r) => r.session_id), ['a'])
 })
+
+test('a followup does not complete a run whose sub-agents are still working', async (t) => {
+  let childBusy = true
+  const h = startHost({ activity: () => (childBusy ? [{ kind: 'subagent', items: [{ id: 'c', label: 'child' }] }] : []) })
+  t.after(h.close); await h.ready
+  const s = S('s1')
+  const first = await h.call('send', { session_id: 's1', message: 'fan out' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId))
+  h.emit(...s.text('children started')); h.emit(...s.turnEnd())
+  const next = await h.call('send', { session_id: 's1', message: 'something else' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[1].requestId))
+  h.emit(...s.text('something else done')); h.emit(...s.turnEnd()); h.emit(...s.status('idle'))
+  await sleep(400)
+  const mid = await h.call('status', { run_id: first.run_id })
+  assert.equal(mid.state, 'running', 'first run must wait for its sub-agent')
+  assert.equal(mid.superseded_by, next.run_id)
+  assert.equal(mid.final_text, 'children started')
+  assert.equal(mid.waiting_on[0].kind, 'subagent')
+  childBusy = false
+  const done = await h.call('wait', { run_id: first.run_id, timeout_s: 10 })
+  assert.equal(done.state, 'completed')
+  assert.equal(done.final_text, 'children started')
+})
+
+test('a bridge steer in a turn woken by sub-agents does not close the earlier run', async (t) => {
+  const h = startHost(); t.after(h.close); await h.ready
+  const s = S('s1')
+  const first = await h.call('send', { session_id: 's1', message: 'fan out' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId))
+  h.emit(...s.text('waiting for children')); h.emit(...s.turnEnd())
+  h.emit(...s.turnStart()) // woken by sub-agent results: no user message
+  const steer = await h.call('send', { session_id: 's1', message: 'also do X', mode: 'steer' })
+  h.emit(...s.userMessage(h.calls.prompt[1].requestId))
+  const st = await h.call('status', { run_id: first.run_id })
+  assert.equal(st.superseded_by, undefined)
+  h.emit(...s.text('children done, X done')); h.emit(...s.turnEnd()); h.emit(...s.status('idle'))
+  const [a, b] = await Promise.all([first, steer].map((r) => h.call('wait', { run_id: r.run_id, timeout_s: 5 })))
+  assert.equal(a.final_text, 'children done, X done')
+  assert.equal(b.final_text, 'children done, X done')
+})
+
+test('an activity read failure is not treated as idle', async (t) => {
+  let broken = true
+  const h = startHost({ activity: () => { if (broken) throw new Error('provider down'); return [] } })
+  t.after(h.close); await h.ready
+  const s = S('s1')
+  const run = await h.call('send', { session_id: 's1', message: 'x' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId))
+  h.emit(...s.text('done')); h.emit(...s.turnEnd()); h.emit(...s.status('idle'))
+  await sleep(300)
+  const mid = await h.call('status', { run_id: run.run_id })
+  assert.equal(mid.state, 'running')
+  assert.match(mid.error, /provider down/)
+  broken = false
+  const done = await h.call('wait', { run_id: run.run_id, timeout_s: 10 })
+  assert.equal(done.state, 'completed')
+  assert.equal(done.error, null)
+})

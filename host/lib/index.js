@@ -20,6 +20,7 @@ const MAX_RUNS = 100
 const QUIET_CONFIRM_MS = 2000
 const CANCEL_ATTEMPTS = 3
 const CANCEL_SETTLE_MS = 6000
+const ACTIVITY_MAX_ERRORS = 10
 
 function bridgeHome() {
   return process.env.DSH_BRIDGE_HOME || path.join(os.homedir(), '.dsh-bridge')
@@ -97,8 +98,12 @@ export function apply(ctx) {
   // once: a followup waits in Harness's queue behind the current turn, and a
   // steer joins the turn that is already running.
   const activeRunsFor = (sessionId) => [...runs.values()].filter((r) => r.sessionId === sessionId && isActive(r))
-  // Runs whose prompt has entered the conversation; the current turn's output belongs to them.
+  // Runs whose prompt has entered the conversation and that are not finished yet.
   const receiversFor = (sessionId) => activeRunsFor(sessionId).filter((r) => r.sawPrompt)
+  // Of those, the runs the current turn's output belongs to. A run is closed for
+  // output once a newer user-started turn begins; it may still wait for its
+  // sub-agents or jobs before it completes.
+  const outputReceiversFor = (sessionId) => receiversFor(sessionId).filter((r) => !r.outputClosed)
 
   function pushEvent(run, e) {
     run.events.push(e)
@@ -118,18 +123,25 @@ export function apply(ctx) {
     if (event.type === 'user/message') {
       const run = active.find((r) => r.requestId === data.source?.rpcId)
       const opensTurn = !turns.get(session.id)?.hasOutput
-      if (data.source?.kind === 'user' && opensTurn) {
+      if (data.source?.kind === 'user' && opensTurn && run?.mode !== 'steer') {
         // A new user-started turn: runs whose own turn already ended keep their
-        // result instead of absorbing this turn's output. (Turns woken by
-        // sub-agent results carry no user message, so they stay attributed.)
+        // result instead of absorbing this turn's output, but still wait for any
+        // sub-agents or jobs they started. Turns woken by sub-agent results carry
+        // no user message, and a bridge steer joins the current work, so neither
+        // closes earlier runs.
+        let closed = false
         for (const prev of active) {
-          if (prev !== run && prev.sawPrompt && prev.turnEnd) settle(prev, 'completed', { supersededBy: run?.id ?? 'user' })
+          if (prev !== run && prev.sawPrompt && prev.turnEnd && !prev.outputClosed) {
+            Object.assign(prev, { outputClosed: true, supersededBy: run?.id ?? 'user' })
+            closed = true
+          }
         }
+        if (closed) scheduleQuietCheck(session.id, 0)
       }
       if (run) Object.assign(run, { sawPrompt: true, state: 'running' })
       return
     }
-    const receivers = active.filter((r) => r.sawPrompt)
+    const receivers = outputReceiversFor(session.id)
     if (!receivers.length) return
     if (event.type === 'assistant/message') {
       turns.set(session.id, { hasOutput: true })
@@ -160,6 +172,7 @@ export function apply(ctx) {
   const quietTimers = new Map() // sessionId -> timeout
   const quietSinceBySession = new Map() // sessionId -> ms when activity was first seen empty
   const lastRunningAt = new Map() // sessionId -> ms of the last running status
+  const activityErrors = new Map() // sessionId -> consecutive activity read failures
 
   function scheduleQuietCheck(sessionId, delayMs) {
     clearTimeout(quietTimers.get(sessionId))
@@ -175,12 +188,38 @@ export function apply(ctx) {
     const receivers = receiversFor(sessionId)
     if (!receivers.length) return
     let items
-    try { items = await sessionActivity(sessionId) } catch { items = [] }
-    if (items.length === 0) {
+    try {
+      items = await sessionActivity(sessionId)
+      activityErrors.delete(sessionId)
+    } catch (error) {
+      // Unknown is not idle: keep waiting and retry; give up only after repeated failures.
+      const count = (activityErrors.get(sessionId) ?? 0) + 1
+      activityErrors.set(sessionId, count)
+      const message = `could not read session activity: ${error?.message ?? error}`
+      if (count >= ACTIVITY_MAX_ERRORS) {
+        activityErrors.delete(sessionId)
+        for (const run of receivers) settle(run, 'completed', { error: `${message} (gave up after ${count} tries; sub-agents may still be running)` })
+      } else {
+        for (const run of receivers) run.error = message
+        scheduleQuietCheck(sessionId, 3000)
+      }
+      return
+    }
+    const summary = (list) => list.map((g) => ({ kind: g.kind, count: g.items?.length ?? 0, labels: (g.items ?? []).map((i) => i.label ?? i.id) }))
+    // Closed runs: the running turn belongs to a newer run, so only their
+    // background work (sub-agents, jobs, reminders) keeps them open.
+    const background = items.filter((g) => g.kind !== 'turn')
+    for (const run of receivers.filter((r) => r.outputClosed)) {
+      if (background.length === 0) settle(run, 'completed', { waitingOn: null, error: null })
+      else run.waitingOn = summary(background)
+    }
+    // A run whose own turn has not ended (and that has not seen the agent idle) is not done yet.
+    const open = receivers.filter((r) => !r.outputClosed && (r.turnEnd || r.idleSeen))
+    if (items.length === 0 && open.length) {
       // After waiting on sub-agents or jobs, Harness wakes the agent for a final
       // turn shortly after they finish. Confirm the quiet holds for a moment (no
       // new running status) so that last turn is not missed.
-      const waited = receivers.some((r) => r.waitingOn)
+      const waited = open.some((r) => r.waitingOn)
       const quietSince = quietSinceBySession.get(sessionId)
       if (waited && (quietSince === undefined || (lastRunningAt.get(sessionId) ?? 0) > quietSince)) {
         quietSinceBySession.set(sessionId, Date.now())
@@ -188,13 +227,12 @@ export function apply(ctx) {
         return
       }
       quietSinceBySession.delete(sessionId)
-      for (const run of receivers) settle(run, 'completed', { waitingOn: null })
+      for (const run of open) settle(run, 'completed', { waitingOn: null, error: null })
       return
     }
     quietSinceBySession.delete(sessionId)
-    const waitingOn = items.map((g) => ({ kind: g.kind, count: g.items?.length ?? 0, labels: (g.items ?? []).map((i) => i.label ?? i.id) }))
-    for (const run of receivers) run.waitingOn = waitingOn
-    scheduleQuietCheck(sessionId, 3000)
+    for (const run of open) run.waitingOn = items.length ? summary(items) : run.waitingOn
+    if (receiversFor(sessionId).length) scheduleQuietCheck(sessionId, 3000)
   }
 
   ctx.effect(() => () => { for (const t of quietTimers.values()) clearTimeout(t) }, 'dsh-bridge-host quiet timers')
@@ -203,16 +241,17 @@ export function apply(ctx) {
     if (!agent) return
     if (status === 'running') lastRunningAt.set(agent.id, Date.now())
     const receivers = receiversFor(agent.id)
-    for (const run of receivers) {
+    for (const run of outputReceiversFor(agent.id)) {
       if (status === 'running') run.state = 'running'
       else if (status === 'waiting') run.state = 'waiting' // needs a person in the Harness UI (approval / question)
       else if (status === 'error') settle(run, 'failed')
+      else if (status === 'idle') run.idleSeen = true
     }
     if (status === 'idle' && receivers.length) scheduleQuietCheck(agent.id, 0)
   })
 
   ctx.on('agent/error', ({ agent, error }) => {
-    for (const run of agent ? receiversFor(agent.id) : []) run.error = String(error?.message ?? error)
+    for (const run of agent ? outputReceiversFor(agent.id) : []) run.error = String(error?.message ?? error)
   })
 
   // --- operations -----------------------------------------------------------
@@ -287,7 +326,7 @@ export function apply(ctx) {
     const ahead = activeRunsFor(sessionId).map((r) => r.id)
     const run = {
       id: `hrun-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`,
-      sessionId, requestId: crypto.randomUUID(), state: 'queued', sawPrompt: false,
+      sessionId, requestId: crypto.randomUUID(), mode, state: 'queued', sawPrompt: false,
       startedAt: new Date().toISOString(), endedAt: null, preview: message.slice(0, 200),
       events: [], finalText: null, turnEnd: null, error: null,
     }

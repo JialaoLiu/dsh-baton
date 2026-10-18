@@ -74,8 +74,9 @@ export function hostCall(method, params = {}, { timeoutMs = 15000 } = {}) {
       const nl = buf.indexOf('\n')
       if (nl === -1) return
       let msg
-      try { msg = JSON.parse(buf.slice(0, nl)) } catch { return finish(new Error(`dsh-bridge-host sent an unreadable reply to ${method}`)) }
-      msg.error ? finish(new Error(msg.error)) : finish(null, msg.result)
+      try { msg = JSON.parse(buf.slice(0, nl)) } catch { msg = null }
+      if (msg === null || typeof msg !== 'object' || Array.isArray(msg)) return finish(new Error(`dsh-bridge-host sent an unreadable reply to ${method}`))
+      msg.error ? finish(new Error(String(msg.error))) : finish(null, msg.result)
     })
     conn.on('error', (e) => finish(Object.assign(e, { hostDown: true })))
     conn.on('close', () => finish(new Error(`dsh-bridge-host closed the connection before answering ${method}`)))
@@ -212,6 +213,12 @@ function runsDir() {
   return path.join(config.bridgeHome, 'runs')
 }
 
+// Run records hold full prompts and replies: keep them private to this user.
+function ensurePrivateDir(dir) {
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
+  fs.chmodSync(dir, 0o700)
+}
+
 function runDir(runId) {
   if (!/^run-[\w-]+$/.test(runId)) throw new Error(`Invalid run id: ${runId}`)
   return path.join(runsDir(), runId)
@@ -223,8 +230,14 @@ function readJson(file) {
 
 function writeJson(file, value) {
   const tmp = `${file}.${process.pid}.tmp`
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2))
+  fs.writeFileSync(tmp, JSON.stringify(value, null, 2), { mode: 0o600 })
   fs.renameSync(tmp, file)
+}
+
+const cancelFlag = (dir) => path.join(dir, 'cancelled')
+
+function writeExit(dir, exit) {
+  writeJson(path.join(dir, 'exit.json'), { ended_at: new Date().toISOString(), ...exit })
 }
 
 function alive(pid) {
@@ -257,8 +270,10 @@ export function startRun({ message, session_id, cwd }) {
 
   const runId = `run-${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}-${crypto.randomBytes(3).toString('hex')}`
   const dir = runDir(runId)
-  fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(path.join(dir, 'message.txt'), message)
+  ensurePrivateDir(config.bridgeHome)
+  ensurePrivateDir(runsDir())
+  ensurePrivateDir(dir)
+  fs.writeFileSync(path.join(dir, 'message.txt'), message, { mode: 0o600 })
   writeJson(path.join(dir, 'meta.json'), {
     run_id: runId, session_id: session_id || null, cwd: workdir, started_at: new Date().toISOString(),
     message_preview: message.slice(0, 200),
@@ -279,10 +294,15 @@ export async function executeRun(runId) {
   if (meta.session_id) args.push('--session-id', meta.session_id)
   args.push('-')
 
-  const events = fs.createWriteStream(path.join(dir, 'events.ndjson'))
-  const stderr = fs.openSync(path.join(dir, 'stderr.log'), 'w')
+  // A cancel that arrived before the child started: never start it.
+  if (fs.existsSync(cancelFlag(dir))) return writeExit(dir, { exit_code: null, signal: null, state: 'cancelled' })
+
+  const events = fs.createWriteStream(path.join(dir, 'events.ndjson'), { mode: 0o600 })
+  const stderr = fs.openSync(path.join(dir, 'stderr.log'), 'w', 0o600)
   const child = spawn(dshBin(), args, { cwd: meta.cwd, stdio: ['pipe', 'pipe', stderr], env: process.env })
   writeJson(path.join(dir, 'pid.json'), { runner: process.pid, dsh: child.pid })
+  // A cancel that arrived while the child was starting (before pid.json existed).
+  if (fs.existsSync(cancelFlag(dir))) child.kill('SIGTERM')
   fs.createReadStream(path.join(dir, 'message.txt')).pipe(child.stdin)
 
   // Keep only JSON lines; the CLI also prints plain log lines on stdout.
@@ -297,11 +317,8 @@ export async function executeRun(runId) {
   const [code, signal] = await new Promise((resolve) => child.on('close', (c, s) => resolve([c, s])))
   if (pending.startsWith('{')) events.write(pending + '\n')
   await new Promise((resolve) => events.end(resolve))
-  const cancelled = fs.existsSync(path.join(dir, 'cancelled'))
-  writeJson(path.join(dir, 'exit.json'), {
-    exit_code: code, signal, ended_at: new Date().toISOString(),
-    state: cancelled ? 'cancelled' : code === 0 ? 'completed' : 'failed',
-  })
+  const cancelled = fs.existsSync(cancelFlag(dir))
+  writeExit(dir, { exit_code: code, signal, state: cancelled ? 'cancelled' : code === 0 ? 'completed' : 'failed' })
 }
 
 export function runStatus(runId, { tail = 20 } = {}) {
@@ -332,6 +349,7 @@ export function runStatus(runId, { tail = 20 } = {}) {
   let state = exit?.state
   // No pid file yet means the runner is still starting; give it 30 s before calling it failed.
   if (!state) state = pids ? (alive(pids.runner) ? 'running' : 'failed') : (Date.now() - Date.parse(meta.started_at) < 30_000 ? 'running' : 'failed')
+  if (state === 'failed' && !exit && fs.existsSync(cancelFlag(dir))) state = 'cancelled'
   let error = timeline.filter((e) => e.type === 'error').map((e) => e.message).join('\n') || null
   if (state === 'failed' && !error) {
     try { error = fs.readFileSync(path.join(dir, 'stderr.log'), 'utf8').split('\n').filter((l) => l.startsWith('dsh: ') || /error/i.test(l)).slice(-5).join('\n') || null } catch { /* none */ }
@@ -364,13 +382,16 @@ export async function waitForSessionId(runId, timeoutMs = 8000) {
   return runStatus(runId, { tail: 0 })
 }
 
+// Stop only the dsh child; the runner stays alive to record the cancelled state.
+// Without a pid yet, the runner sees the flag and does not start (or stops) the child.
 export function cancelRun(runId) {
   const dir = runDir(runId)
   const st = runStatus(runId, { tail: 0 })
   if (st.state !== 'running') return st
-  fs.writeFileSync(path.join(dir, 'cancelled'), '')
+  fs.writeFileSync(cancelFlag(dir), '', { mode: 0o600 })
   const pids = readJson(path.join(dir, 'pid.json'))
-  for (const pid of [pids?.dsh, pids?.runner]) { try { process.kill(pid, 'SIGTERM') } catch { /* gone */ } }
+  if (pids?.dsh) { try { process.kill(pids.dsh, 'SIGTERM') } catch { /* already gone */ } }
+  if (pids && !alive(pids.runner)) writeExit(dir, { exit_code: null, signal: null, state: 'cancelled' })
   return { ...st, state: 'cancelling' }
 }
 

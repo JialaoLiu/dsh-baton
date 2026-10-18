@@ -41,3 +41,18 @@ test('initialize, tools/list and an unreachable-host tool call', async () => {
   assert.equal(byId[4].error.code, -32601)
   assert.equal(replies.length, 4) // the notification gets no reply
 })
+
+test('a null or malformed request gets an error reply and the server keeps working', async () => {
+  const raw = await new Promise((resolve) => {
+    const child = spawn(process.execPath, [SERVER], { env: { ...process.env, DSH_BRIDGE_BACKEND: 'host', DSH_BRIDGE_SOCKET: path.join(os.tmpdir(), 'dshb-missing.sock') } })
+    let out = ''
+    child.stdout.on('data', (d) => { out += d })
+    child.on('close', (code) => resolve({ code, lines: out.trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) }))
+    child.stdin.write('null\n[]\n42\n{"jsonrpc":"2.0","id":7}\n')
+    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 8, method: 'ping' }) + '\n')
+    setTimeout(() => child.stdin.end(), 800)
+  })
+  assert.equal(raw.code, 0)
+  assert.equal(raw.lines.filter((l) => l.error?.code === -32600).length, 4)
+  assert.deepEqual(raw.lines.find((l) => l.id === 8).result, {})
+})
