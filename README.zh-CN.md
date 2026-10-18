@@ -22,6 +22,21 @@
 
 需要：DeepSeek Harness ≥ 0.2.1-rc.2 并已登录；Node.js ≥ 22.15。
 
+**最快：** 把下面这段发给 Claude Code 或 Codex，让它帮你装：
+
+```text
+帮我装好 dsh-bridge。
+1. 接入 MCP 服务器。Claude Code 里运行：claude mcp add dsh-bridge -s user -- npx -y dsh-bridge-mcp
+   Codex 则在 ~/.codex/config.toml 里加入：
+   [mcp_servers.dsh-bridge]
+   command = "npx"
+   args = ["-y", "dsh-bridge-mcp"]
+2. 提醒我自己在 DeepSeek Harness 里装插件：插件 → 添加插件 → dsh-bridge-host → 安装 → 立即应用。等我确认装好。
+3. 需要的话重启后，调用 dsh_list_workspaces 检查是否连通，把结果给我看。
+```
+
+或者手动安装：
+
 ### 1. 在 Harness 里装插件
 
 Harness → **插件** → **添加插件** → 粘贴下面的包名 → **安装** → **立即应用**。

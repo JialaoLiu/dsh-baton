@@ -22,6 +22,21 @@
 
 Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in) and Node.js ≥ 22.15.
 
+**Fastest:** paste this into Claude Code or Codex and let it do the setup:
+
+```text
+Set up dsh-bridge for me.
+1. Connect the MCP server. In Claude Code run: claude mcp add dsh-bridge -s user -- npx -y dsh-bridge-mcp
+   In Codex add this to ~/.codex/config.toml:
+   [mcp_servers.dsh-bridge]
+   command = "npx"
+   args = ["-y", "dsh-bridge-mcp"]
+2. Tell me to install the plugin in DeepSeek Harness myself: Plugins → Add plugin → dsh-bridge-host → Install → Apply now. Wait until I confirm.
+3. After a restart if needed, call dsh_list_workspaces to check the connection and show me the result.
+```
+
+Or do it by hand:
+
 ### 1. Install the plugin in Harness
 
 Harness → **Plugins** → **Add plugin** → paste the package name below → **Install** → **Apply now**.
