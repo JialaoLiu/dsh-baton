@@ -1,54 +1,34 @@
-# dsh-bridge
+<p align="center">
+  <img src="./assets/readme/zh/hero.gif" width="100%" alt="dsh-bridge：让 Claude Code 或 Codex 把任务派给 DeepSeek Harness，界面实时可见，做完那一刻就把你叫醒">
+</p>
 
-[English](README.md) | 中文
+<p align="center">
+  <a href="README.md">English</a> | 中文 · 非官方项目，与 DeepSeek 无关。
+</p>
 
-让 Claude Code、Codex 或任何 MCP 客户端把任务派给本机的 **DeepSeek Harness**，像同事一样协作：
+<p align="center">
+  <img src="./assets/readme/zh/features.svg" width="100%" alt="新建工作区和对话、续接指定对话、界面实时可见、完成即唤醒、不用另配 key、零依赖只走本机">
+</p>
 
-- **新建工作区和对话**：让 Harness 在指定文件夹开工，工作区和对话都会出现在 Harness 侧边栏。
-- **续接指定对话**：按 `session_id` 往已有对话继续发消息，沿用原来的上下文，不另开子对话。
-- **界面实时可见**：消息由 Harness 自己处理，和你在 Harness 里打字一样，实时显示在界面上。
-- **完成即通知**：`dsh_wait` 等到任务结束；或者把 `dsh-bridge wait <run_id>` 当后台命令跑，任务结束那一刻派活的一方就会被唤醒。
-- **不用另配 key**：用的是 Harness 桌面版已有的登录、预设和配置。
-- **零依赖、只走本机**：只用 Node.js 标准库；插件只开一个仅当前用户可访问的本地套接字，不开端口、不经第三方。
+<p align="center">
+  <img src="./assets/readme/zh/flow.gif" width="100%" alt="典型流程：新建工作区、派发任务、后台等待、在同一个对话里续接追问">
+</p>
 
-> 非官方项目，与 DeepSeek 无关。
+## 快速上手
 
-## 组成
-
-```
-Claude Code / Codex ──MCP──▶ dsh-bridge-mcp（本仓库 src/）
-                                  │ 本地套接字 ~/.dsh-bridge/host.sock（仅当前用户）
-                                  ▼
-             dsh-bridge-host（本仓库 host/，装在 Harness 里的插件）
-                                  │ Harness 官方会话服务
-                                  ▼
-                     Harness 的工作区、对话和界面
-```
-
-| 包 | 装在哪 | 作用 |
-|---|---|---|
-| [`dsh-bridge-host`](host/) | DeepSeek Harness 桌面版（或 `dsh web`） | 把 Harness 的会话服务开放到本机套接字 |
-| `dsh-bridge-mcp` | Claude Code、Codex 等 MCP 客户端 | 提供 `dsh_*` 工具 |
-
-## 安装
+<p align="center">
+  <img src="./assets/readme/zh/install.svg" width="100%" alt="第一步：Harness → 插件 → 添加插件 → dsh-bridge-host → 安装 → 立即应用。第二步：把 Claude Code、Codex 或其他 MCP 客户端接到 dsh-bridge-mcp">
+</p>
 
 需要：DeepSeek Harness ≥ 0.2.1-rc.2 并已登录；Node.js ≥ 22.15。
 
-### 1. 在 Harness 里装插件
-
-Harness → **插件** → **添加插件** → 输入 `dsh-bridge-host` → **安装** → **立即应用**。
-
-（从源码装：把输入框里的包名换成本仓库 `host` 文件夹的绝对路径。改了插件代码后需要重启 Harness。）
-
-### 2. 把 MCP 服务器接到你的客户端
-
-**Claude Code**：
+**Claude Code**
 
 ```bash
 claude mcp add dsh-bridge -s user -- npx -y dsh-bridge-mcp
 ```
 
-**Codex**（`~/.codex/config.toml`）：
+**Codex**（`~/.codex/config.toml`）
 
 ```toml
 [mcp_servers.dsh-bridge]
@@ -56,9 +36,30 @@ command = "npx"
 args = ["-y", "dsh-bridge-mcp"]
 ```
 
-从源码运行时把命令换成 `node /绝对路径/dsh-bridge/src/server.mjs`。
+从源码装：插件那一步把包名换成本仓库 `host` 文件夹的绝对路径（改了插件代码后需要重启 Harness）；MCP 服务器用 `node /绝对路径/dsh-bridge/src/server.mjs`。
+
+## 工作原理
+
+<p align="center">
+  <img src="./assets/readme/zh/architecture.svg" width="100%" alt="MCP 客户端通过 stdio 调用 dsh-bridge-mcp，再经仅当前用户可访问的本地套接字连到 Harness 里的 dsh-bridge-host 插件，插件驱动 Harness 的对话并实时显示；插件不可用时退回 dsh headless">
+</p>
+
+<p align="center">
+  <img src="./assets/readme/zh/comparison.svg" width="100%" alt="插件和 headless 对比：只有插件能在 Harness 界面实时可见、续接桌面版的对话、使用桌面版智能体预设；两者都沿用桌面版登录">
+</p>
 
 ## 工具
+
+<p align="center">
+  <img src="./assets/readme/zh/tools.svg" width="100%" alt="工作区：列出、新建、改名。对话：列出、读取、当前活动、改名。运行：发送、状态、等待、取消、列出最近运行">
+</p>
+
+<p align="center">
+  <img src="./assets/readme/zh/states.svg" width="100%" alt="运行状态：queued、running、waiting、completed、failed、cancelled。对话正忙时，followup 进排队栏，steer 在下一步插话">
+</p>
+
+<details>
+<summary>完整工具说明</summary>
 
 | 工具 | 作用 |
 |---|---|
@@ -75,16 +76,7 @@ args = ["-y", "dsh-bridge-mcp"]
 | `dsh_rename_workspace` | 给工作区改名（只改侧边栏标题，不动文件夹） |
 | `dsh_list_runs` | 列出最近的运行 |
 
-运行状态有 `queued` / `running` / `waiting` / `completed` / `failed` / `cancelled`。`waiting` 表示 Harness 在等人处理（比如审批或提问），需要到 Harness 界面里操作。
-
-**对话正在忙时也能发**：`mode: "followup"`（默认）会进入 Harness 的排队栏，等当前任务做完再处理；`mode: "steer"` 是插话，在当前任务的下一步就交给智能体。每条消息有自己的 `run_id`，分别追踪到完成。只有当回合结束、并且子智能体和后台任务都结束后，运行才算 `completed`。
-
-### 典型流程
-
-1. `dsh_create_workspace {"path": "~/code/new-app"}`
-2. `dsh_send {"cwd": "~/code/new-app", "message": "搭一个 Vite + React 项目骨架，跑通 dev server"}` → 得到 `run_id` 和 `session_id`
-3. 后台运行 `dsh-bridge wait <run_id>`，结束时被唤醒
-4. 审查改动，再 `dsh_send {"session_id": "...", "message": "测试没过，修一下 …"}` 续接同一个对话
+</details>
 
 ## 命令行
 
@@ -105,21 +97,11 @@ dsh-bridge rename-workspace ~/code/new-app 新名字
 
 （从源码运行时用 `node src/cli.mjs …`。）
 
-## 没开 Harness 时：headless 后备模式
-
-插件不可用时，MCP 服务器会自动改用 Harness 自带的 `dsh headless` 命令。这个模式有明显限制：
-
-- 只能续接它自己新建的对话，**不能续接桌面版里建的对话**（Harness 的 headless 不加载 `standard` 等智能体预设）；
-- 新建的对话**不会出现在桌面版侧边栏**；
-- 默认通过 [`patches/account.patch.yml`](patches/account.patch.yml) 沿用桌面版的 DeepSeek 账号登录，不需要 API key。
-
-`DSH_BRIDGE_BACKEND` 可强制选择：`auto`（默认）、`host`、`headless`。
-
 ## 配置（环境变量）
 
 | 变量 | 默认值 | 作用 |
 |---|---|---|
-| `DSH_BRIDGE_BACKEND` | `auto` | 选择后端 |
+| `DSH_BRIDGE_BACKEND` | `auto` | `auto`、`host` 或 `headless` |
 | `DSH_BRIDGE_HOME` | `~/.dsh-bridge` | 套接字和 headless 运行记录的位置 |
 | `DSH_BRIDGE_SOCKET` | `$DSH_BRIDGE_HOME/host.sock` | 插件套接字路径（插件和 MCP 两边要一致） |
 | `DSH_BIN` | macOS 应用内的 `dsh`，否则查 `PATH` | headless 模式用的 Harness 命令行 |
@@ -127,18 +109,24 @@ dsh-bridge rename-workspace ~/code/new-app 新名字
 | `DSH_BRIDGE_ACCOUNT` | `1` | headless 模式下设为 `0` 则改用 API key 路线 |
 | `DSH_BRIDGE_PATCHES` | 空 | headless 模式额外的 `--patch` 覆盖文件，用 `:` 分隔 |
 
-## 安全
+<details>
+<summary>headless 后备模式说明</summary>
 
-- 套接字目录权限 `0700`、套接字 `0600`，只有当前系统用户能连。任何能以你的身份运行程序的进程都能用它驱动 Harness，这和直接运行 `dsh` 的权限一样。
-- 插件不开网络端口，不连任何外部服务。
-- 发出去的任务由 Harness 按它自己的权限设置执行（沙箱、审批）。
+插件不可用时，MCP 服务器会自动改用 Harness 自带的 `dsh headless` 命令。它只能续接自己新建的对话，不能续接桌面版里建的对话（headless 不加载 `standard` 等智能体预设）；新建的对话也不会出现在桌面版侧边栏。默认通过 [`patches/account.patch.yml`](patches/account.patch.yml) 沿用桌面版的 DeepSeek 账号登录，不需要 API key。
 
-## 已知限制
+</details>
 
-- 桥接任务还在跑时，如果你在 Harness 界面里往同一个对话手动发消息，那一轮的输出会被记到这个桥接任务上（或让它以 `superseded_by: "user"` 结束）。手动操作时，等桥接任务结束，或换一个对话。
-- 运行记录（`run_id`）保存在 Harness 进程内存里，Harness 重启后旧的 `run_id` 查不到了；对话本身不受影响。
-- MCP 客户端对单次工具调用可能有超时；长任务建议用后台 `wait` 命令，而不是长时间的 `dsh_wait`。
-- 依赖 Harness 0.2.1 系列的内部服务接口，Harness 大版本更新后可能需要跟进。
+## 安全与限制
+
+<p align="center">
+  <img src="./assets/readme/zh/security.svg" width="100%" alt="目录 0700、套接字 0600，只有当前用户能连；不开网络端口；任务按 Harness 的沙箱和审批设置执行">
+</p>
+
+<p align="center">
+  <img src="./assets/readme/zh/limits.svg" width="100%" alt="已知限制：桥接任务在跑时别在界面里往同一个对话发消息；Harness 重启后 run_id 会重置；长任务用后台 wait">
+</p>
+
+任何能以你的身份运行程序的进程都能通过这个套接字驱动 Harness，这和直接运行 `dsh` 的权限一样。本项目依赖 Harness 0.2.1 系列的内部服务接口，Harness 大版本更新后可能需要跟进。
 
 ## 许可证
 

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-labelledby="title desc">
+  <title id="title">Typical dsh-bridge flow</title>
+  <desc id="desc">Create a workspace, send the task and get a run id, wait in the background until it ends, then follow up in the same session.</desc>
+  <rect width="1200" height="400" rx="24" fill="#FFFFFF"/>
+<text x="64" y="76" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="30" fill="#0F172A" font-weight="700">典型流程</text>
+<rect x="64" y="112" width="250" height="250" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
+<text x="88" y="172" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#2563EB" font-weight="700">1</text>
+<text x="88" y="220" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="21" fill="#0F172A" font-weight="700" opacity="1.000">新建工作区</text>
+<rect x="88" y="240" width="202" height="34" rx="8" fill="#FFFFFF" opacity="1.000"/>
+<text x="100" y="263" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="16" fill="#2563EB" opacity="1.000">dsh_create_workspace</text>
+<text x="88" y="310" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="19" fill="#5B6577" opacity="1.000">~/code/new-app</text>
+<text x="88" y="336" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="19" fill="#5B6577" opacity="1.000">出现在侧边栏</text>
+<path d="M317 237 l14 0" stroke="#2563EB" stroke-width="2.5"/>
+<rect x="338" y="112" width="250" height="250" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
+<text x="362" y="172" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#2563EB" font-weight="700">2</text>
+<text x="362" y="220" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="21" fill="#0F172A" font-weight="700" opacity="1.000">派发任务</text>
+<rect x="362" y="240" width="202" height="34" rx="8" fill="#FFFFFF" opacity="1.000"/>
+<text x="374" y="263" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="18" fill="#2563EB" opacity="1.000">dsh_send</text>
+<text x="362" y="310" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="19" fill="#5B6577" opacity="1.000">立即返回 run_id</text>
+<text x="362" y="336" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="19" fill="#5B6577" opacity="1.000">和 session_id</text>
+<path d="M591 237 l14 0" stroke="#2563EB" stroke-width="2.5"/>
+<rect x="612" y="112" width="250" height="250" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
+<text x="636" y="172" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#2563EB" font-weight="700">3</text>
+<text x="636" y="220" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="21" fill="#0F172A" font-weight="700" opacity="1.000">后台等待</text>
+<rect x="636" y="240" width="202" height="34" rx="8" fill="#FFFFFF" opacity="1.000"/>
+<text x="648" y="263" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="18" fill="#2563EB" opacity="1.000">dsh-bridge wait</text>
+<text x="636" y="310" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="19" fill="#5B6577" opacity="1.000">结束那一刻</text>
+<text x="636" y="336" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="19" fill="#5B6577" opacity="1.000">就被唤醒</text>
+<path d="M865 237 l14 0" stroke="#2563EB" stroke-width="2.5"/>
+<rect x="886" y="112" width="250" height="250" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
+<text x="910" y="172" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#2563EB" font-weight="700">4</text>
+<text x="910" y="220" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="21" fill="#0F172A" font-weight="700" opacity="1.000">续接追问</text>
+<rect x="910" y="240" width="202" height="34" rx="8" fill="#FFFFFF" opacity="1.000"/>
+<text x="922" y="263" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="16" fill="#2563EB" opacity="1.000">dsh_send session_id</text>
+<text x="910" y="310" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="19" fill="#5B6577" opacity="1.000">同一个对话，</text>
+<text x="910" y="336" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="19" fill="#5B6577" opacity="1.000">沿用原来的上下文</text>
+</svg>

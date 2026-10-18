@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="600" viewBox="0 0 1200 600"
+     role="img" aria-labelledby="title desc">
+  <title id="title">How dsh-bridge is wired</title>
+  <desc id="desc">MCP clients such as Claude Code and Codex call dsh-bridge-mcp over stdio. dsh-bridge-mcp talks to the dsh-bridge-host plugin inside DeepSeek Harness through an owner-only local socket at ~/.dsh-bridge/host.sock. The plugin drives Harness's own session controller, so workspaces and sessions appear live in the Harness UI. When the plugin is unreachable, dsh-bridge-mcp falls back to dsh headless. Everything stays on your machine with no network port.</desc>
+
+  <style>
+    .sans { font-family: "Microsoft YaHei", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Microsoft YaHei", "PingFang SC", monospace; }
+  </style>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0F172A"/>
+    </marker>
+    <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5B6577"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="600" rx="24" fill="#FFFFFF"/>
+  <rect x="0.5" y="0.5" width="1199" height="599" rx="24" fill="none" stroke="#E2E7EF"/>
+
+  <!-- machine boundary -->
+  <rect x="32" y="32" width="1136" height="536" rx="18" fill="none" stroke="#E2E7EF" stroke-dasharray="8 8"/>
+  <text x="60" y="72" class="mono" font-size="18" letter-spacing="2" fill="#5B6577">全在本机 · 不开网络端口</text>
+
+  <!-- column 1: MCP clients -->
+  <g id="clients" transform="translate(64 112)">
+    <text x="0" y="0" class="mono" font-size="18" fill="#5B6577">MCP 客户端</text>
+    <rect x="0" y="20" width="220" height="64" rx="12" fill="#F4F6FA" stroke="#E2E7EF"/>
+    <text x="110" y="60" text-anchor="middle" class="sans" font-size="22" font-weight="600" fill="#0F172A">Claude Code</text>
+    <rect x="0" y="100" width="220" height="64" rx="12" fill="#F4F6FA" stroke="#E2E7EF"/>
+    <text x="110" y="140" text-anchor="middle" class="sans" font-size="22" font-weight="600" fill="#0F172A">Codex</text>
+    <rect x="0" y="180" width="220" height="64" rx="12" fill="#F4F6FA" stroke="#E2E7EF"/>
+    <text x="110" y="220" text-anchor="middle" class="sans" font-size="22" fill="#5B6577">其他 MCP 客户端</text>
+  </g>
+
+  <!-- clients -> mcp -->
+  <path d="M284 164 C 310 164, 310 236, 336 236" fill="none" stroke="#0F172A" stroke-width="2"/>
+  <path d="M284 244 L 336 244" fill="none" stroke="#0F172A" stroke-width="2"/>
+  <path d="M284 324 C 310 324, 310 252, 336 252" fill="none" stroke="#0F172A" stroke-width="2"/>
+  <path d="M336 244 L 352 244" fill="none" stroke="#0F172A" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="318" y="148" text-anchor="middle" class="mono" font-size="18" fill="#5B6577">stdio</text>
+
+  <!-- column 2: dsh-bridge-mcp -->
+  <g id="mcp" transform="translate(356 172)">
+    <rect x="0" y="0" width="252" height="144" rx="14" fill="#F4F6FA" stroke="#0F172A" stroke-width="2"/>
+    <text x="24" y="44" class="sans" font-size="24" font-weight="700" fill="#0F172A">dsh-bridge-mcp</text>
+    <text x="24" y="76" class="mono" font-size="18" fill="#5B6577">src/ · npx</text>
+    <text x="24" y="114" class="mono" font-size="20" fill="#2563EB">dsh_* 工具 + 命令行</text>
+  </g>
+
+  <!-- socket link -->
+  <path d="M608 244 L 716 244" fill="none" stroke="#2563EB" stroke-width="2.5" stroke-dasharray="7 6" marker-end="url(#arrow-accent)"/>
+  <circle cx="662" cy="244" r="7" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
+  <text x="662" y="210" text-anchor="middle" class="mono" font-size="18" fill="#2563EB">host.sock</text>
+  <text x="662" y="286" text-anchor="middle" class="mono" font-size="18" fill="#5B6577">0600</text>
+
+  <!-- column 3: DeepSeek Harness -->
+  <g id="harness" transform="translate(724 100)">
+    <rect x="0" y="0" width="412" height="300" rx="16" fill="#F8FAFC" stroke="#E2E7EF"/>
+    <text x="24" y="40" class="mono" font-size="18" letter-spacing="2" fill="#5B6577">DEEPSEEK HARNESS</text>
+
+    <rect x="24" y="64" width="364" height="88" rx="12" fill="#F4F6FA" stroke="#0F172A" stroke-width="2"/>
+    <text x="44" y="102" class="sans" font-size="24" font-weight="700" fill="#0F172A">dsh-bridge-host</text>
+    <text x="44" y="132" class="mono" font-size="18" fill="#5B6577">插件 · host/</text>
+
+    <path d="M206 152 L 206 176" stroke="#0F172A" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="24" y="180" width="364" height="44" rx="10" fill="none" stroke="#C9D2DF"/>
+    <text x="206" y="209" text-anchor="middle" class="sans" font-size="20" fill="#0F172A">Harness 会话服务</text>
+
+    <path d="M206 224 L 206 240" stroke="#0F172A" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="24" y="244" width="364" height="44" rx="10" fill="none" stroke="#C9D2DF"/>
+    <text x="206" y="273" text-anchor="middle" class="sans" font-size="20" fill="#0F172A">工作区 · 对话 · 实时界面</text>
+  </g>
+
+  <!-- headless fallback -->
+  <path d="M482 316 L 482 440" fill="none" stroke="#5B6577" stroke-width="2" stroke-dasharray="4 6" marker-end="url(#arrow-muted)"/>
+  <text x="500" y="384" class="mono" font-size="18" fill="#5B6577">插件不可用时</text>
+  <g id="headless" transform="translate(356 444)">
+    <rect x="0" y="0" width="252" height="88" rx="12" fill="none" stroke="#C9D2DF" stroke-dasharray="4 6"/>
+    <text x="24" y="38" class="mono" font-size="20" fill="#0F172A">dsh headless</text>
+    <text x="24" y="68" class="sans" font-size="18" fill="#5B6577">后备 · 不进侧边栏</text>
+  </g>
+
+  <!-- footer note -->
+  <text x="724" y="470" class="sans" font-size="20" fill="#0F172A">消息由 Harness 自己处理，和亲手打字一样：</text>
+  <text x="724" y="500" class="sans" font-size="20" fill="#0F172A">同样的登录、预设、沙箱和审批。</text>
+</svg>

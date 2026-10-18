@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">dsh-bridge run states</title>
+  <desc id="desc">A run moves from queued to running and ends completed, failed or cancelled. Running can pause in waiting when Harness needs a person. When a session is busy, followup queues the message and steer interjects at the next step.</desc>
+  <rect width="1200" height="520" rx="24" fill="#FFFFFF"/>
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#5B6577"/></marker></defs>
+<text x="64" y="76" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="30" fill="#0F172A" font-weight="700">每条消息都有自己的 run</text>
+<g transform="translate(0 56)">
+<rect x="64" y="150" width="170" height="52" rx="26" fill="#F4F6FA" stroke="#0F172A" stroke-width="2"/><text x="149.0" y="183" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="20" fill="#0F172A" font-weight="700" text-anchor="middle">queued</text>
+<path d="M234 176 H 306" stroke="#5B6577" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+<rect x="310" y="150" width="170" height="52" rx="26" fill="#F4F6FA" stroke="#C27803" stroke-width="2"/><text x="395.0" y="183" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="20" fill="#C27803" font-weight="700" text-anchor="middle">running</text>
+<path d="M480 176 H 552" stroke="#5B6577" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+<rect x="556" y="150" width="190" height="52" rx="26" fill="#2563EB" stroke="#2563EB" stroke-width="2"/><text x="651.0" y="183" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="20" fill="#FFFFFF" font-weight="700" text-anchor="middle">completed</text>
+<rect x="556" y="236" width="170" height="52" rx="26" fill="#F4F6FA" stroke="#DC2626" stroke-width="2"/><text x="641.0" y="269" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="20" fill="#DC2626" font-weight="700" text-anchor="middle">failed</text>
+<rect x="556" y="64" width="170" height="52" rx="26" fill="#F4F6FA" stroke="#5B6577" stroke-width="2"/><text x="641.0" y="97" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="20" fill="#5B6577" font-weight="700" text-anchor="middle">cancelled</text>
+<path d="M480 186 C 520 186, 520 262, 552 262" stroke="#5B6577" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+<path d="M480 166 C 520 166, 520 90, 552 90" stroke="#5B6577" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+<rect x="310" y="290" width="170" height="52" rx="26" fill="#F4F6FA" stroke="#7C3AED" stroke-width="2"/><text x="395.0" y="323" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="20" fill="#7C3AED" font-weight="700" text-anchor="middle">waiting</text>
+<path d="M380 202 V 286" stroke="#5B6577" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+<path d="M410 290 V 206" stroke="#5B6577" stroke-width="2" fill="none" stroke-dasharray="4 5" marker-end="url(#ah)"/>
+<text x="310" y="372" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">Harness 在等人处理：</text>
+<text x="310" y="398" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">审批，或回答提问。</text>
+<text x="556" y="340" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">completed = 回合结束，</text>
+<text x="556" y="366" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">子智能体和后台任务也结束。</text>
+</g>
+<rect x="820" y="160" width="316" height="320" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
+<text x="846" y="202" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="18" fill="#2563EB" letter-spacing="2">对话正忙？</text>
+<text x="846" y="252" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="22" fill="#0F172A" font-weight="700">followup</text>
+<text x="970" y="252" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">默认</text>
+<text x="846" y="282" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">进排队栏，等当前</text>
+<text x="846" y="310" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">任务做完再处理。</text>
+<line x1="846" y1="346" x2="1110" y2="346" stroke="#E2E7EF"/>
+<text x="846" y="390" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="22" fill="#0F172A" font-weight="700">steer</text>
+<text x="846" y="420" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">插话，在智能体的</text>
+<text x="846" y="448" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">下一步就送达。</text>
+</svg>
