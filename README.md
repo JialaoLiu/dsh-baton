@@ -22,6 +22,16 @@
 
 Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in) and Node.js ≥ 22.15.
 
+### 1. Install the plugin in Harness
+
+Harness → **Plugins** → **Add plugin** → paste the package name below → **Install** → **Apply now**.
+
+```text
+dsh-bridge-host
+```
+
+### 2. Connect your MCP client
+
 **Claude Code**
 
 ```bash
