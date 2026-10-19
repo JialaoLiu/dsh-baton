@@ -10,6 +10,7 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { socketEndpoint } from './socket.js'
 
 export const name = 'dsh-bridge-host'
 export const inject = ['sessionController', 'workspaceRegistry']
@@ -21,14 +22,25 @@ const QUIET_CONFIRM_MS = 2000
 const CANCEL_ATTEMPTS = 3
 const CANCEL_SETTLE_MS = 6000
 const ACTIVITY_MAX_ERRORS = 10
+const MAX_REQUEST_BYTES = 4 * 1024 * 1024
+const MAX_WAIT_S = 24 * 3600
 
 function bridgeHome() {
   return process.env.DSH_BRIDGE_HOME || path.join(os.homedir(), '.dsh-bridge')
 }
 
+const IS_WIN = process.platform === 'win32'
+
+// A Unix socket file on macOS / Linux, a per-user named pipe on Windows (see socket.js).
 function socketPath() {
-  return process.env.DSH_BRIDGE_SOCKET || path.join(bridgeHome(), 'host.sock')
+  return socketEndpoint(process.env.DSH_BRIDGE_SOCKET || path.join(bridgeHome(), 'host.sock'))
 }
+
+const probe = (sock) => new Promise((resolve) => {
+  const conn = net.connect(sock)
+  conn.on('connect', () => { conn.destroy(); resolve(true) })
+  conn.on('error', () => resolve(false))
+})
 
 // Expand `~`, resolve, and follow symlinks when the path exists, so the same
 // folder always compares equal (on macOS /tmp is a link to /private/tmp).
@@ -41,6 +53,12 @@ function normalizePath(p) {
 // own directory gets 0700, only a stale socket is removed, and a live host that
 // already answers there is left alone.
 async function claimSocket(sock) {
+  // A named pipe has no file to own, chmod or clean up; it disappears with its
+  // server. Only refuse to start when another host already answers on it.
+  if (IS_WIN) {
+    if (await probe(sock)) throw new Error(`another dsh-bridge-host already serves ${sock}; set DSH_BRIDGE_SOCKET for a second host`)
+    return
+  }
   const dir = path.dirname(sock)
   const ours = dir === bridgeHome() || !fs.existsSync(dir)
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
@@ -48,27 +66,37 @@ async function claimSocket(sock) {
   let st
   try { st = fs.lstatSync(sock) } catch { return }
   if (!st.isSocket()) throw new Error(`${sock} exists and is not a socket; point DSH_BRIDGE_SOCKET somewhere else`)
-  const live = await new Promise((resolve) => {
-    const probe = net.connect(sock)
-    probe.on('connect', () => { probe.destroy(); resolve(true) })
-    probe.on('error', () => resolve(false))
-  })
+  const live = await probe(sock)
   if (live) throw new Error(`another dsh-bridge-host already serves ${sock}; set DSH_BRIDGE_SOCKET for a second host`)
   fs.unlinkSync(sock)
 }
 
-const textOf = (content) =>
-  Array.isArray(content) ? content.filter((c) => c.type === 'text').map((c) => c.text).join('\n') : ''
+const parts = (content) => (Array.isArray(content) ? content.filter((c) => c && typeof c === 'object') : [])
+
+const textOf = (content) => parts(content).filter((c) => c.type === 'text').map((c) => c.text).join('\n')
 
 function toolCallsOf(content) {
-  if (!Array.isArray(content)) return []
-  return content.filter((c) => c.type !== 'text' && c.type !== 'reasoning')
+  return parts(content).filter((c) => c.type !== 'text' && c.type !== 'reasoning')
     .map((c) => ({ kind: c.type, name: c.name ?? c.toolName, input: c.input ?? c.arguments }))
 }
 
 const iso = (t) => (typeof t === 'number' ? new Date(t).toISOString() : t ?? null)
 
 export function apply(ctx) {
+  // This code runs inside the Harness host process: an uncaught error here can
+  // take Harness down. Every event listener and timer goes through guard().
+  const guard = (label, fn) => (...args) => {
+    try {
+      const result = fn(...args)
+      if (result && typeof result.catch === 'function') result.catch((error) => logError(label, error))
+    } catch (error) {
+      logError(label, error)
+    }
+  }
+  const logError = (label, error) => {
+    try { ctx.logger?.error?.(`dsh-bridge-host ${label}: ${error?.stack ?? error}`) } catch { /* logging must never throw */ }
+  }
+
   const controller = ctx.sessionController
   const registry = ctx.workspaceRegistry
   const runs = new Map() // runId -> run
@@ -115,7 +143,7 @@ export function apply(ctx) {
   // followup, or someone typing in the Harness UI); one after it is a steer.
   const turns = new Map() // sessionId -> { hasOutput }
 
-  ctx.on('session/event', (session, event) => {
+  ctx.on('session/event', guard('session/event', (session, event) => {
     const data = event.data ?? {}
     if (event.type === 'turn/start') turns.set(session.id, { hasOutput: false })
     const active = activeRunsFor(session.id)
@@ -165,7 +193,7 @@ export function apply(ctx) {
       if (reason?.kind && reason.kind !== 'completed') for (const run of receivers) settle(run, 'failed')
       else scheduleQuietCheck(session.id, 1000)
     }
-  })
+  }))
 
   // --- completion: wait until the session has no running turn, sub-agents or jobs
 
@@ -176,7 +204,7 @@ export function apply(ctx) {
 
   function scheduleQuietCheck(sessionId, delayMs) {
     clearTimeout(quietTimers.get(sessionId))
-    quietTimers.set(sessionId, setTimeout(() => checkQuiet(sessionId), delayMs))
+    quietTimers.set(sessionId, setTimeout(guard('quiet check', () => checkQuiet(sessionId)), delayMs))
   }
 
   async function sessionActivity(sessionId) {
@@ -190,6 +218,7 @@ export function apply(ctx) {
     let items
     try {
       items = await sessionActivity(sessionId)
+      if (!Array.isArray(items)) throw new Error('session activity is not a list')
       activityErrors.delete(sessionId)
     } catch (error) {
       // Unknown is not idle: keep waiting and retry; give up only after repeated failures.
@@ -237,7 +266,7 @@ export function apply(ctx) {
 
   ctx.effect(() => () => { for (const t of quietTimers.values()) clearTimeout(t) }, 'dsh-bridge-host quiet timers')
 
-  ctx.on('agent/status', ({ agent, status }) => {
+  ctx.on('agent/status', guard('agent/status', ({ agent, status }) => {
     if (!agent) return
     if (status === 'running') lastRunningAt.set(agent.id, Date.now())
     const receivers = receiversFor(agent.id)
@@ -248,11 +277,11 @@ export function apply(ctx) {
       else if (status === 'idle') run.idleSeen = true
     }
     if (status === 'idle' && receivers.length) scheduleQuietCheck(agent.id, 0)
-  })
+  }))
 
-  ctx.on('agent/error', ({ agent, error }) => {
+  ctx.on('agent/error', guard('agent/error', ({ agent, error }) => {
     for (const run of agent ? outputReceiversFor(agent.id) : []) run.error = String(error?.message ?? error)
-  })
+  }))
 
   // --- operations -----------------------------------------------------------
 
@@ -361,6 +390,7 @@ export function apply(ctx) {
 
   async function wait({ run_id, timeout_s = 300 }) {
     const run = getRun(run_id)
+    const seconds = Number.isFinite(Number(timeout_s)) ? Math.min(Math.max(Number(timeout_s), 0), MAX_WAIT_S) : 300
     if (isActive(run)) {
       await new Promise((resolve) => {
         const set = waiters.get(run.id) ?? new Set()
@@ -370,7 +400,7 @@ export function apply(ctx) {
           set.delete(done)
           resolve()
         }
-        const timer = setTimeout(done, timeout_s * 1000)
+        const timer = setTimeout(done, seconds * 1000)
         set.add(done)
       })
     }
@@ -454,12 +484,20 @@ export function apply(ctx) {
 
   // --- local socket (owner-only) ---------------------------------------------
 
+  const connections = new Set()
+
   function serve(conn) {
     let buf = ''
+    connections.add(conn)
+    conn.on('close', () => connections.delete(conn))
     conn.setEncoding('utf8')
     conn.on('error', () => {})
     conn.on('data', (chunk) => {
       buf += chunk
+      if (buf.length > MAX_REQUEST_BYTES) {
+        conn.destroy()
+        return
+      }
       let nl
       while ((nl = buf.indexOf('\n')) !== -1) {
         const line = buf.slice(0, nl)
@@ -468,6 +506,9 @@ export function apply(ctx) {
       }
     })
     async function handle(line) {
+      try { await answer(line) } catch (error) { logError('socket request', error) }
+    }
+    async function answer(line) {
       let req
       try { req = JSON.parse(line) } catch { return conn.write(JSON.stringify({ id: null, error: 'parse error' }) + '\n') }
       try {
@@ -491,15 +532,20 @@ export function apply(ctx) {
       server = net.createServer(serve)
       server.on('error', (error) => ctx.logger?.error?.(`dsh-bridge-host socket error: ${error.message}`))
       server.listen(sock, () => {
-        try { fs.chmodSync(sock, 0o600) } catch { /* best effort */ }
+        if (!IS_WIN) try { fs.chmodSync(sock, 0o600) } catch { /* best effort */ }
         ctx.logger?.info?.(`dsh-bridge-host listening on ${sock}`)
       })
     }).catch((error) => ctx.logger?.error?.(`dsh-bridge-host not started: ${error.message}`))
     return () => {
       disposed = true
+      // Release callers blocked in wait() and close open connections, so an
+      // unloaded or reloaded plugin leaves no timers or sockets behind.
+      for (const set of waiters.values()) for (const done of [...set]) done()
+      waiters.clear()
+      for (const conn of connections) conn.destroy()
       if (!server) return
       server.close()
-      try { if (fs.lstatSync(sock).isSocket()) fs.unlinkSync(sock) } catch { /* gone */ }
+      if (!IS_WIN) try { if (fs.lstatSync(sock).isSocket()) fs.unlinkSync(sock) } catch { /* gone */ }
     }
   }, 'dsh-bridge-host socket')
 }

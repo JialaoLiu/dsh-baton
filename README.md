@@ -20,7 +20,7 @@
   <img src="./assets/readme/install.svg" width="100%" alt="Step 1: Harness, Plugins, Add plugin, dsh-bridge-host, Install, Apply now. Step 2: connect Claude Code, Codex or any MCP client to dsh-bridge-mcp">
 </p>
 
-Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in) and Node.js ≥ 22.15.
+Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in) and Node.js ≥ 22.15. On Windows, see [WINDOWS.md](WINDOWS.md).
 
 **Fastest:** paste this into Claude Code or Codex and let it do the setup:
 
@@ -126,7 +126,7 @@ dsh-bridge rename-workspace ~/code/new-app "New name"
 |---|---|---|
 | `DSH_BRIDGE_BACKEND` | `auto` | `auto`, `host` or `headless` |
 | `DSH_BRIDGE_HOME` | `~/.dsh-bridge` | Socket and headless run records |
-| `DSH_BRIDGE_SOCKET` | `$DSH_BRIDGE_HOME/host.sock` | Plugin socket path (must match on both sides) |
+| `DSH_BRIDGE_SOCKET` | `$DSH_BRIDGE_HOME/host.sock` | Plugin socket path (must match on both sides); on Windows mapped to a per-user named pipe |
 | `DSH_BIN` | the `dsh` inside the macOS app, else `PATH` | Harness CLI for headless mode |
 | `DSH_HOME` | `~/.dsh` | Harness data folder (headless session reads) |
 | `DSH_BRIDGE_ACCOUNT` | `1` | `0` uses the API-key route in headless mode |

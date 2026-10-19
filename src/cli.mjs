@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Command-line entry. `wait` is meant for an orchestrator that runs it as a
 // background shell command and is woken up when the command exits.
+import path from 'node:path'
 import * as core from './core.mjs'
 
 const USAGE = `Usage: dsh-bridge <command> [args]
@@ -66,7 +67,8 @@ async function main() {
     case 'rename':
       return print(await core.api.rename_session({ session_id: rest[0], title: rest.slice(1).join(' ') }))
     case 'rename-workspace':
-      return print(await core.api.rename_workspace(rest[0]?.startsWith('/') || rest[0]?.startsWith('~') ? { path: rest[0], title: rest.slice(1).join(' ') } : { workspace_id: rest[0], title: rest.slice(1).join(' ') }))
+      // A path (also C:\… on Windows) or a workspace id.
+      return print(await core.api.rename_workspace(rest[0]?.startsWith('/') || rest[0]?.startsWith('~') || path.isAbsolute(rest[0] ?? '') ? { path: rest[0], title: rest.slice(1).join(' ') } : { workspace_id: rest[0], title: rest.slice(1).join(' ') }))
     case 'activity':
       return print(await core.api.activity({ session_id: rest[0] }))
     case 'runs':

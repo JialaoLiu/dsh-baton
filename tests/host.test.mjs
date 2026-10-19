@@ -8,10 +8,14 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { apply } from '../host/lib/index.js'
+import { socketEndpoint } from '../host/lib/socket.js'
+
+const IS_WIN = process.platform === 'win32'
 
 function startHost({ activity = () => [], sessions = [], workspaces = [], sock: sockPath } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-'))
   const sock = sockPath ?? path.join(dir, 'h.sock')
+  const endpoint = socketEndpoint(sock) // where the host listens: the path itself, or a named pipe on Windows
   const logs = []
   const handlers = {}
   const disposers = []
@@ -47,7 +51,7 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], sock: 
   apply(ctx)
   const emit = (ev, ...args) => (handlers[ev] ?? []).forEach((fn) => fn(...args))
   const call = (method, params = {}) => new Promise((resolve, reject) => {
-    const conn = net.connect(sock)
+    const conn = net.connect(endpoint)
     let buf = ''
     conn.on('connect', () => conn.write(JSON.stringify({ id: 1, method, params }) + '\n'))
     conn.on('data', (d) => {
@@ -219,7 +223,8 @@ test('unknown methods and bad input are reported, not thrown', async (t) => {
   await assert.rejects(h.call('status', { run_id: 'hrun-missing' }), /Unknown run/)
 })
 
-test('refuses to start over a regular file and leaves it alone', async (t) => {
+// On Windows the path maps to a named pipe, so a file at the path is never looked at or touched.
+test('refuses to start over a regular file and leaves it alone', { skip: IS_WIN && 'named pipes on Windows' }, async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-f-'))
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
   const file = path.join(dir, 'not-a-socket')
@@ -257,7 +262,7 @@ test('run eviction keeps active runs', async (t) => {
 test('list_sessions cwd filter follows symlinks', async (t) => {
   const real = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-real-')))
   const link = `${real}-link`
-  fs.symlinkSync(real, link)
+  fs.symlinkSync(real, link, IS_WIN ? 'junction' : undefined) // a junction needs no admin rights on Windows
   t.after(() => { fs.unlinkSync(link); fs.rmSync(real, { recursive: true, force: true }) })
   const h = startHost({ sessions: [{ sessionId: 'a', cwd: real }, { sessionId: 'b', cwd: '/elsewhere' }] }); t.after(h.close); await h.ready
   assert.deepEqual((await h.call('list_sessions', { cwd: link })).map((r) => r.session_id), ['a'])

@@ -122,6 +122,22 @@ async function handle(req) {
 }
 
 const rl = readline.createInterface({ input: process.stdin })
+
+// Exit when the client goes away: stdin closes, or the parent process dies
+// and we get re-parented. Otherwise orphaned servers pile up.
+let inFlight = 0
+let stdinClosed = false
+// Writes to a piped stdout are asynchronous: flush the last reply before exiting.
+const exitIfDone = () => { if (stdinClosed && inFlight === 0) process.stdout.write('', () => process.exit(0)) }
+rl.on('close', () => { stdinClosed = true; exitIfDone() })
+const parentPid = process.ppid
+// Windows does not re-parent orphans (ppid stays the same), so there the parent is checked directly.
+const parentGone = () => {
+  if (process.platform !== 'win32') return false
+  try { process.kill(parentPid, 0); return false } catch (e) { return e.code !== 'EPERM' }
+}
+setInterval(() => { if (process.ppid !== parentPid || parentGone()) process.exit(0) }, 5000).unref()
+
 rl.on('line', async (line) => {
   if (!line.trim()) return
   let req
@@ -130,9 +146,13 @@ rl.on('line', async (line) => {
     return send({ jsonrpc: '2.0', id: req?.id ?? null, error: { code: -32600, message: 'Invalid Request' } })
   }
   if (req.id === undefined) return // notification
+  inFlight++
   try {
     send({ jsonrpc: '2.0', id: req.id, result: await handle(req) })
   } catch (e) {
     send({ jsonrpc: '2.0', id: req.id, error: { code: e.code || -32603, message: e.message } })
+  } finally {
+    inFlight--
+    exitIfDone()
   }
 })

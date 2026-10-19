@@ -14,20 +14,29 @@ process.env.DSH_BRIDGE_SOCKET = path.join(home, 's.sock')
 process.env.DSH_BRIDGE_HOME = path.join(home, 'bridge')
 process.env.DSH_BRIDGE_ACCOUNT = '0'
 // A fake `dsh` that announces a session, then works for a while.
-const fakeDsh = path.join(home, 'fake-dsh')
-fs.writeFileSync(fakeDsh, `#!${process.execPath}
+const fakeScript = path.join(home, 'fake-dsh')
+fs.writeFileSync(fakeScript, `#!${process.execPath}
 process.stdin.resume()
 console.log(JSON.stringify({ type: 'session', sessionId: 'session-fake' }))
 setTimeout(() => { console.log(JSON.stringify({ type: 'final', text: 'fake done' })); process.exit(0) }, 8000)
 `, { mode: 0o755 })
+// Windows cannot run a shebang script: there a .cmd launcher (with a space in
+// its path) wraps it, which also exercises the cmd.exe route in dshCommand().
+const IS_WIN = process.platform === 'win32'
+const fakeDsh = IS_WIN ? path.join(home, 'fake dsh.cmd') : fakeScript
+if (IS_WIN) fs.writeFileSync(fakeDsh, `@"${process.execPath}" "${fakeScript}" %*\r\n`)
 process.env.DSH_BIN = fakeDsh
 const core = await import('../src/core.mjs')
 test.after(() => fs.rmSync(home, { recursive: true, force: true }))
 
+// A fresh socket per server: a closed named pipe on Windows stays taken until its
+// last connection handle is gone, so reusing one name races the previous test.
+let servers = 0
 function fakeServer(onLine) {
+  process.env.DSH_BRIDGE_SOCKET = path.join(home, `s${++servers}.sock`)
   fs.rmSync(process.env.DSH_BRIDGE_SOCKET, { force: true })
   const server = net.createServer((c) => c.on('data', () => onLine(c)))
-  return new Promise((r) => server.listen(process.env.DSH_BRIDGE_SOCKET, () => r(server)))
+  return new Promise((r) => server.listen(core.hostSocket(), () => r(server)))
 }
 
 test('hostCall rejects an unreadable reply instead of crashing', async () => {
@@ -68,7 +77,7 @@ test('session reader decodes appended frames and skips false frame starts', () =
 test('normalizePath expands ~ and follows symlinks', () => {
   assert.equal(core.normalizePath('~'), fs.realpathSync(os.homedir()))
   const real = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-n-')))
-  fs.symlinkSync(real, `${real}-l`)
+  fs.symlinkSync(real, `${real}-l`, IS_WIN ? 'junction' : undefined) // a junction needs no admin rights on Windows
   assert.equal(core.normalizePath(`${real}-l`), real)
   fs.unlinkSync(`${real}-l`); fs.rmSync(real, { recursive: true })
 })
@@ -105,7 +114,19 @@ test('headless: cancelling a running child keeps the runner to record cancelled'
   assert.ok(fs.existsSync(path.join(dir, 'exit.json')), 'runner must write exit.json')
 })
 
-test('headless: run records are private to the user', async () => {
+test('headless: a dsh that cannot start fails the run with a reason', async () => {
+  const cwd = fs.mkdtempSync(path.join(home, 'w-'))
+  const saved = process.env.DSH_BIN
+  process.env.DSH_BIN = path.join(home, IS_WIN ? 'missing-dsh.exe' : 'missing-dsh')
+  let runId
+  try { runId = core.startRun({ cwd, message: 'x' }) } finally { process.env.DSH_BIN = saved }
+  const st = await core.waitRun(runId, { timeout_s: 15, poll_ms: 100 })
+  assert.equal(st.state, 'failed')
+  assert.match(st.error ?? '', /could not start/)
+})
+
+// POSIX modes only: on Windows the records sit in the user profile, private through its ACL.
+test('headless: run records are private to the user', { skip: IS_WIN && 'POSIX file modes' }, async () => {
   const cwd = fs.mkdtempSync(path.join(home, 'w-'))
   const runId = core.startRun({ cwd, message: 'secret task' })
   const dir = path.join(process.env.DSH_BRIDGE_HOME, 'runs', runId)

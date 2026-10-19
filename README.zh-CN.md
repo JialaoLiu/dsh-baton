@@ -20,7 +20,7 @@
   <img src="./assets/readme/zh/install.svg" width="100%" alt="第一步：Harness → 插件 → 添加插件 → dsh-bridge-host → 安装 → 立即应用。第二步：把 Claude Code、Codex 或其他 MCP 客户端接到 dsh-bridge-mcp">
 </p>
 
-需要：DeepSeek Harness ≥ 0.2.1-rc.2 并已登录；Node.js ≥ 22.15。
+需要：DeepSeek Harness ≥ 0.2.1-rc.2 并已登录；Node.js ≥ 22.15。Windows 见 [WINDOWS.md](WINDOWS.md)。
 
 **最快：** 把下面这段发给 Claude Code 或 Codex，让它帮你装：
 
@@ -128,7 +128,7 @@ dsh-bridge rename-workspace ~/code/new-app 新名字
 |---|---|---|
 | `DSH_BRIDGE_BACKEND` | `auto` | `auto`、`host` 或 `headless` |
 | `DSH_BRIDGE_HOME` | `~/.dsh-bridge` | 套接字和 headless 运行记录的位置 |
-| `DSH_BRIDGE_SOCKET` | `$DSH_BRIDGE_HOME/host.sock` | 插件套接字路径（插件和 MCP 两边要一致） |
+| `DSH_BRIDGE_SOCKET` | `$DSH_BRIDGE_HOME/host.sock` | 插件套接字路径（插件和 MCP 两边要一致）；Windows 上映射为按用户区分的命名管道，见 [WINDOWS.md](WINDOWS.md) |
 | `DSH_BIN` | macOS 应用内的 `dsh`，否则查 `PATH` | headless 模式用的 Harness 命令行 |
 | `DSH_HOME` | `~/.dsh` | Harness 数据目录（headless 模式读取对话用） |
 | `DSH_BRIDGE_ACCOUNT` | `1` | headless 模式下设为 `0` 则改用 API key 路线 |

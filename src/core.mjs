@@ -23,14 +23,59 @@ export const config = {
   useAccount: process.env.DSH_BRIDGE_ACCOUNT !== '0',
 }
 
+const IS_WIN = process.platform === 'win32'
+
+// The Windows desktop app has no standalone dsh launcher: its CLI is a script
+// packed in app.asar, run by the app's own Electron binary in Node mode.
+// It installs per user into %LOCALAPPDATA%\Programs by default, but the folder
+// can be chosen at install time, so the uninstall entries are read as well.
+function winHarnessExe() {
+  const dirs = [path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Programs', 'DeepSeek Harness')]
+  for (const hive of ['HKCU', 'HKLM']) {
+    try {
+      const out = execFileSync('reg', ['query', `${hive}\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall`, '/s', '/v', 'InstallLocation'], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }).toString()
+      for (const m of out.matchAll(/InstallLocation\s+REG_\w+\s+(.+)/g)) dirs.push(m[1].trim().replace(/^"|"$/g, ''))
+    } catch { /* no such key */ }
+  }
+  return dirs.map((d) => path.join(d, 'DeepSeek Harness.exe')).find((exe) => fs.existsSync(exe))
+}
+const WIN_DSH_SCRIPT = ['resources', 'app.asar', 'dsh', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js']
+
 export function dshBin() {
   if (process.env.DSH_BIN) return process.env.DSH_BIN
   if (fs.existsSync(MAC_DSH)) return MAC_DSH
   try {
-    return execFileSync(process.platform === 'win32' ? 'where' : 'which', ['dsh']).toString().split(/\r?\n/)[0].trim()
-  } catch {
-    throw new Error('DeepSeek Harness CLI not found. Install DeepSeek Harness or set DSH_BIN to the dsh launcher.')
+    const hits = execFileSync(IS_WIN ? 'where' : 'which', ['dsh'], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }).toString().split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    // `where` also lists extensionless shell shims that Windows cannot start; prefer a runnable one.
+    const hit = (IS_WIN && hits.find((h) => /\.(exe|cmd|bat)$/i.test(h))) || hits[0]
+    if (hit) return hit
+  } catch { /* not on PATH */ }
+  const exe = IS_WIN && winHarnessExe()
+  if (exe) return exe
+  throw new Error('DeepSeek Harness CLI not found. Install DeepSeek Harness or set DSH_BIN to the dsh launcher.')
+}
+
+// How to start dsh with these arguments: { file, args, options }. On Windows a
+// .cmd/.bat launcher needs cmd.exe (Node refuses to spawn it directly), and the
+// desktop app's own exe runs the packed CLI script with ELECTRON_RUN_AS_NODE=1.
+export function dshCommand(args, bin = dshBin(), platform = process.platform) {
+  if (platform !== 'win32') return { file: bin, args, options: {} }
+  if (/\.(cmd|bat)$/i.test(bin)) {
+    const quote = (a) => (/[\s"&|<>^()%!]/.test(a) || a === '' ? `"${a.replace(/"/g, '""')}"` : a)
+    const line = [bin, ...args].map(quote).join(' ')
+    return { file: process.env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', `"${line}"`], options: { windowsVerbatimArguments: true } }
   }
+  if (/DeepSeek Harness\.exe$/i.test(bin)) {
+    return { file: bin, args: [path.join(path.dirname(bin), ...WIN_DSH_SCRIPT), ...args], options: { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } } }
+  }
+  return { file: bin, args, options: {} }
+}
+
+// Stop a process. On Windows the dsh we started may be cmd.exe or Electron with
+// children of its own, so the whole tree of that one pid is ended.
+function stopProcess(pid) {
+  if (!IS_WIN) return process.kill(pid, 'SIGTERM')
+  execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true })
 }
 
 // Expand `~`, resolve, and follow symlinks when the path exists, so the same
@@ -52,7 +97,17 @@ function patchArgs() {
 // Preferred backend: prompts go through the host's own session controller, so
 // they work on any session and show up live in the Harness UI.
 
-export const hostSocket = () => process.env.DSH_BRIDGE_SOCKET || path.join(config.bridgeHome, 'host.sock')
+// A Unix socket file on macOS / Linux. Node cannot use socket files on Windows,
+// so there the same path maps to a per-user named pipe; DSH_BRIDGE_SOCKET may
+// be a path or a \\.\pipe\ name. Must match socketEndpoint() in host/lib/socket.js.
+const PIPE_PREFIX = /^\\\\[.?]\\pipe\\/i
+export function socketEndpoint(p, platform = process.platform) {
+  if (platform !== 'win32' || PIPE_PREFIX.test(p)) return p
+  const key = path.win32.resolve(p).toLowerCase()
+  return `\\\\.\\pipe\\dsh-bridge-${crypto.createHash('sha256').update(key).digest('hex').slice(0, 16)}`
+}
+
+export const hostSocket = () => socketEndpoint(process.env.DSH_BRIDGE_SOCKET || path.join(config.bridgeHome, 'host.sock'))
 
 export function hostCall(method, params = {}, { timeoutMs = 15000 } = {}) {
   return new Promise((resolve, reject) => {
@@ -280,7 +335,7 @@ export function startRun({ message, session_id, cwd }) {
   })
 
   const runner = spawn(process.execPath, [path.join(HERE, 'cli.mjs'), '_run', runId], {
-    detached: true, stdio: 'ignore', cwd: workdir, env: process.env,
+    detached: true, stdio: 'ignore', cwd: workdir, env: process.env, windowsHide: true,
   })
   runner.unref()
   return runId
@@ -299,10 +354,20 @@ export async function executeRun(runId) {
 
   const events = fs.createWriteStream(path.join(dir, 'events.ndjson'), { mode: 0o600 })
   const stderr = fs.openSync(path.join(dir, 'stderr.log'), 'w', 0o600)
-  const child = spawn(dshBin(), args, { cwd: meta.cwd, stdio: ['pipe', 'pipe', stderr], env: process.env })
+  // No dsh found at all is a failed run with a reason, not a runner that dies silently.
+  let launch
+  try { launch = dshCommand(args) } catch (error) {
+    events.end()
+    fs.writeSync(stderr, `dsh: ${error.message}\n`)
+    return writeExit(dir, { exit_code: null, signal: null, state: 'failed' })
+  }
+  const child = spawn(launch.file, launch.args, { cwd: meta.cwd, stdio: ['pipe', 'pipe', stderr], env: process.env, windowsHide: true, ...launch.options })
+  // A dsh that cannot start (missing, not executable) is a failed run, not a crashed runner.
+  const started = new Promise((resolve) => child.once('error', (error) => resolve(error)))
+  child.stdin.on('error', () => {})
   writeJson(path.join(dir, 'pid.json'), { runner: process.pid, dsh: child.pid })
   // A cancel that arrived while the child was starting (before pid.json existed).
-  if (fs.existsSync(cancelFlag(dir))) child.kill('SIGTERM')
+  if (fs.existsSync(cancelFlag(dir))) { try { IS_WIN ? stopProcess(child.pid) : child.kill('SIGTERM') } catch { /* not started */ } }
   fs.createReadStream(path.join(dir, 'message.txt')).pipe(child.stdin)
 
   // Keep only JSON lines; the CLI also prints plain log lines on stdout.
@@ -311,9 +376,18 @@ export async function executeRun(runId) {
     pending += chunk
     const lines = pending.split('\n')
     pending = lines.pop()
-    for (const line of lines) if (line.startsWith('{')) events.write(line + '\n')
+    for (const raw of lines) {
+      const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw // CRLF output on Windows
+      if (line.startsWith('{')) events.write(line + '\n')
+    }
   })
 
+  const spawnError = await Promise.race([started, new Promise((resolve) => child.once('spawn', () => resolve(null)))])
+  if (spawnError) {
+    events.end()
+    fs.writeSync(stderr, `dsh: could not start ${launch.file}: ${spawnError.message}\n`)
+    return writeExit(dir, { exit_code: null, signal: null, state: 'failed' })
+  }
   const [code, signal] = await new Promise((resolve) => child.on('close', (c, s) => resolve([c, s])))
   if (pending.startsWith('{')) events.write(pending + '\n')
   await new Promise((resolve) => events.end(resolve))
@@ -390,7 +464,7 @@ export function cancelRun(runId) {
   if (st.state !== 'running') return st
   fs.writeFileSync(cancelFlag(dir), '', { mode: 0o600 })
   const pids = readJson(path.join(dir, 'pid.json'))
-  if (pids?.dsh) { try { process.kill(pids.dsh, 'SIGTERM') } catch { /* already gone */ } }
+  if (pids?.dsh) { try { stopProcess(pids.dsh) } catch { /* already gone */ } }
   if (pids && !alive(pids.runner)) writeExit(dir, { exit_code: null, signal: null, state: 'cancelled' })
   return { ...st, state: 'cancelling' }
 }
