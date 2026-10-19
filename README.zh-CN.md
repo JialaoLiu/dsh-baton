@@ -93,8 +93,8 @@ args = ["-y", "dsh-bridge-mcp"]
 | `dsh_list_sessions` | 列出对话（最新在前），带标题、目录、是否在跑；可按目录或关键字过滤 |
 | `dsh_read_session` | 读某个对话最近的消息和回复（含用到的工具名） |
 | `dsh_send` | 发消息。带 `session_id` 续接那个对话；带 `cwd` 或 `workspace_id` 新开对话（`cwd` 还不是工作区时会先登记）。立即返回 `run_id` |
-| `dsh_status` | 查看运行进度：状态、最近的文字和工具调用、最终回复；回合结束但子智能体/后台任务还在跑时给出 `waiting_on` |
-| `dsh_wait` | 等到运行结束（或超时）再返回结果 |
+| `dsh_status` | 查看运行进度：状态、最近的文字和工具调用、最终回复；回合结束但子智能体/后台任务还在跑时给出 `waiting_on`；中途有人在 Harness 界面里发消息时给出 `human_interjections`；被 Harness 重启打断的任务状态为 `interrupted` |
+| `dsh_wait` | 等运行结束。约 50 秒（`timeout_s`）内返回，还没做完会带 `timed_out`，再调用一次即可；等待期间会发进度通知 |
 | `dsh_session_activity` | 对话此刻在做什么：正在跑的回合、子智能体（任意层级）、后台任务 |
 | `dsh_cancel` | 按 `run_id` 或 `session_id` 停掉整个对话的工作：当前回合、子智能体、后台任务（排队中的消息不会被删） |
 | `dsh_rename_session` | 给对话改名 |
@@ -148,7 +148,7 @@ dsh-bridge rename-workspace ~/code/new-app 新名字
 </p>
 
 <p align="center">
-  <img src="./assets/readme/zh/limits.svg" width="100%" alt="已知限制：桥接任务在跑时别在界面里往同一个对话发消息；Harness 重启后 run_id 会重置；长任务用后台 wait">
+  <img src="./assets/readme/zh/limits.svg" width="100%" alt="使用须知：任务进行中在界面里发的话会作为人工插话记到任务上；任务记录在 Harness 重启后还在，被打断的标为 interrupted；dsh_wait 约 50 秒内返回，没做完就再调用一次">
 </p>
 
 任何能以你的身份运行程序的进程都能通过这个套接字驱动 Harness，这和直接运行 `dsh` 的权限一样。本项目依赖 Harness 0.2.1 系列的内部服务接口，Harness 大版本更新后可能需要跟进。

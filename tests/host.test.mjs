@@ -12,8 +12,10 @@ import { socketEndpoint } from '../host/lib/socket.js'
 
 const IS_WIN = process.platform === 'win32'
 
-function startHost({ activity = () => [], sessions = [], workspaces = [], sock: sockPath } = {}) {
+function startHost({ activity = () => [], sessions = [], workspaces = [], sock: sockPath, home } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-'))
+  // Run records go to the bridge home: keep them out of the real ~/.dsh-bridge.
+  process.env.DSH_BRIDGE_HOME = home ?? path.join(dir, 'bridge')
   const sock = sockPath ?? path.join(dir, 'h.sock')
   const endpoint = socketEndpoint(sock) // where the host listens: the path itself, or a named pipe on Windows
   const logs = []
@@ -324,4 +326,53 @@ test('an activity read failure is not treated as idle', async (t) => {
   const done = await h.call('wait', { run_id: run.run_id, timeout_s: 10 })
   assert.equal(done.state, 'completed')
   assert.equal(done.error, null)
+})
+
+test('a message typed in the Harness UI mid-turn is recorded on the running run', async (t) => {
+  const h = startHost(); t.after(h.close); await h.ready
+  const run = await h.call('send', { session_id: 'A', message: 'build it' })
+  const a = S('A')
+  h.emit(...a.turnStart()); h.emit(...a.userMessage(h.calls.prompt[0].requestId)); h.emit(...a.text('working'))
+  h.emit('session/event', { id: 'A' }, { type: 'user/message', time: 1, data: { source: { kind: 'user', rpcId: 'ui-typed' }, content: [{ type: 'text', text: 'use tabs, not spaces' }] } })
+  const st = await h.call('status', { run_id: run.run_id })
+  assert.equal(st.human_interjections.length, 1)
+  assert.equal(st.human_interjections[0].text, 'use tabs, not spaces')
+  assert.ok(st.recent_events.some((e) => e.type === 'human_input'))
+  // a bridge steer is not counted as a human interjection
+  await h.call('send', { session_id: 'A', message: 'steer', mode: 'steer' })
+  h.emit(...a.userMessage(h.calls.prompt[1].requestId))
+  assert.equal((await h.call('status', { run_id: run.run_id })).human_interjections.length, 1)
+})
+
+test('run records survive a host restart; an interrupted run is marked as such', async (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-home-'))
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }))
+  const h1 = startHost({ home }); await h1.ready
+  const done = await h1.call('send', { session_id: 'A', message: 'quick' })
+  const a = S('A')
+  h1.emit(...a.turnStart()); h1.emit(...a.userMessage(h1.calls.prompt[0].requestId)); h1.emit(...a.text('done!')); h1.emit(...a.turnEnd())
+  h1.emit('agent/status', { agent: { id: 'A' }, status: 'idle' })
+  await h1.call('wait', { run_id: done.run_id, timeout_s: 5 })
+  const live = await h1.call('send', { session_id: 'B', message: 'long' })
+  const b = S('B')
+  h1.emit(...b.turnStart()); h1.emit(...b.userMessage(h1.calls.prompt[1].requestId))
+  h1.close() // flushes the store, like Harness shutting the plugin down
+  if (!IS_WIN) assert.equal(fs.statSync(path.join(home, 'host-runs')).mode & 0o777, 0o700)
+  const h2 = startHost({ home }); t.after(h2.close); await h2.ready
+  const kept = await h2.call('status', { run_id: done.run_id })
+  assert.equal(kept.state, 'completed'); assert.equal(kept.final_text, 'done!')
+  const lost = await h2.call('status', { run_id: live.run_id })
+  assert.equal(lost.state, 'interrupted'); assert.match(lost.error, /restarted/)
+  assert.equal((await h2.call('wait', { run_id: live.run_id, timeout_s: 5 })).state, 'interrupted')
+})
+
+test('per-session state is dropped once a session has no active runs', async (t) => {
+  const h = startHost(); t.after(h.close); await h.ready
+  // many idle sessions producing turns must not accumulate anything observable as leaks
+  for (let i = 0; i < 200; i++) { const s = S(`idle-${i}`); h.emit(...s.turnStart()); h.emit(...s.text('x')); h.emit(...s.turnEnd()) }
+  const run = await h.call('send', { session_id: 'A', message: 'x' })
+  const a = S('A')
+  h.emit(...a.turnStart()); h.emit(...a.userMessage(h.calls.prompt[0].requestId)); h.emit(...a.text('ok')); h.emit(...a.turnEnd())
+  h.emit('agent/status', { agent: { id: 'A' }, status: 'idle' })
+  assert.equal((await h.call('wait', { run_id: run.run_id, timeout_s: 5 })).state, 'completed')
 })

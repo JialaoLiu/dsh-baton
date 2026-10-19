@@ -56,3 +56,40 @@ test('a null or malformed request gets an error reply and the server keeps worki
   assert.equal(raw.lines.filter((l) => l.error?.code === -32600).length, 4)
   assert.deepEqual(raw.lines.find((l) => l.id === 8).result, {})
 })
+
+test('dsh_wait waits in short chunks, reports progress, and returns before the client times out', async () => {
+  const net = await import('node:net')
+  const fs = await import('node:fs')
+  const { socketEndpoint } = await import('../host/lib/socket.js')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-w-'))
+  const sock = path.join(dir, 'h.sock')
+  const waits = []
+  // Fake host: every wait chunk times out (the run never finishes).
+  const server = net.createServer((c) => c.on('data', (d) => {
+    const req = JSON.parse(String(d).split('\n')[0])
+    waits.push(req.params?.timeout_s)
+    setTimeout(() => c.end(JSON.stringify({ id: req.id, result: { run_id: req.params.run_id, state: 'running', timed_out: true } }) + '\n'), 50)
+  }))
+  await new Promise((r) => server.listen(socketEndpoint(sock), r))
+  const child = spawn(process.execPath, [SERVER], { env: { ...process.env, DSH_BRIDGE_BACKEND: 'host', DSH_BRIDGE_SOCKET: sock } })
+  let out = ''
+  child.stdout.on('data', (d) => { out += d })
+  const t0 = Date.now()
+  child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'dsh_wait', arguments: { run_id: 'hrun-x', timeout_s: 2 }, _meta: { progressToken: 'p1' } } }) + '\n')
+  const reply = await new Promise((resolve) => {
+    const tick = setInterval(() => {
+      const msgs = out.split('\n').filter(Boolean).map((l) => JSON.parse(l))
+      const r = msgs.find((m) => m.id === 1)
+      if (r) { clearInterval(tick); resolve({ r, msgs }) }
+    }, 50)
+  })
+  child.stdin.end(); server.close(); fs.rmSync(dir, { recursive: true, force: true })
+  const result = JSON.parse(reply.r.result.content[0].text)
+  assert.equal(result.timed_out, true)
+  assert.match(result.hint, /Call dsh_wait again/)
+  assert.ok(Date.now() - t0 < 6000, 'returned near its 2 s budget')
+  assert.ok(waits.every((s) => s >= 1 && s <= 10), `chunks: ${waits}`)
+  const progress = reply.msgs.filter((m) => m.method === 'notifications/progress')
+  assert.ok(progress.length >= 1, 'sent progress notifications')
+  assert.equal(progress[0].params.progressToken, 'p1')
+})

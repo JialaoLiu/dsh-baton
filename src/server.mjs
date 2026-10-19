@@ -9,6 +9,27 @@ const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
 const str = (description) => ({ type: 'string', description })
 const int = (description, d) => ({ type: 'integer', description, default: d })
 
+const DEFAULT_WAIT_S = 50
+const WAIT_CHUNK_S = 10
+
+// Wait in short chunks so each one stays well inside any client's tool timeout,
+// reporting progress between chunks (clients that support it reset their timer).
+async function waitInChunks({ run_id, timeout_s = DEFAULT_WAIT_S }, progress) {
+  const total = Number.isFinite(Number(timeout_s)) ? Math.max(0, Number(timeout_s)) : DEFAULT_WAIT_S
+  const started = Date.now()
+  const deadline = started + total * 1000
+  for (;;) {
+    const left = Math.ceil((deadline - Date.now()) / 1000)
+    const t0 = Date.now()
+    const st = await core.api.wait({ run_id, timeout_s: Math.max(1, Math.min(WAIT_CHUNK_S, left)) })
+    if (!st.timed_out) return st
+    // Never spin: a chunk that came back early still takes a moment before the next one.
+    if (Date.now() - t0 < 500) await new Promise((r) => setTimeout(r, 500))
+    if (Date.now() >= deadline) return { ...st, hint: `Still ${st.state}. Call dsh_wait again with run_id ${run_id} to keep waiting.` }
+    progress?.(Math.round((Date.now() - started) / 1000), `run ${run_id} is ${st.state}`)
+  }
+}
+
 const TOOLS = [
   {
     name: 'dsh_list_workspaces',
@@ -45,15 +66,15 @@ const TOOLS = [
   },
   {
     name: 'dsh_status',
-    description: 'Progress of a run: state (queued/running/waiting/completed/failed/cancelled), session_id, recent events (text, tool calls), final reply, and waiting_on when the turn is over but sub-agents or background jobs are still working.',
+    description: 'Progress of a run: state (queued/running/waiting/completed/failed/cancelled, or interrupted when a Harness restart cut it short), session_id, recent events (text, tool calls), final reply, waiting_on when the turn is over but sub-agents or background jobs are still working, and human_interjections when someone typed in the Harness UI during the run (its result then reflects that input too).',
     inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send'), tail: int('How many recent events', 20) } },
     run: (a) => core.api.status(a),
   },
   {
     name: 'dsh_wait',
-    description: 'Block until a run finishes (or the timeout passes) and return its final status and reply.',
-    inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send'), timeout_s: int('Seconds to wait before returning with timed_out', 300) } },
-    run: (a) => core.api.wait(a),
+    description: 'Wait for a run to finish and return its final status and reply. Returns after timeout_s (default 50, short enough for clients that cap tool calls at about a minute) with timed_out: true if it is still running: then just call dsh_wait again with the same run_id. Sends progress notifications while waiting when the client asks for them.',
+    inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send'), timeout_s: int('Seconds to wait before returning with timed_out', DEFAULT_WAIT_S) } },
+    run: (a, { progress }) => waitInChunks(a, progress),
   },
   {
     name: 'dsh_rename_session',
@@ -110,7 +131,11 @@ async function handle(req) {
       const tool = TOOLS.find((t) => t.name === req.params?.name)
       if (!tool) throw Object.assign(new Error(`Unknown tool: ${req.params?.name}`), { code: -32602 })
       try {
-        const result = await tool.run(req.params.arguments || {})
+        // MCP progress: only when the client sent a progressToken with this call.
+        const token = req.params?._meta?.progressToken
+        const progress = token === undefined ? undefined : (done, message) =>
+          send({ jsonrpc: '2.0', method: 'notifications/progress', params: { progressToken: token, progress: done, message } })
+        const result = await tool.run(req.params.arguments || {}, { progress })
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
       } catch (e) {
         return { content: [{ type: 'text', text: e.message }], isError: true }

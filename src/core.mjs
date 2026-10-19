@@ -40,6 +40,7 @@ function winHarnessExe() {
   return dirs.map((d) => path.join(d, 'DeepSeek Harness.exe')).find((exe) => fs.existsSync(exe))
 }
 const WIN_DSH_SCRIPT = ['resources', 'app.asar', 'dsh', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js']
+const WIN_DSH_LAUNCHER = ['resources', 'runtime', 'cli', 'bin', 'dsh.cmd']
 
 export function dshBin() {
   if (process.env.DSH_BIN) return process.env.DSH_BIN
@@ -51,7 +52,12 @@ export function dshBin() {
     if (hit) return hit
   } catch { /* not on PATH */ }
   const exe = IS_WIN && winHarnessExe()
-  if (exe) return exe
+  if (exe) {
+    // Harness ≥ 0.2.1 ships its own launcher (the one its "add dsh to PATH" setting
+    // exposes); older builds only have the CLI packed in app.asar.
+    const launcher = path.join(path.dirname(exe), ...WIN_DSH_LAUNCHER)
+    return fs.existsSync(launcher) ? launcher : exe
+  }
   throw new Error('DeepSeek Harness CLI not found. Install DeepSeek Harness or set DSH_BIN to the dsh launcher.')
 }
 

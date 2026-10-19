@@ -24,6 +24,8 @@ const CANCEL_SETTLE_MS = 6000
 const ACTIVITY_MAX_ERRORS = 10
 const MAX_REQUEST_BYTES = 4 * 1024 * 1024
 const MAX_WAIT_S = 24 * 3600
+const MAX_HUMAN_INPUTS = 10
+const PERSIST_DELAY_MS = 1000
 
 function bridgeHome() {
   return process.env.DSH_BRIDGE_HOME || path.join(os.homedir(), '.dsh-bridge')
@@ -109,6 +111,7 @@ export function apply(ctx) {
     message_preview: run.preview, final_text: run.finalText, turn_end: run.turnEnd, error: run.error,
     ...(run.waitingOn ? { waiting_on: run.waitingOn } : {}),
     ...(run.supersededBy ? { superseded_by: run.supersededBy } : {}),
+    ...(run.humanInputs?.length ? { human_interjections: run.humanInputs } : {}),
     ...(tail ? { recent_events: run.events.slice(-tail) } : {}),
   })
 
@@ -120,6 +123,18 @@ export function apply(ctx) {
     Object.assign(run, extra, { state, endedAt: new Date().toISOString() })
     for (const resolve of waiters.get(run.id) ?? []) resolve()
     waiters.delete(run.id)
+    persist(run)
+    if (!activeRunsFor(run.sessionId).length) forgetSession(run.sessionId)
+  }
+
+  // Per-session bookkeeping only lives while the session has active runs, so a
+  // host that stays up for days does not accumulate state for idle sessions.
+  function forgetSession(sessionId) {
+    clearTimeout(quietTimers.get(sessionId))
+    quietTimers.delete(sessionId)
+    quietSinceBySession.delete(sessionId)
+    lastRunningAt.delete(sessionId)
+    activityErrors.delete(sessionId)
   }
 
   // Active bridge runs of one session, oldest first. Several can be active at
@@ -136,6 +151,69 @@ export function apply(ctx) {
   function pushEvent(run, e) {
     run.events.push(e)
     if (run.events.length > MAX_EVENTS) run.events.splice(0, run.events.length - MAX_EVENTS)
+    persist(run)
+  }
+
+  // --- persistence: run records survive a Harness restart -----------------------
+  // One JSON file per run under <bridge home>/host-runs, written at most once a
+  // second per change burst. Enabled only once this host owns the socket, so a
+  // second host never overwrites the first one's records.
+
+  const store = { dir: path.join(bridgeHome(), 'host-runs'), enabled: false, dirty: new Set(), timer: null }
+  const RUN_FILE = /^(hrun-[\w-]+)\.json$/
+
+  function persist(run) {
+    if (!store.enabled) return
+    store.dirty.add(run.id)
+    if (!store.timer) store.timer = setTimeout(guard('persist runs', flushRuns), PERSIST_DELAY_MS)
+  }
+
+  function writeRunFile(run) {
+    const file = path.join(store.dir, `${run.id}.json`)
+    const tmp = `${file}.tmp`
+    fs.writeFileSync(tmp, JSON.stringify(run), { mode: 0o600 })
+    fs.renameSync(tmp, file)
+  }
+
+  function flushRuns() {
+    clearTimeout(store.timer)
+    store.timer = null
+    for (const id of store.dirty) {
+      const run = runs.get(id)
+      try {
+        if (run) writeRunFile(run)
+        else fs.rmSync(path.join(store.dir, `${id}.json`), { force: true })
+      } catch (error) { logError('persist run', error) }
+    }
+    store.dirty.clear()
+  }
+
+  // Load earlier records. A run that was active when Harness went away cannot
+  // finish any more (Harness ends the turn on restart), so it is marked interrupted.
+  function enableStore() {
+    fs.mkdirSync(store.dir, { recursive: true, mode: 0o700 })
+    if (!IS_WIN) fs.chmodSync(store.dir, 0o700)
+    const loaded = []
+    for (const name of fs.readdirSync(store.dir)) {
+      const m = RUN_FILE.exec(name)
+      if (!m) { if (name.endsWith('.tmp')) fs.rmSync(path.join(store.dir, name), { force: true }); continue }
+      try {
+        const run = JSON.parse(fs.readFileSync(path.join(store.dir, name), 'utf8'))
+        if (run?.id === m[1]) loaded.push(run)
+      } catch { fs.rmSync(path.join(store.dir, name), { force: true }) }
+    }
+    loaded.sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)))
+    for (const old of loaded.splice(0, Math.max(0, loaded.length - MAX_RUNS))) fs.rmSync(path.join(store.dir, `${old.id}.json`), { force: true })
+    store.enabled = true
+    for (const run of loaded) {
+      if (runs.has(run.id)) continue
+      run.events ??= []
+      runs.set(run.id, run)
+      if (isActive(run)) {
+        Object.assign(run, { state: 'interrupted', endedAt: new Date().toISOString(), error: 'Harness restarted while this run was active; its turn was stopped.' })
+        persist(run)
+      }
+    }
   }
 
   // Per-session turn state: whether the current turn has produced assistant
@@ -145,12 +223,26 @@ export function apply(ctx) {
 
   ctx.on('session/event', guard('session/event', (session, event) => {
     const data = event.data ?? {}
+    // Turn state is kept only for a turn in progress and dropped at its end.
     if (event.type === 'turn/start') turns.set(session.id, { hasOutput: false })
+    else if (event.type === 'assistant/message' && turns.has(session.id)) turns.get(session.id).hasOutput = true
     const active = activeRunsFor(session.id)
+    if (event.type === 'turn/end' && !active.some((r) => r.sawPrompt)) turns.delete(session.id)
     if (!active.length) return
     if (event.type === 'user/message') {
       const run = active.find((r) => r.requestId === data.source?.rpcId)
       const opensTurn = !turns.get(session.id)?.hasOutput
+      // A user message no bridge run sent: someone typing in the Harness UI (or
+      // another client). Mid-turn it joins the work of the runs in progress, so
+      // they record it: their result then reflects that input too.
+      const fromBridge = run || [...runs.values()].some((r) => r.requestId === data.source?.rpcId)
+      if (data.source?.kind === 'user' && !fromBridge && !opensTurn) {
+        const text = textOf(data.content).slice(0, 500)
+        for (const r of outputReceiversFor(session.id)) {
+          r.humanInputs = [...(r.humanInputs ?? []), { time: iso(event.time) ?? new Date().toISOString(), text }].slice(-MAX_HUMAN_INPUTS)
+          pushEvent(r, { type: 'human_input', text })
+        }
+      }
       if (data.source?.kind === 'user' && opensTurn && run?.mode !== 'steer') {
         // A new user-started turn: runs whose own turn already ended keep their
         // result instead of absorbing this turn's output, but still wait for any
@@ -166,13 +258,12 @@ export function apply(ctx) {
         }
         if (closed) scheduleQuietCheck(session.id, 0)
       }
-      if (run) Object.assign(run, { sawPrompt: true, state: 'running' })
+      if (run) { Object.assign(run, { sawPrompt: true, state: 'running' }); persist(run) }
       return
     }
     const receivers = outputReceiversFor(session.id)
     if (!receivers.length) return
     if (event.type === 'assistant/message') {
-      turns.set(session.id, { hasOutput: true })
       const content = data.message?.content
       const text = textOf(content)
       for (const run of receivers) {
@@ -189,9 +280,10 @@ export function apply(ctx) {
       // completed one ends it only once the session is quiet (no sub-agents or jobs
       // left), because Harness wakes the agent again when those report back.
       const reason = data.reason ?? null
-      for (const run of receivers) run.turnEnd = reason
+      for (const run of receivers) { run.turnEnd = reason; persist(run) }
       if (reason?.kind && reason.kind !== 'completed') for (const run of receivers) settle(run, 'failed')
       else scheduleQuietCheck(session.id, 1000)
+      turns.delete(session.id)
     }
   }))
 
@@ -240,7 +332,7 @@ export function apply(ctx) {
     const background = items.filter((g) => g.kind !== 'turn')
     for (const run of receivers.filter((r) => r.outputClosed)) {
       if (background.length === 0) settle(run, 'completed', { waitingOn: null, error: null })
-      else run.waitingOn = summary(background)
+      else { run.waitingOn = summary(background); persist(run) }
     }
     // A run whose own turn has not ended (and that has not seen the agent idle) is not done yet.
     const open = receivers.filter((r) => !r.outputClosed && (r.turnEnd || r.idleSeen))
@@ -268,8 +360,8 @@ export function apply(ctx) {
 
   ctx.on('agent/status', guard('agent/status', ({ agent, status }) => {
     if (!agent) return
-    if (status === 'running') lastRunningAt.set(agent.id, Date.now())
     const receivers = receiversFor(agent.id)
+    if (status === 'running' && receivers.length) lastRunningAt.set(agent.id, Date.now())
     for (const run of outputReceiversFor(agent.id)) {
       if (status === 'running') run.state = 'running'
       else if (status === 'waiting') run.state = 'waiting' // needs a person in the Harness UI (approval / question)
@@ -376,9 +468,10 @@ export function apply(ctx) {
   // Keep at most MAX_RUNS records, dropping the oldest finished one; active runs are never evicted.
   function remember(run) {
     runs.set(run.id, run)
+    persist(run)
     if (runs.size <= MAX_RUNS) return
     for (const [id, r] of runs) {
-      if (!isActive(r)) { runs.delete(id); return }
+      if (!isActive(r)) { runs.delete(id); persist({ id }); return }
     }
   }
 
@@ -529,6 +622,7 @@ export function apply(ctx) {
     let disposed = false
     claimSocket(sock).then(() => {
       if (disposed) return
+      try { enableStore() } catch (error) { logError('run store', error) }
       server = net.createServer(serve)
       server.on('error', (error) => ctx.logger?.error?.(`dsh-bridge-host socket error: ${error.message}`))
       server.listen(sock, () => {
@@ -538,6 +632,8 @@ export function apply(ctx) {
     }).catch((error) => ctx.logger?.error?.(`dsh-bridge-host not started: ${error.message}`))
     return () => {
       disposed = true
+      if (store.enabled) { try { flushRuns() } catch (error) { logError('persist runs', error) } }
+      store.enabled = false
       // Release callers blocked in wait() and close open connections, so an
       // unloaded or reloaded plugin leaves no timers or sockets behind.
       for (const set of waiters.values()) for (const done of [...set]) done()

@@ -93,8 +93,8 @@ From source: install the plugin from this repo's absolute `host` folder path, an
 | `dsh_list_sessions` | Sessions newest first, with title, folder and running state; filter by folder or text |
 | `dsh_read_session` | Recent prompts and replies of one session (with tool names) |
 | `dsh_send` | Send a message: `session_id` continues that session; `cwd` or `workspace_id` starts a new one (a `cwd` that is not a workspace yet is registered first). Returns a `run_id` at once |
-| `dsh_status` | Run progress: state, recent text and tool calls, final reply; `waiting_on` when the turn is over but sub-agents or jobs still run |
-| `dsh_wait` | Wait until the run ends (or times out) |
+| `dsh_status` | Run progress: state, recent text and tool calls, final reply; `waiting_on` when the turn is over but sub-agents or jobs still run; `human_interjections` when someone typed in the Harness UI mid-run; state `interrupted` for a run cut short by a Harness restart |
+| `dsh_wait` | Wait for the run to end. Returns within about 50 s (`timeout_s`) with `timed_out` if it is still going: call it again. Sends progress notifications while waiting |
 | `dsh_session_activity` | What a session is doing now: running turn, sub-agents (any depth), background jobs |
 | `dsh_cancel` | Stop everything a session is doing, by `run_id` or `session_id`: turn, sub-agents, jobs (queued messages stay) |
 | `dsh_rename_session` | Rename a session |
@@ -146,7 +146,7 @@ When the plugin is unreachable, the MCP server falls back to Harness's `dsh head
 </p>
 
 <p align="center">
-  <img src="./assets/readme/limits.svg" width="100%" alt="Known limitations: don't type into a session during a bridge run, run ids reset when Harness restarts, prefer the background wait command">
+  <img src="./assets/readme/limits.svg" width="100%" alt="Good to know: a message typed in the UI mid-run is flagged on the run as a human interjection, run records survive a Harness restart (cut-short runs show interrupted), dsh_wait returns within about 50 s so call it again while a run is going">
 </p>
 
 Any process running as your OS user can drive Harness through the socket, the same as running `dsh` directly. dsh-bridge relies on Harness 0.2.1-series internal service APIs, so a major Harness update may need a follow-up release.

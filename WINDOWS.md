@@ -10,11 +10,10 @@ Verified on Windows 11 with DeepSeek Harness 0.2.1-rc.2 (desktop app), Node.js 2
   - `DSH_BRIDGE_HOME` / `DSH_BRIDGE_SOCKET` still move it. A path is mapped the same way on both sides, and a value that is already `\\.\pipe\…` is used as is.
   - There is no file to clean up: the pipe disappears when Harness exits.
   - Access: Windows' default pipe security lets other standard users only read it, so they cannot drive Harness through it. Administrators and SYSTEM can, as with any process you run.
-- **The headless backend uses Harness's own CLI.** The desktop app ships no `dsh.exe`; its CLI is packed in `resources\app.asar` and runs on the app's own Electron binary. dsh-bridge finds it automatically, in this order:
+- **The headless backend uses Harness's own CLI.** The desktop app ships no `dsh.exe`. Harness ≥ 0.2.1 has a launcher at `resources\runtime\cli\bin\dsh.cmd`; older builds only have the CLI packed in `resources\app.asar`, which runs on the app's own Electron binary. dsh-bridge finds it automatically, in this order:
   1. `DSH_BIN`, if set;
-  2. `dsh` on `PATH`, preferring `.exe` / `.cmd` / `.bat` over extensionless shims;
-  3. the default install at `%LOCALAPPDATA%\Programs\DeepSeek Harness`;
-  4. any `InstallLocation` from the uninstall registry entries, so a custom folder such as `E:\Software\DeepSeek Harness` works.
+  2. `dsh` on `PATH`, preferring `.exe` / `.cmd` / `.bat` over extensionless shims (Harness's "add dsh to PATH" setting puts `dsh.cmd` there);
+  3. the Harness install, either the default `%LOCALAPPDATA%\Programs\DeepSeek Harness` or any `InstallLocation` from the uninstall registry entries, so a custom folder such as `E:\Software\DeepSeek Harness` works. There its `dsh.cmd` launcher is used, or the packed CLI on older builds.
 
   A `.cmd` launcher is started through `cmd.exe`.
 - **Cancelling stops the whole process tree** of that one run (`taskkill /PID <pid> /T /F`). It never kills by image name.
@@ -45,7 +44,9 @@ Requires DeepSeek Harness ≥ 0.2.1-rc.2 and Node.js ≥ 22.15.
    $env:DSH_DESKTOP_NODE_EXECUTABLE = "$app\DeepSeek Harness.exe"
    $env:Path = "$app\resources\runtime\bin;$env:Path"
    cd "$env:USERPROFILE\.dsh\profiles\desktop"
-   & "$app\DeepSeek Harness.exe" "$app\resources\runtime\pnpm\bin\pnpm.mjs" install --store-dir "$env:USERPROFILE\.dsh\desktop\pnpm\store\v11"
+   # Harness ≥ 0.2.1; older builds have it at resources\runtime\pnpm\bin\pnpm.mjs
+   $pnpm = "$app\resources\runtime\primary-runtime\dependencies\pnpm\bin\pnpm.mjs"
+   & "$app\DeepSeek Harness.exe" $pnpm install --store-dir "$env:USERPROFILE\.dsh\desktop\pnpm\store\v11"
    ```
 
    `node_modules\dsh-bridge-host` becomes a junction to your `host` folder.
@@ -115,7 +116,7 @@ The suite runs on Windows with named pipes. Two POSIX-only checks are skipped: f
 ## 中文要点
 
 - **套接字改为命名管道。** Windows 上 Node 不能监听 Unix 套接字文件，所以同一路径被映射成按用户区分的命名管道 `\\.\pipe\dsh-bridge-<哈希>`。插件和 MCP 两边算法一致，`DSH_BRIDGE_SOCKET` 仍然可用，Harness 退出后管道自动消失。
-- **headless 用 Harness 自带的 CLI。** CLI 打包在 `app.asar` 里，由 Harness 自己的 exe 以 Node 模式运行。会按顺序自动查找：`DSH_BIN`、`PATH` 里的 `dsh`、默认安装位置，以及注册表里的自定义安装目录。
+- **headless 用 Harness 自带的 CLI。** Harness ≥ 0.2.1 自带 `resources\runtime\cli\bin\dsh.cmd`；更早的版本只有打包在 `app.asar` 里的 CLI，由 Harness 自己的 exe 以 Node 模式运行。会按顺序自动查找：`DSH_BIN`、`PATH` 里的 `dsh`、默认安装位置，以及注册表里的自定义安装目录。
 - **从源码安装插件要手动来。** `dsh plugin --profile desktop` 会拒绝桌面版托管的 profile，所以：
   1. 退出 Harness；
   2. 在 profile 的 `package.json` 里加 `link:` 依赖，并在 `dsh.profile.bundles` 里加上 `dsh-bridge-host`；
