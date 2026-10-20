@@ -93,3 +93,30 @@ test('dsh_wait waits in short chunks, reports progress, and returns before the c
   assert.ok(progress.length >= 1, 'sent progress notifications')
   assert.equal(progress[0].params.progressToken, 'p1')
 })
+
+test('dsh_send tells the host who is sending, from the client name in initialize', async () => {
+  const net = await import('node:net')
+  const fs = await import('node:fs')
+  const { socketEndpoint } = await import('../host/lib/socket.js')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-s-'))
+  const sock = path.join(dir, 'h.sock')
+  const sends = []
+  const server = net.createServer((c) => c.on('data', (d) => {
+    const req = JSON.parse(String(d).split('\n')[0])
+    if (req.method === 'send') sends.push(req.params)
+    c.end(JSON.stringify({ id: req.id, result: { run_id: 'hrun-1', state: 'queued' } }) + '\n')
+  }))
+  await new Promise((r) => server.listen(socketEndpoint(sock), r))
+  const { DSH_BRIDGE_SENDER, ...env } = process.env
+  const child = spawn(process.execPath, [SERVER], { env: { ...env, DSH_BRIDGE_BACKEND: 'host', DSH_BRIDGE_SOCKET: sock } })
+  let out = ''
+  child.stdout.on('data', (d) => { out += d })
+  for (const m of [
+    { id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: 'codex-mcp-client', version: '1' } } },
+    { id: 2, method: 'tools/call', params: { name: 'dsh_send', arguments: { session_id: 's1', message: 'hi' } } },
+  ]) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n')
+  await new Promise((resolve) => { const tick = setInterval(() => { if (out.includes('"id":2')) { clearInterval(tick); resolve() } }, 50) })
+  child.stdin.end(); server.close(); fs.rmSync(dir, { recursive: true, force: true })
+  assert.equal(sends[0].sender, 'codex')
+  assert.equal(sends[0].message, 'hi')
+})

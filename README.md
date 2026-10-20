@@ -136,7 +136,7 @@ Start a **new** conversation in Claude Code or Codex (no reconnecting needed) an
 | `dsh_create_workspace` | Register a folder as a workspace (creates the folder if missing); returns the existing one if already registered |
 | `dsh_list_sessions` | Sessions newest first, with title, folder and running state; filter by folder or text |
 | `dsh_read_session` | Recent prompts and replies of one session (with tool names) |
-| `dsh_send` | Send a message: `session_id` continues that session; `cwd` or `workspace_id` starts a new one (a `cwd` that is not a workspace yet is registered first). Returns a `run_id` at once |
+| `dsh_send` | Send a message: `session_id` continues that session; `cwd` or `workspace_id` starts a new one (a `cwd` that is not a workspace yet is registered first). Returns a `run_id` at once. In Harness the message is marked "Sent by Claude / ChatGPT from another chat" |
 | `dsh_status` | Run progress: state, recent text and tool calls, final reply; `waiting_on` when the turn is over but sub-agents or jobs still run; `human_interjections` when someone typed in the Harness UI mid-run; state `interrupted` for a run cut short by a Harness restart |
 | `dsh_wait` | Wait for the run to end. Returns within about 50 s (`timeout_s`) with `timed_out` if it is still going: call it again. Sends progress notifications while waiting |
 | `dsh_session_activity` | What a session is doing now: running turn, sub-agents (any depth), background jobs |

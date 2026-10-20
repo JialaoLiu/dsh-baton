@@ -60,7 +60,7 @@ const TOOLS = [
     description: 'Send a message to DeepSeek Harness. With session_id it continues that existing session (same context, no new session); with cwd or workspace_id it starts a new session there (a cwd that is not a workspace yet is registered in the sidebar first). Returns immediately with a run_id; the turn runs in the background. If the session is already working, mode followup (default) queues the message after the current turn and steer adds it to the running turn; each message gets its own run_id. The message is delivered verbatim as a user message, with no prefix or label added: write it in the language the user works in, self-contained (Harness does not see this conversation), and say who is asking only if it matters. Follow up with dsh_wait or dsh_status.',
     inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: 'followup queues after the current turn (default); steer injects into a running turn', default: 'followup' } } },
     run: async (a) => {
-      const st = await core.api.send(a)
+      const st = await core.api.send({ ...a, sender: core.senderOf(process.env.DSH_BRIDGE_SENDER || clientName) })
       return { ...st, hint: `Run started. Wait with dsh_wait {"run_id":"${st.run_id}"}, or run \`dsh-bridge wait ${st.run_id}\` as a background shell command to be woken when it ends.` }
     },
   },
@@ -108,6 +108,8 @@ const TOOLS = [
   },
 ]
 
+let clientName = null
+
 function send(msg) {
   process.stdout.write(JSON.stringify(msg) + '\n')
 }
@@ -116,6 +118,7 @@ async function handle(req) {
   switch (req.method) {
     case 'initialize': {
       const asked = req.params?.protocolVersion
+      clientName = req.params?.clientInfo?.name ?? null
       return {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: {} },

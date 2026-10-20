@@ -153,6 +153,16 @@ export async function hostAvailable() {
   }
 }
 
+// Who a bridge message is from, shown on it in the Harness chat: DSH_BRIDGE_SENDER if set,
+// else the MCP client's name (claude-code, claude-ai → claude; codex-mcp-client → codex).
+export function senderOf(clientName = process.env.DSH_BRIDGE_SENDER) {
+  const n = String(clientName ?? '').toLowerCase()
+  if (n.includes('claude')) return 'claude'
+  if (n.includes('codex')) return 'codex'
+  const slug = n.replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32)
+  return slug || undefined
+}
+
 export const isHostRun = (runId) => typeof runId === 'string' && runId.startsWith('hrun-')
 
 // ---------------------------------------------------------------------------

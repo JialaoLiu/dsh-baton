@@ -139,3 +139,12 @@ test('headless: run records are private to the user', { skip: IS_WIN && 'POSIX f
   core.cancelRun(runId)
   await core.waitRun(runId, { timeout_s: 15, poll_ms: 100 })
 })
+
+test('senderOf maps MCP client names to a short sender', () => {
+  assert.equal(core.senderOf('claude-code'), 'claude')
+  assert.equal(core.senderOf('claude-ai'), 'claude')
+  assert.equal(core.senderOf('codex-mcp-client'), 'codex')
+  assert.equal(core.senderOf('Cursor (vscode)'), 'cursor-vscode')
+  assert.equal(core.senderOf(''), undefined)
+  assert.equal(core.senderOf(null), undefined)
+})

@@ -26,6 +26,10 @@ const MAX_REQUEST_BYTES = 4 * 1024 * 1024
 const MAX_WAIT_S = 24 * 3600
 const MAX_HUMAN_INPUTS = 10
 const PERSIST_DELAY_MS = 1000
+// A bridge prompt's request id carries its sender ("dsh-bridge.<sender>.<uuid>"), so the
+// client half (lib/client.js) can label the message in the chat without any extra state.
+const SENDER_RE = /^[a-z0-9-]{1,32}$/
+const requestIdFor = (sender) => (sender ? `dsh-bridge.${sender}.${crypto.randomUUID()}` : crypto.randomUUID())
 
 function bridgeHome() {
   return process.env.DSH_BRIDGE_HOME || path.join(os.homedir(), '.dsh-bridge')
@@ -109,6 +113,7 @@ export function apply(ctx) {
   const publicRun = (run, tail = 20) => ({
     run_id: run.id, session_id: run.sessionId, state: run.state, started_at: run.startedAt, ended_at: run.endedAt,
     message_preview: run.preview, final_text: run.finalText, turn_end: run.turnEnd, error: run.error,
+    ...(run.sender ? { sender: run.sender } : {}),
     ...(run.waitingOn ? { waiting_on: run.waitingOn } : {}),
     ...(run.supersededBy ? { superseded_by: run.supersededBy } : {}),
     ...(run.humanInputs?.length ? { human_interjections: run.humanInputs } : {}),
@@ -434,8 +439,9 @@ export function apply(ctx) {
     return { session_id, cwd: meta?.cwd ?? null, title, total_messages: messages.length, messages: messages.slice(-last) }
   }
 
-  async function send({ message, session_id, cwd, workspace_id, mode = 'followup' }) {
+  async function send({ message, session_id, cwd, workspace_id, mode = 'followup', sender }) {
     if (!message || !message.trim()) throw new Error('message is required')
+    if (sender != null && !SENDER_RE.test(sender)) throw new Error('sender must be 1-32 characters of a-z, 0-9 or -')
     let sessionId = session_id
     let workspace = null
     if (!sessionId) {
@@ -447,7 +453,7 @@ export function apply(ctx) {
     const ahead = activeRunsFor(sessionId).map((r) => r.id)
     const run = {
       id: `hrun-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`,
-      sessionId, requestId: crypto.randomUUID(), mode, state: 'queued', sawPrompt: false,
+      sessionId, requestId: requestIdFor(sender), ...(sender ? { sender } : {}), mode, state: 'queued', sawPrompt: false,
       startedAt: new Date().toISOString(), endedAt: null, preview: message.slice(0, 200),
       events: [], finalText: null, turnEnd: null, error: null,
     }

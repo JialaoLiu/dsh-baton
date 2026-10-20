@@ -52,7 +52,7 @@ async function main() {
       return print(await core.api.read_session({ session_id: rest[0], last: Number(flags.last) || 10 }))
     case 'send': {
       const message = rest.join(' ') === '-' ? await readStdin() : rest.join(' ')
-      return print(await core.api.send({ message, session_id: flags.session, cwd: flags.cwd, workspace_id: flags.workspace, ...(flags.mode ? { mode: flags.mode } : {}) }))
+      return print(await core.api.send({ message, sender: core.senderOf(), session_id: flags.session, cwd: flags.cwd, workspace_id: flags.workspace, ...(flags.mode ? { mode: flags.mode } : {}) }))
     }
     case 'status':
       return print(await core.api.status({ run_id: rest[0] }))
