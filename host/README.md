@@ -6,7 +6,7 @@ DeepSeek Harness 插件，配合 [dsh-bridge](../README.zh-CN.md) 使用。它�
 
 ## Install / 安装
 
-Harness → Plugins / 插件 → Add plugin / 添加插件 → `dsh-bridge-host` → Install / 安装 → Apply now / 立即应用
+Harness → Plugins / 插件 → Add plugin / 添加插件 → `dsh-bridge-host` → Install / 安装 → Enable now / 立即应用
 
 Then connect the MCP server / 然后接入 MCP 服务器: see [dsh-bridge](../README.md).
 

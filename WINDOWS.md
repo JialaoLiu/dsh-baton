@@ -20,13 +20,17 @@ Verified on Windows 11 with DeepSeek Harness 0.2.1-rc.2 (desktop app), Node.js 2
 
 ## Install
 
-Requires DeepSeek Harness ≥ 0.2.1-rc.2 and Node.js ≥ 22.15.
+Requires DeepSeek Harness ≥ 0.2.1-rc.2, Node.js ≥ 22.15 and git. The npm packages are not published yet, so install from a clone, for example:
+
+```powershell
+git clone https://github.com/JialaoLiu/dsh-bridge.git C:\dev\dsh-bridge
+```
 
 ### 1. The plugin in Harness
 
-**From npm:** Harness → **Plugins / 插件** → **Add plugin / 添加插件** → `dsh-bridge-host` → **Install** → **Apply now**.
+Harness → **Plugins / 插件** → **Add plugin / 添加插件** → paste `C:\dev\dsh-bridge\host` → **Install** → **Enable now / 立即应用**. The pipe appears right away (see [Verify](#verify)); if it does not, restart Harness.
 
-**From a source checkout**, for example `C:\dev\dsh-bridge`, by hand. `dsh plugin --profile desktop` refuses with "profile "desktop" is managed exclusively by the Electron application", so do this instead:
+**If the Add plugin dialog refuses the folder**, link it by hand. `dsh plugin --profile desktop` refuses with "profile "desktop" is managed exclusively by the Electron application", so do this instead:
 
 1. Quit Harness, including its tray icon.
 2. In `%USERPROFILE%\.dsh\profiles\desktop\package.json`, add the link to `dependencies` and the bundle to `dsh.profile.bundles`:
@@ -52,26 +56,38 @@ Requires DeepSeek Harness ≥ 0.2.1-rc.2 and Node.js ≥ 22.15.
    `node_modules\dsh-bridge-host` becomes a junction to your `host` folder.
 4. Start Harness. Restart it after changing plugin code.
 
-### 2. The MCP server
+### 2. The MCP server, registered once for every conversation
 
-On Windows, an MCP client cannot start `npx` directly, because it is `npx.cmd`. Either go through `cmd`, or point at `node` and the server file.
+Register it at user scope, not per conversation or per project, so every new conversation already has the `dsh_*` tools. Use the absolute path of `node`: desktop apps start MCP servers without your shell's `PATH`, and they cannot start `npx.cmd` directly.
 
-**Claude Code:**
+**Claude Code**: `-s user` is the important part. Without it, Claude Code registers the server for the current project folder only.
 
 ```powershell
-claude mcp add dsh-bridge -s user -- cmd /c npx -y dsh-bridge-mcp
-# from source:
-claude mcp add dsh-bridge -s user -- node C:\dev\dsh-bridge\src\server.mjs
+claude mcp add dsh-bridge -s user -- (Get-Command node).Source C:\dev\dsh-bridge\src\server.mjs
 ```
 
-**Codex** (`%USERPROFILE%\.codex\config.toml`, or `codex mcp add dsh-bridge -- node C:\dev\dsh-bridge\src\server.mjs`):
+Check: `claude mcp get dsh-bridge` shows `Scope: User config (available in all your projects)` and `Status: ✓ Connected`.
 
-```toml
-[mcp_servers.dsh-bridge]
-command = "cmd"
-args = ["/c", "npx", "-y", "dsh-bridge-mcp"]
-# from source: command = 'C:\Program Files\nodejs\node.exe', args = ['C:\dev\dsh-bridge\src\server.mjs']
+**Codex**: `codex mcp add` is already user-wide. It writes to `%USERPROFILE%\.codex\config.toml`, which the Codex CLI and app share.
+
+```powershell
+codex mcp add dsh-bridge -- (Get-Command node).Source C:\dev\dsh-bridge\src\server.mjs
 ```
+
+Check: `codex mcp list` lists `dsh-bridge`. Approve the `dsh-bridge` tools when Codex asks; for unattended `codex exec`, add `--approve-for-me`.
+
+**If `claude` or `codex` is not on `PATH`** (desktop apps only), write the same user-wide entry by hand:
+
+- Claude Code: under the top-level `"mcpServers"` key of `%USERPROFILE%\.claude.json`: `"dsh-bridge": { "type": "stdio", "command": "C:\\Program Files\\nodejs\\node.exe", "args": ["C:\\dev\\dsh-bridge\\src\\server.mjs"] }`.
+- Codex: in `%USERPROFILE%\.codex\config.toml`:
+
+  ```toml
+  [mcp_servers.dsh-bridge]
+  command = 'C:\Program Files\nodejs\node.exe'
+  args = ['C:\dev\dsh-bridge\src\server.mjs']
+  ```
+
+**Claude desktop app (optional)**: the same `"mcpServers"` entry in `%APPDATA%\Claude\claude_desktop_config.json`, then restart the app.
 
 ## Verify
 
@@ -88,7 +104,7 @@ args = ["/c", "npx", "-y", "dsh-bridge-mcp"]
    ```
 
    It prints the same pipe and `{ name: 'dsh-bridge-host', version: …, pid: … }`.
-3. **The clients see it.** `claude mcp list` shows `dsh-bridge … ✓ Connected`, and `codex mcp list` shows `dsh-bridge … enabled`.
+3. **The clients see it, user-wide.** `claude mcp get dsh-bridge` shows `Scope: User config` and `✓ Connected`, and `codex mcp list` shows `dsh-bridge … enabled`. Start a new conversation: the `dsh_*` tools are there without reconnecting.
 4. **A real round trip.** Ask the client: *"Use dsh-bridge: dsh_send with cwd C:\temp\dsh-test and message 'Reply with exactly one word: pong', then dsh_wait on the run_id."*
    - It should come back `completed` with `pong`.
    - The new session shows up under the `dsh-test` workspace in the Harness sidebar.
@@ -122,5 +138,5 @@ The suite runs on Windows with named pipes. Two POSIX-only checks are skipped: f
   2. 在 profile 的 `package.json` 里加 `link:` 依赖，并在 `dsh.profile.bundles` 里加上 `dsh-bridge-host`；
   3. 用 Harness 自带的 pnpm 安装，记得加 `--store-dir`；
   4. 启动 Harness。
-- **MCP 客户端不能直接启动 `npx`。** 改用 `cmd /c npx -y dsh-bridge-mcp`，或者直接写 `node` 加 `server.mjs` 的路径。
+- **MCP 服务器要全局注册。** npm 包还没发布，所以用 `node` 的绝对路径加克隆下来的 `src\server.mjs`。Claude Code 用 `claude mcp add … -s user`（用户级，所有项目都能用）；Codex 用 `codex mcp add`，本来就写在用户级的 `config.toml` 里。注册一次后，新开对话不用再连。
 - **headless 需要独立凭据。** 要么登录账户，要么设置 `DEEPSEEK_API_KEY`。桌面版里保存的 Key，headless CLI 读不到。

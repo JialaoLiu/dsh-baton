@@ -477,7 +477,7 @@ export function apply(ctx) {
 
   function getRun(runId) {
     const run = runs.get(runId)
-    if (!run) throw new Error(`Unknown run: ${runId} (runs are kept in memory and reset when Harness restarts)`)
+    if (!run) throw new Error(`Unknown run: ${runId} (only the latest 100 runs are kept)`)
     return run
   }
 

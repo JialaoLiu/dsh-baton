@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="390" viewBox="0 0 1200 390" role="img" aria-labelledby="title desc">
   <title id="title">Install dsh-bridge in two steps</title>
-  <desc id="desc">Step 1: in Harness open Plugins, Add plugin, enter dsh-bridge-host, Install, Apply now. Step 2: connect Claude Code, Codex or any MCP client to dsh-bridge-mcp.</desc>
+  <desc id="desc">Step 1: in Harness open Plugins, Add plugin, paste the path of the dsh-bridge/host folder, Install, Enable now. Step 2: register src/server.mjs once, user-wide, in Claude Code, Codex or any MCP client.</desc>
   <rect width="1200" height="390" rx="24" fill="#FFFFFF"/>
 <text x="64" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#5B6577" letter-spacing="2">TWO STEPS</text>
 <text x="64" y="120" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="56" fill="#2563EB" font-weight="700">1</text>
@@ -12,13 +12,13 @@
 <text x="314.0" y="154" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="19" fill="#0F172A" text-anchor="middle">Add plugin</text>
 <path d="M392 141 l7 7 l-7 7" stroke="#5B6577" stroke-width="2" fill="none"/>
 <rect x="410" y="128" width="219" height="40" rx="20" fill="#EAF1FE" stroke="#2563EB" stroke-width="1"/>
-<text x="519.5" y="154" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="19" fill="#2563EB" text-anchor="middle">dsh-bridge-host</text>
+<text x="519.5" y="154" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="19" fill="#2563EB" text-anchor="middle">dsh-bridge/host</text>
 <path d="M639 141 l7 7 l-7 7" stroke="#5B6577" stroke-width="2" fill="none"/>
 <rect x="657" y="128" width="106" height="40" rx="20" fill="#F4F6FA" stroke="#C9D2DF" stroke-width="1"/>
 <text x="710.0" y="154" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="19" fill="#0F172A" text-anchor="middle">Install</text>
 <path d="M773 141 l7 7 l-7 7" stroke="#5B6577" stroke-width="2" fill="none"/>
 <rect x="791" y="128" width="126" height="40" rx="20" fill="#F4F6FA" stroke="#C9D2DF" stroke-width="1"/>
-<text x="854.0" y="154" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="19" fill="#0F172A" text-anchor="middle">Apply now</text>
+<text x="854.0" y="154" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="19" fill="#0F172A" text-anchor="middle">Enable now</text>
 <text x="64" y="262" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="56" fill="#2563EB" font-weight="700">2</text>
 <text x="112" y="246" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="24" fill="#0F172A" font-weight="700">Connect your MCP client</text>
 <rect x="112" y="270" width="146" height="40" rx="20" fill="#F4F6FA" stroke="#C9D2DF" stroke-width="1"/>
@@ -29,6 +29,6 @@
 <text x="456.0" y="296" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="19" fill="#0F172A" text-anchor="middle">any MCP client</text>
 <path d="M560 290 h56" stroke="#2563EB" stroke-width="2.5" stroke-dasharray="7 6"/><path d="M612 283 l9 7 l-9 7 z" fill="#2563EB"/>
 <rect x="632" y="266" width="230" height="48" rx="12" fill="#F4F6FA" stroke="#0F172A" stroke-width="2"/>
-<text x="747" y="297" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#0F172A" font-weight="700" text-anchor="middle">dsh-bridge-mcp</text>
-<text x="112" y="350" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">Copy the exact command for your client below.</text>
+<text x="747" y="297" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#0F172A" font-weight="700" text-anchor="middle">src/server.mjs</text>
+<text x="112" y="350" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">Register it once, user-wide: every chat gets it.</text>
 </svg>

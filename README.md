@@ -17,51 +17,95 @@
 ## Quick start
 
 <p align="center">
-  <img src="./assets/readme/install.svg" width="100%" alt="Step 1: Harness, Plugins, Add plugin, dsh-bridge-host, Install, Apply now. Step 2: connect Claude Code, Codex or any MCP client to dsh-bridge-mcp">
+  <img src="./assets/readme/install.svg" width="100%" alt="Step 1: in Harness open Plugins, Add plugin, paste the path of the dsh-bridge/host folder, Install, Enable now. Step 2: register src/server.mjs once, user-wide, in Claude Code and Codex">
 </p>
 
-Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in) and Node.js ≥ 22.15. On Windows, see [WINDOWS.md](WINDOWS.md).
+Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in), Node.js ≥ 22.15 and git. On Windows, see [WINDOWS.md](WINDOWS.md).
+
+> The npm packages `dsh-bridge-host` and `dsh-bridge-mcp` are not published yet, so install from a clone of this repo as below. There is nothing to `npm install`: dsh-bridge has no dependencies.
 
 **Fastest:** paste this into Claude Code or Codex and let it do the setup:
 
 ```text
-Set up dsh-bridge for me.
-1. Connect the MCP server. In Claude Code run: claude mcp add dsh-bridge -s user -- npx -y dsh-bridge-mcp
-   In Codex add this to ~/.codex/config.toml:
-   [mcp_servers.dsh-bridge]
-   command = "npx"
-   args = ["-y", "dsh-bridge-mcp"]
-2. Tell me to install the plugin in DeepSeek Harness myself: Plugins → Add plugin → dsh-bridge-host → Install → Apply now. Wait until I confirm.
-3. After a restart if needed, call dsh_list_workspaces to check the connection and show me the result.
+Set up dsh-bridge for me, registered globally so every conversation can use it.
+1. Clone it: git clone https://github.com/JialaoLiu/dsh-bridge.git ~/dsh-bridge
+2. Tell me to install the plugin in DeepSeek Harness myself: Plugins → Add plugin → paste the absolute path of ~/dsh-bridge/host → Install → Enable now. Wait until I confirm.
+3. Register the MCP server at user scope, with the absolute path of node:
+   Claude Code: claude mcp add dsh-bridge -s user -- "$(command -v node)" ~/dsh-bridge/src/server.mjs
+   Codex:       codex mcp add dsh-bridge -- "$(command -v node)" ~/dsh-bridge/src/server.mjs
+   If a command is not on PATH, write the same entry yourself: "mcpServers" in ~/.claude.json (user scope), [mcp_servers.dsh-bridge] in ~/.codex/config.toml.
+4. Check: claude mcp get dsh-bridge shows "Scope: User config" and "Connected"; codex mcp list lists dsh-bridge. Then call dsh_list_workspaces and show me the result.
 ```
 
 Or do it by hand:
 
-### 1. Install the plugin in Harness
-
-Harness → **Plugins** → **Add plugin** → paste the package name below → **Install** → **Apply now**.
-
-```text
-dsh-bridge-host
-```
-
-### 2. Connect your MCP client
-
-**Claude Code**
+### 1. Get the code
 
 ```bash
-claude mcp add dsh-bridge -s user -- npx -y dsh-bridge-mcp
+git clone https://github.com/JialaoLiu/dsh-bridge.git
+cd dsh-bridge
 ```
 
-**Codex** (`~/.codex/config.toml`)
+### 2. Install the plugin in Harness
 
-```toml
-[mcp_servers.dsh-bridge]
-command = "npx"
-args = ["-y", "dsh-bridge-mcp"]
+Print the absolute path of the plugin folder:
+
+```bash
+echo "$PWD/host"
 ```
 
-From source: install the plugin from this repo's absolute `host` folder path, and run the MCP server with `node /absolute/path/dsh-bridge/src/server.mjs`.
+Harness → **Plugins** → **Add plugin** → paste that path → **Install** → **Enable now** (Chinese UI: 立即应用). It starts right away: `~/.dsh-bridge/host.sock` appears. If it does not, restart Harness.
+
+### 3. Register the MCP server, once, for every conversation
+
+Register it at user scope, not per conversation or per project. Then every new conversation, in any folder, already has the `dsh_*` tools: no reconnecting when you switch or start conversations.
+
+**Claude Code**: `-s user` is the important part. Without it, Claude Code registers the server for the current project folder only.
+
+```bash
+claude mcp add dsh-bridge -s user -- "$(command -v node)" "$PWD/src/server.mjs"
+```
+
+Check: `claude mcp get dsh-bridge` shows `Scope: User config (available in all your projects)` and `Status: ✔ Connected`.
+
+**Codex**: `codex mcp add` is already user-wide. It writes to `~/.codex/config.toml`, which the Codex CLI and app share.
+
+```bash
+codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/src/server.mjs"
+```
+
+Check: `codex mcp list` lists `dsh-bridge`. Codex asks you to approve MCP tool calls: approve the `dsh-bridge` tools. For unattended `codex exec` runs, add `--approve-for-me`.
+
+**Claude desktop app (optional)**: for the chat app's connectors (Claude Code above is separate), add this to `~/Library/Application Support/Claude/claude_desktop_config.json` and restart the app. It shows as a "Local dev" connector.
+
+```json
+{ "mcpServers": { "dsh-bridge": { "command": "/absolute/path/to/node", "args": ["/absolute/path/to/dsh-bridge/src/server.mjs"] } } }
+```
+
+Notes:
+- Use the absolute path of `node` (`command -v node` prints it): desktop apps start MCP servers without your shell's `PATH`.
+- `claude` or `codex` not found? With only the desktop apps installed they may not be on your `PATH`. Write the entry directly instead. It is the same user-wide registration:
+  - Claude Code: add it under the top-level `"mcpServers"` key of `~/.claude.json`:
+
+    ```json
+    "dsh-bridge": { "type": "stdio", "command": "/absolute/path/to/node", "args": ["/absolute/path/to/dsh-bridge/src/server.mjs"] }
+    ```
+
+  - Codex: add it to `~/.codex/config.toml`:
+
+    ```toml
+    [mcp_servers.dsh-bridge]
+    command = "/absolute/path/to/node"
+    args = ["/absolute/path/to/dsh-bridge/src/server.mjs"]
+    ```
+
+  The **Fastest** prompt tells Claude Code or Codex to do this for you.
+
+### 4. Check it end to end
+
+Start a **new** conversation in Claude Code or Codex (no reconnecting needed) and ask it to call `dsh_list_workspaces`. It lists your Harness workspaces.
+
+**Updating:** `git pull` in the clone. Restart Harness to load plugin changes; new conversations pick up MCP server changes.
 
 ## How it works
 

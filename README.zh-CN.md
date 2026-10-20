@@ -17,51 +17,95 @@
 ## 快速上手
 
 <p align="center">
-  <img src="./assets/readme/zh/install.svg" width="100%" alt="第一步：Harness → 插件 → 添加插件 → dsh-bridge-host → 安装 → 立即应用。第二步：把 Claude Code、Codex 或其他 MCP 客户端接到 dsh-bridge-mcp">
+  <img src="./assets/readme/zh/install.svg" width="100%" alt="第一步：Harness → 插件 → 添加插件 → 粘贴 dsh-bridge/host 文件夹的路径 → 安装 → 立即应用。第二步：在 Claude Code 和 Codex 里全局注册一次 src/server.mjs">
 </p>
 
-需要：DeepSeek Harness ≥ 0.2.1-rc.2 并已登录；Node.js ≥ 22.15。Windows 见 [WINDOWS.md](WINDOWS.md)。
+需要：DeepSeek Harness ≥ 0.2.1-rc.2 并已登录；Node.js ≥ 22.15；git。Windows 见 [WINDOWS.md](WINDOWS.md)。
+
+> npm 包 `dsh-bridge-host` 和 `dsh-bridge-mcp` 还没发布，目前请按下面的方法从仓库源码安装。不需要 `npm install`：dsh-bridge 没有任何依赖。
 
 **最快：** 把下面这段发给 Claude Code 或 Codex，让它帮你装：
 
 ```text
-帮我装好 dsh-bridge。
-1. 接入 MCP 服务器。Claude Code 里运行：claude mcp add dsh-bridge -s user -- npx -y dsh-bridge-mcp
-   Codex 则在 ~/.codex/config.toml 里加入：
-   [mcp_servers.dsh-bridge]
-   command = "npx"
-   args = ["-y", "dsh-bridge-mcp"]
-2. 提醒我自己在 DeepSeek Harness 里装插件：插件 → 添加插件 → dsh-bridge-host → 安装 → 立即应用。等我确认装好。
-3. 需要的话重启后，调用 dsh_list_workspaces 检查是否连通，把结果给我看。
+帮我装好 dsh-bridge，并全局注册，让所有对话都能用。
+1. 克隆仓库：git clone https://github.com/JialaoLiu/dsh-bridge.git ~/dsh-bridge
+2. 提醒我自己在 DeepSeek Harness 里装插件：插件 → 添加插件 → 粘贴 ~/dsh-bridge/host 的绝对路径 → 安装 → 立即应用。等我确认装好。
+3. 用 node 的绝对路径，在用户级别注册 MCP 服务器：
+   Claude Code：claude mcp add dsh-bridge -s user -- "$(command -v node)" ~/dsh-bridge/src/server.mjs
+   Codex：      codex mcp add dsh-bridge -- "$(command -v node)" ~/dsh-bridge/src/server.mjs
+   如果命令不在 PATH 里，就直接写配置：~/.claude.json 的 "mcpServers"（用户级），~/.codex/config.toml 的 [mcp_servers.dsh-bridge]。
+4. 检查：claude mcp get dsh-bridge 显示 "Scope: User config" 和 "Connected"；codex mcp list 里有 dsh-bridge。然后调用 dsh_list_workspaces，把结果给我看。
 ```
 
 或者手动安装：
 
-### 1. 在 Harness 里装插件
-
-Harness → **插件** → **添加插件** → 粘贴下面的包名 → **安装** → **立即应用**。
-
-```text
-dsh-bridge-host
-```
-
-### 2. 接入你的 MCP 客户端
-
-**Claude Code**
+### 1. 获取代码
 
 ```bash
-claude mcp add dsh-bridge -s user -- npx -y dsh-bridge-mcp
+git clone https://github.com/JialaoLiu/dsh-bridge.git
+cd dsh-bridge
 ```
 
-**Codex**（`~/.codex/config.toml`）
+### 2. 在 Harness 里装插件
 
-```toml
-[mcp_servers.dsh-bridge]
-command = "npx"
-args = ["-y", "dsh-bridge-mcp"]
+先打印插件文件夹的绝对路径：
+
+```bash
+echo "$PWD/host"
 ```
 
-从源码装：插件那一步把包名换成本仓库 `host` 文件夹的绝对路径（改了插件代码后需要重启 Harness）；MCP 服务器用 `node /绝对路径/dsh-bridge/src/server.mjs`。
+Harness → **插件** → **添加插件** → 粘贴这个路径 → **安装** → **立即应用**（英文界面是 Enable now）。装好立即生效，会出现 `~/.dsh-bridge/host.sock`；如果没有出现，重启一次 Harness。
+
+### 3. 注册 MCP 服务器：只注册一次，所有对话都能用
+
+要在用户级别注册，不要按对话或按项目注册。这样以后新开的任何对话、在任何文件夹里，都直接有 `dsh_*` 工具，切换或新开对话不用再连一次。
+
+**Claude Code**：关键是 `-s user`。不加的话，Claude Code 只会给当前项目文件夹注册。
+
+```bash
+claude mcp add dsh-bridge -s user -- "$(command -v node)" "$PWD/src/server.mjs"
+```
+
+检查：`claude mcp get dsh-bridge` 显示 `Scope: User config (available in all your projects)` 和 `Status: ✔ Connected`。
+
+**Codex**：`codex mcp add` 本来就是用户级的，写在 `~/.codex/config.toml`，Codex 命令行和应用共用。
+
+```bash
+codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/src/server.mjs"
+```
+
+检查：`codex mcp list` 里有 `dsh-bridge`。Codex 调用 MCP 工具时会请你批准，批准 `dsh-bridge` 的工具即可；无人值守的 `codex exec` 加上 `--approve-for-me`。
+
+**Claude 桌面应用（可选）**：给聊天应用的连接器用（和上面的 Claude Code 是分开的）。在 `~/Library/Application Support/Claude/claude_desktop_config.json` 里加入下面这段，然后重启应用，它会显示为 "Local dev" 连接器。
+
+```json
+{ "mcpServers": { "dsh-bridge": { "command": "/node 的绝对路径", "args": ["/dsh-bridge 的绝对路径/src/server.mjs"] } } }
+```
+
+说明：
+- 用 `node` 的绝对路径（`command -v node` 可以打印出来）：桌面应用启动 MCP 服务器时，不一定带着你终端里的 `PATH`。
+- 终端里找不到 `claude` 或 `codex`？只装了桌面应用时，它们可能不在 `PATH` 里。这时直接写配置，效果一样是用户级注册：
+  - Claude Code：写在 `~/.claude.json` 顶层的 `"mcpServers"` 里：
+
+    ```json
+    "dsh-bridge": { "type": "stdio", "command": "/node 的绝对路径", "args": ["/dsh-bridge 的绝对路径/src/server.mjs"] }
+    ```
+
+  - Codex：写在 `~/.codex/config.toml` 里：
+
+    ```toml
+    [mcp_servers.dsh-bridge]
+    command = "/node 的绝对路径"
+    args = ["/dsh-bridge 的绝对路径/src/server.mjs"]
+    ```
+
+  上面的**最快**提示词会让 Claude Code 或 Codex 替你写好。
+
+### 4. 端到端检查
+
+在 Claude Code 或 Codex 里**新开**一个对话（不用重新连接），让它调用 `dsh_list_workspaces`，应该会列出你的 Harness 工作区。
+
+**更新：** 在克隆的文件夹里 `git pull`。插件有改动时重启 Harness；MCP 服务器的改动，新开的对话会自动用上。
 
 ## 工作原理
 
