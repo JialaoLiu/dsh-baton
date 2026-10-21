@@ -32,8 +32,9 @@
 2. 提醒我自己在 DeepSeek Harness 里装插件：插件 → 添加插件 → 粘贴 ~/dsh-bridge/host 的绝对路径 → 安装 → 立即应用。等我确认装好。
 3. 用 node 的绝对路径，在用户级别注册 MCP 服务器：
    Claude Code：claude mcp add dsh-bridge -s user -- "$(command -v node)" ~/dsh-bridge/src/server.mjs
-   Codex：      codex mcp add dsh-bridge -- "$(command -v node)" ~/dsh-bridge/src/server.mjs
-   如果命令不在 PATH 里，就直接写配置：~/.claude.json 的 "mcpServers"（用户级），~/.codex/config.toml 的 [mcp_servers.dsh-bridge]。
+   Codex：      codex mcp add dsh-bridge --env DSH_BRIDGE_WAIT_S=1740 -- "$(command -v node)" ~/dsh-bridge/src/server.mjs
+                然后在 ~/.codex/config.toml 的 [mcp_servers.dsh-bridge] 里加上 tool_timeout_sec = 1800
+   如果命令不在 PATH 里，就直接写配置：~/.claude.json 的 "mcpServers"（用户级），~/.codex/config.toml 的 [mcp_servers.dsh-bridge]（带上 env DSH_BRIDGE_WAIT_S = "1740" 和 tool_timeout_sec = 1800）。
 4. 检查：claude mcp get dsh-bridge 显示 "Scope: User config" 和 "Connected"；codex mcp list 里有 dsh-bridge。然后调用 dsh_list_workspaces，把结果给我看。
 ```
 
@@ -68,11 +69,21 @@ claude mcp add dsh-bridge -s user -- "$(command -v node)" "$PWD/src/server.mjs"
 
 检查：`claude mcp get dsh-bridge` 显示 `Scope: User config (available in all your projects)` 和 `Status: ✔ Connected`。
 
+不用再设别的：`dsh_send` 之后，Claude Code 会把返回的 `wait_command` 放到后台运行，任务结束时被唤醒，中间不轮询。
+
 **Codex**：`codex mcp add` 本来就是用户级的，写在 `~/.codex/config.toml`，Codex 命令行和应用共用。
 
 ```bash
-codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/src/server.mjs"
+codex mcp add dsh-bridge --env DSH_BRIDGE_WAIT_S=1740 -- "$(command -v node)" "$PWD/src/server.mjs"
 ```
+
+再让一次 `dsh_wait` 等完整个任务。Codex 默认 60 秒就会中断工具调用，所以要给这个服务器调大：在 `~/.codex/config.toml` 里，给上面命令写好的 `[mcp_servers.dsh-bridge]` 加一行：
+
+```toml
+tool_timeout_sec = 1800
+```
+
+`DSH_BRIDGE_WAIT_S=1740` 让每次等待略短于这个时间。不设这两项的话，`dsh_wait` 每 50 秒返回一次，Codex 要再调一次，每次都多一轮对话。
 
 检查：`codex mcp list` 里有 `dsh-bridge`。Codex 调用 MCP 工具时会请你批准，批准 `dsh-bridge` 的工具即可；无人值守的 `codex exec` 加上 `--approve-for-me`。
 
@@ -97,6 +108,10 @@ codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/src/server.mjs"
     [mcp_servers.dsh-bridge]
     command = "/node 的绝对路径"
     args = ["/dsh-bridge 的绝对路径/src/server.mjs"]
+    tool_timeout_sec = 1800
+
+    [mcp_servers.dsh-bridge.env]
+    DSH_BRIDGE_WAIT_S = "1740"
     ```
 
   上面的**最快**提示词会让 Claude Code 或 Codex 替你写好。
@@ -138,7 +153,7 @@ codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/src/server.mjs"
 | `dsh_read_session` | 读某个对话最近的消息和回复（含用到的工具名） |
 | `dsh_send` | 发消息。带 `session_id` 续接那个对话；带 `cwd` 或 `workspace_id` 新开对话（`cwd` 还不是工作区时会先登记）。立即返回 `run_id`。Harness 里这条消息会标注「由 Claude / ChatGPT 从另一个聊天发送」 |
 | `dsh_status` | 查看运行进度：状态、最近的文字和工具调用、最终回复；回合结束但子智能体/后台任务还在跑时给出 `waiting_on`；中途有人在 Harness 界面里发消息时给出 `human_interjections`；被 Harness 重启打断的任务状态为 `interrupted` |
-| `dsh_wait` | 等运行结束。约 50 秒（`timeout_s`）内返回，还没做完会带 `timed_out`，再调用一次即可；等待期间会发进度通知 |
+| `dsh_wait` | 等运行结束。等 `DSH_BRIDGE_WAIT_S`（默认 50 秒）后返回，还没做完会带 `timed_out`，再调用一次即可；等待期间会发进度通知。能在后台等待的客户端改用 `dsh_send` 返回的 `wait_command` |
 | `dsh_session_activity` | 对话此刻在做什么：正在跑的回合、子智能体（任意层级）、后台任务 |
 | `dsh_cancel` | 按 `run_id` 或 `session_id` 停掉整个对话的工作：当前回合、子智能体、后台任务（排队中的消息不会被删） |
 | `dsh_rename_session` | 给对话改名 |
@@ -173,6 +188,7 @@ dsh-bridge rename-workspace ~/code/new-app 新名字
 | `DSH_BRIDGE_BACKEND` | `auto` | `auto`、`host` 或 `headless` |
 | `DSH_BRIDGE_HOME` | `~/.dsh-bridge` | 套接字和 headless 运行记录的位置 |
 | `DSH_BRIDGE_SOCKET` | `$DSH_BRIDGE_HOME/host.sock` | 插件套接字路径（插件和 MCP 两边要一致）；Windows 上映射为按用户区分的命名管道，见 [WINDOWS.md](WINDOWS.md) |
+| `DSH_BRIDGE_WAIT_S` | `50` | 一次 `dsh_wait` 等多久；要小于客户端的工具超时 |
 | `DSH_BIN` | macOS 应用内的 `dsh`，否则查 `PATH` | headless 模式用的 Harness 命令行 |
 | `DSH_HOME` | `~/.dsh` | Harness 数据目录（headless 模式读取对话用） |
 | `DSH_BRIDGE_ACCOUNT` | `1` | headless 模式下设为 `0` 则改用 API key 路线 |

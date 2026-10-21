@@ -57,7 +57,7 @@ async function main() {
     case 'status':
       return print(await core.api.status({ run_id: rest[0] }))
     case 'wait': {
-      const st = await core.api.wait({ run_id: rest[0], timeout_s: Number(flags.timeout) || 3600 })
+      const st = await core.api.wait({ run_id: rest[0], timeout_s: Number(flags.timeout) || 24 * 3600 })
       print({ run_id: st.run_id, state: st.state, session_id: st.session_id, timed_out: !!st.timed_out, error: st.error, final_text: st.final_text })
       process.exitCode = st.state === 'completed' ? 0 : 1
       return

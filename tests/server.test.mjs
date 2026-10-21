@@ -119,4 +119,19 @@ test('dsh_send tells the host who is sending, from the client name in initialize
   child.stdin.end(); server.close(); fs.rmSync(dir, { recursive: true, force: true })
   assert.equal(sends[0].sender, 'codex')
   assert.equal(sends[0].message, 'hi')
+  const sent = JSON.parse(out.split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((m) => m.id === 2).result.content[0].text)
+  assert.match(sent.wait_command, /cli\.mjs" wait hrun-1$/)
+  assert.match(sent.hint, /background/)
+})
+
+test('DSH_BRIDGE_WAIT_S sets the default dsh_wait length', async () => {
+  const run = (env) => new Promise((resolve) => {
+    const child = spawn(process.execPath, [SERVER], { env: { ...process.env, ...env } })
+    let out = ''
+    child.stdout.on('data', (d) => { out += d })
+    child.on('close', () => resolve(JSON.parse(out.trim().split('\n')[0]).result.tools.find((t) => t.name === 'dsh_wait')))
+    child.stdin.end(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) + '\n')
+  })
+  assert.equal((await run({ DSH_BRIDGE_WAIT_S: '1740' })).inputSchema.properties.timeout_s.default, 1740)
+  assert.equal((await run({ DSH_BRIDGE_WAIT_S: 'nope' })).inputSchema.properties.timeout_s.default, 50)
 })

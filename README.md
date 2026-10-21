@@ -32,8 +32,9 @@ Set up dsh-bridge for me, registered globally so every conversation can use it.
 2. Tell me to install the plugin in DeepSeek Harness myself: Plugins → Add plugin → paste the absolute path of ~/dsh-bridge/host → Install → Enable now. Wait until I confirm.
 3. Register the MCP server at user scope, with the absolute path of node:
    Claude Code: claude mcp add dsh-bridge -s user -- "$(command -v node)" ~/dsh-bridge/src/server.mjs
-   Codex:       codex mcp add dsh-bridge -- "$(command -v node)" ~/dsh-bridge/src/server.mjs
-   If a command is not on PATH, write the same entry yourself: "mcpServers" in ~/.claude.json (user scope), [mcp_servers.dsh-bridge] in ~/.codex/config.toml.
+   Codex:       codex mcp add dsh-bridge --env DSH_BRIDGE_WAIT_S=1740 -- "$(command -v node)" ~/dsh-bridge/src/server.mjs
+                then add tool_timeout_sec = 1800 to [mcp_servers.dsh-bridge] in ~/.codex/config.toml
+   If a command is not on PATH, write the same entry yourself: "mcpServers" in ~/.claude.json (user scope), [mcp_servers.dsh-bridge] in ~/.codex/config.toml (with env DSH_BRIDGE_WAIT_S = "1740" and tool_timeout_sec = 1800).
 4. Check: claude mcp get dsh-bridge shows "Scope: User config" and "Connected"; codex mcp list lists dsh-bridge. Then call dsh_list_workspaces and show me the result.
 ```
 
@@ -68,11 +69,21 @@ claude mcp add dsh-bridge -s user -- "$(command -v node)" "$PWD/src/server.mjs"
 
 Check: `claude mcp get dsh-bridge` shows `Scope: User config (available in all your projects)` and `Status: ✔ Connected`.
 
+Nothing else to set: after `dsh_send`, Claude Code runs the returned `wait_command` as a background command and is woken when the run ends, with no polling in between.
+
 **Codex**: `codex mcp add` is already user-wide. It writes to `~/.codex/config.toml`, which the Codex CLI and app share.
 
 ```bash
-codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/src/server.mjs"
+codex mcp add dsh-bridge --env DSH_BRIDGE_WAIT_S=1740 -- "$(command -v node)" "$PWD/src/server.mjs"
 ```
+
+Then let one `dsh_wait` cover a whole run. Codex stops a tool call after 60 s by default, so raise it for this server: in `~/.codex/config.toml`, add `tool_timeout_sec` to the `[mcp_servers.dsh-bridge]` entry that the command wrote.
+
+```toml
+tool_timeout_sec = 1800
+```
+
+`DSH_BRIDGE_WAIT_S=1740` keeps each wait just under that. Without the two settings, `dsh_wait` returns every 50 s and Codex calls it again, one turn each time.
 
 Check: `codex mcp list` lists `dsh-bridge`. Codex asks you to approve MCP tool calls: approve the `dsh-bridge` tools. For unattended `codex exec` runs, add `--approve-for-me`.
 
@@ -97,6 +108,10 @@ Notes:
     [mcp_servers.dsh-bridge]
     command = "/absolute/path/to/node"
     args = ["/absolute/path/to/dsh-bridge/src/server.mjs"]
+    tool_timeout_sec = 1800
+
+    [mcp_servers.dsh-bridge.env]
+    DSH_BRIDGE_WAIT_S = "1740"
     ```
 
   The **Fastest** prompt tells Claude Code or Codex to do this for you.
@@ -138,7 +153,7 @@ Start a **new** conversation in Claude Code or Codex (no reconnecting needed) an
 | `dsh_read_session` | Recent prompts and replies of one session (with tool names) |
 | `dsh_send` | Send a message: `session_id` continues that session; `cwd` or `workspace_id` starts a new one (a `cwd` that is not a workspace yet is registered first). Returns a `run_id` at once. In Harness the message is marked "Sent by Claude / ChatGPT from another chat" |
 | `dsh_status` | Run progress: state, recent text and tool calls, final reply; `waiting_on` when the turn is over but sub-agents or jobs still run; `human_interjections` when someone typed in the Harness UI mid-run; state `interrupted` for a run cut short by a Harness restart |
-| `dsh_wait` | Wait for the run to end. Returns within about 50 s (`timeout_s`) with `timed_out` if it is still going: call it again. Sends progress notifications while waiting |
+| `dsh_wait` | Wait for the run to end. Returns after `DSH_BRIDGE_WAIT_S` (default 50 s) with `timed_out` if it is still going: call it again. Sends progress notifications while waiting. Clients that can wait in the background use `dsh_send`'s `wait_command` instead |
 | `dsh_session_activity` | What a session is doing now: running turn, sub-agents (any depth), background jobs |
 | `dsh_cancel` | Stop everything a session is doing, by `run_id` or `session_id`: turn, sub-agents, jobs (queued messages stay) |
 | `dsh_rename_session` | Rename a session |
@@ -171,6 +186,7 @@ dsh-bridge rename-workspace ~/code/new-app "New name"
 | `DSH_BRIDGE_BACKEND` | `auto` | `auto`, `host` or `headless` |
 | `DSH_BRIDGE_HOME` | `~/.dsh-bridge` | Socket and headless run records |
 | `DSH_BRIDGE_SOCKET` | `$DSH_BRIDGE_HOME/host.sock` | Plugin socket path (must match on both sides); on Windows mapped to a per-user named pipe |
+| `DSH_BRIDGE_WAIT_S` | `50` | How long one `dsh_wait` call waits; keep it under the client's tool timeout |
 | `DSH_BIN` | the `dsh` inside the macOS app, else `PATH` | Harness CLI for headless mode |
 | `DSH_HOME` | `~/.dsh` | Harness data folder (headless session reads) |
 | `DSH_BRIDGE_ACCOUNT` | `1` | `0` uses the API-key route in headless mode |

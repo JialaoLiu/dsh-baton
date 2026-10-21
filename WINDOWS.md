@@ -71,8 +71,12 @@ Check: `claude mcp get dsh-bridge` shows `Scope: User config (available in all y
 **Codex**: `codex mcp add` is already user-wide. It writes to `%USERPROFILE%\.codex\config.toml`, which the Codex CLI and app share.
 
 ```powershell
-codex mcp add dsh-bridge -- (Get-Command node).Source C:\dev\dsh-bridge\src\server.mjs
+codex mcp add dsh-bridge --env DSH_BRIDGE_WAIT_S=1740 -- (Get-Command node).Source C:\dev\dsh-bridge\src\server.mjs
 ```
+
+Then add `tool_timeout_sec = 1800` to the `[mcp_servers.dsh-bridge]` entry in `%USERPROFILE%\.codex\config.toml`, so one `dsh_wait` can cover a whole run instead of returning every 50 s (Codex stops a tool call after 60 s by default).
+
+Claude Code needs nothing more: it runs the `wait_command` that `dsh_send` returns as a background command and is woken when the run ends.
 
 Check: `codex mcp list` lists `dsh-bridge`. Approve the `dsh-bridge` tools when Codex asks; for unattended `codex exec`, add `--approve-for-me`.
 
@@ -85,6 +89,10 @@ Check: `codex mcp list` lists `dsh-bridge`. Approve the `dsh-bridge` tools when 
   [mcp_servers.dsh-bridge]
   command = 'C:\Program Files\nodejs\node.exe'
   args = ['C:\dev\dsh-bridge\src\server.mjs']
+  tool_timeout_sec = 1800
+
+  [mcp_servers.dsh-bridge.env]
+  DSH_BRIDGE_WAIT_S = '1740'
   ```
 
 **Claude desktop app (optional)**: the same `"mcpServers"` entry in `%APPDATA%\Claude\claude_desktop_config.json`, then restart the app.
@@ -138,5 +146,5 @@ The suite runs on Windows with named pipes. Two POSIX-only checks are skipped: f
   2. 在 profile 的 `package.json` 里加 `link:` 依赖，并在 `dsh.profile.bundles` 里加上 `dsh-bridge-host`；
   3. 用 Harness 自带的 pnpm 安装，记得加 `--store-dir`；
   4. 启动 Harness。
-- **MCP 服务器要全局注册。** npm 包还没发布，所以用 `node` 的绝对路径加克隆下来的 `src\server.mjs`。Claude Code 用 `claude mcp add … -s user`（用户级，所有项目都能用）；Codex 用 `codex mcp add`，本来就写在用户级的 `config.toml` 里。注册一次后，新开对话不用再连。
+- **MCP 服务器要全局注册。** npm 包还没发布，所以用 `node` 的绝对路径加克隆下来的 `src\server.mjs`。Claude Code 用 `claude mcp add … -s user`（用户级，所有项目都能用）；Codex 用 `codex mcp add --env DSH_BRIDGE_WAIT_S=1740`，本来就写在用户级的 `config.toml` 里，再在那一项里加 `tool_timeout_sec = 1800`，一次 `dsh_wait` 就能等完整个任务。注册一次后，新开对话不用再连。
 - **headless 需要独立凭据。** 要么登录账户，要么设置 `DEEPSEEK_API_KEY`。桌面版里保存的 Key，headless CLI 读不到。

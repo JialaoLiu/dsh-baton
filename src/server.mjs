@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // MCP server over stdio (newline-delimited JSON-RPC 2.0), no dependencies.
 import readline from 'node:readline'
+import path from 'node:path'
 import * as core from './core.mjs'
 
 const SERVER = { name: 'dsh-bridge', version: '0.2.0' }
@@ -9,8 +10,20 @@ const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
 const str = (description) => ({ type: 'string', description })
 const int = (description, d) => ({ type: 'integer', description, default: d })
 
-const DEFAULT_WAIT_S = 50
+// How long one dsh_wait call waits by default. 50 s stays under Codex's default 60 s
+// tool timeout; a client whose timeout was raised (Codex: tool_timeout_sec) sets
+// DSH_BRIDGE_WAIT_S a little below it, so one call covers the whole run.
+const MAX_WAIT_S = 24 * 3600
+const envWait = Math.floor(Number(process.env.DSH_BRIDGE_WAIT_S))
+const DEFAULT_WAIT_S = envWait >= 1 ? Math.min(envWait, MAX_WAIT_S) : 50
 const WAIT_CHUNK_S = 10
+
+// A shell command that blocks until a run ends and prints its reply. Run in the
+// background by a client that wakes the model when the command exits (Claude Code),
+// it waits without spending any turns.
+const quote = (p) => `"${p}"`
+const waitCommand = (runId) =>
+  `${process.platform === 'win32' ? '& ' : ''}${quote(process.execPath)} ${quote(path.join(core.ROOT, 'src', 'cli.mjs'))} wait ${runId}`
 
 // Wait in short chunks so each one stays well inside any client's tool timeout,
 // reporting progress between chunks (clients that support it reset their timer).
@@ -61,7 +74,11 @@ const TOOLS = [
     inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: 'followup queues after the current turn (default); steer injects into a running turn', default: 'followup' } } },
     run: async (a) => {
       const st = await core.api.send({ ...a, sender: core.senderOf(process.env.DSH_BRIDGE_SENDER || clientName) })
-      return { ...st, hint: `Run started. Wait with dsh_wait {"run_id":"${st.run_id}"}, or run \`dsh-bridge wait ${st.run_id}\` as a background shell command to be woken when it ends.` }
+      return {
+        ...st,
+        wait_command: waitCommand(st.run_id),
+        hint: 'Run started. If you can run a shell command in the background and are woken when it exits (Claude Code: Bash with run_in_background), run wait_command that way: it ends when the run ends and prints the reply, with no polling. Otherwise call dsh_wait with this run_id.',
+      }
     },
   },
   {
@@ -72,7 +89,7 @@ const TOOLS = [
   },
   {
     name: 'dsh_wait',
-    description: 'Wait for a run to finish and return its final status and reply. Returns after timeout_s (default 50, short enough for clients that cap tool calls at about a minute) with timed_out: true if it is still running: then just call dsh_wait again with the same run_id. Sends progress notifications while waiting when the client asks for them.',
+    description: `Wait for a run to finish and return its final status and reply. Prefer the background wait_command from dsh_send when your client can run background shell commands and wake you when they exit: it costs no turns while waiting. Returns after timeout_s (default ${DEFAULT_WAIT_S}, set with DSH_BRIDGE_WAIT_S to stay under the client's tool timeout) with timed_out: true if the run is still going: then call dsh_wait again with the same run_id. Sends progress notifications while waiting when the client asks for them.`,
     inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send'), timeout_s: int('Seconds to wait before returning with timed_out', DEFAULT_WAIT_S) } },
     run: (a, { progress }) => waitInChunks(a, progress),
   },
@@ -123,7 +140,7 @@ async function handle(req) {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: {} },
         serverInfo: SERVER,
-        instructions: 'Bridge to a local DeepSeek Harness. Find a session with dsh_list_sessions, continue it with dsh_send {session_id, message}, then dsh_wait for the reply. A run in state "waiting" needs a person to answer in the Harness UI.',
+        instructions: 'Bridge to a local DeepSeek Harness. Find a session with dsh_list_sessions, continue it with dsh_send {session_id, message}, then wait for the reply: run the wait_command it returns as a background shell command if your client wakes you when one exits, otherwise call dsh_wait. A run in state "waiting" needs a person to answer in the Harness UI.',
       }
     }
     case 'ping':
