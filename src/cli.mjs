@@ -3,9 +3,11 @@
 // background shell command and is woken up when the command exits.
 import path from 'node:path'
 import * as core from './core.mjs'
+import { setup } from './setup.mjs'
 
 const USAGE = `Usage: dsh-bridge <command> [args]
 
+  setup [--remove]                                        register the MCP server for Claude Code and Codex (user-wide)
   workspaces                                              list Harness sidebar workspaces (host plugin)
   new-workspace <dir> [--title <t>]                       register (and create) a folder as a workspace
   sessions [--cwd <dir>] [--query <text>] [--limit <n>]   list saved sessions
@@ -40,6 +42,8 @@ async function main() {
   const [cmd, ...argv] = process.argv.slice(2)
   const { flags, rest } = parse(argv)
   switch (cmd) {
+    case 'setup':
+      return console.log(await setup({ remove: argv.includes('--remove') }))
     case '_run':
       return core.executeRun(rest[0])
     case 'workspaces':

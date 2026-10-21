@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="350" viewBox="0 0 1200 350" role="img" aria-labelledby="title desc">
   <title id="title">使用须知</title>
-  <desc id="desc">任务进行中在 Harness 界面里发的话，会作为人工插话记到这个任务上；任务记录保存在本机，Harness 重启后还在，被重启打断的任务标为 interrupted；dsh_wait 约 50 秒内返回，没做完就再调用一次。</desc>
+  <desc id="desc">任务进行中在 Harness 界面里发的话，会作为人工插话记到这个任务上；任务记录保存在本机，Harness 重启后还在，被重启打断的任务标为 interrupted；Claude Code 在后台等待、结束时唤醒一次；Codex 每次最多等 270 秒，低于它的工具超时。</desc>
   <rect width="1200" height="350" rx="24" fill="#FFFFFF"/>
 <text x="64" y="76" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="30" fill="#0F172A" font-weight="700">使用须知</text>
 <rect x="64" y="104" width="341" height="210" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
@@ -17,8 +17,8 @@
 <text x="455" y="252" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">任务标成 interrupted。</text>
 <rect x="794" y="104" width="341" height="210" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <rect x="794" y="130" width="4" height="30" fill="#2F855A"/>
-<text x="820" y="154" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#0F172A" font-weight="700">等待分段返回</text>
-<text x="820" y="196" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">dsh_wait 约 50 秒内返回，</text>
-<text x="820" y="224" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">还没做完就再调用一次，</text>
-<text x="820" y="252" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">不会被客户端超时卡住。</text>
+<text x="820" y="154" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#0F172A" font-weight="700">等待不轮询</text>
+<text x="820" y="196" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">Claude Code 结束时唤醒一次；</text>
+<text x="820" y="224" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">Codex 每次最多等 270 秒，</text>
+<text x="820" y="252" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">不会撞上它的超时。</text>
 </svg>

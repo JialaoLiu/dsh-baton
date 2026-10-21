@@ -71,11 +71,12 @@ test('dsh_wait waits in short chunks, reports progress, and returns before the c
     setTimeout(() => c.end(JSON.stringify({ id: req.id, result: { run_id: req.params.run_id, state: 'running', timed_out: true } }) + '\n'), 50)
   }))
   await new Promise((r) => server.listen(socketEndpoint(sock), r))
-  const child = spawn(process.execPath, [SERVER], { env: { ...process.env, DSH_BRIDGE_BACKEND: 'host', DSH_BRIDGE_SOCKET: sock } })
+  const child = spawn(process.execPath, [SERVER], { env: { ...process.env, DSH_BRIDGE_BACKEND: 'host', DSH_BRIDGE_SOCKET: sock, DSH_BRIDGE_WAIT_S: '2' } })
   let out = ''
   child.stdout.on('data', (d) => { out += d })
   const t0 = Date.now()
-  child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'dsh_wait', arguments: { run_id: 'hrun-x', timeout_s: 2 }, _meta: { progressToken: 'p1' } } }) + '\n')
+  // timeout_s from the model is ignored: the server's wait length (2 s here) applies.
+  child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'dsh_wait', arguments: { run_id: 'hrun-x', timeout_s: 600 }, _meta: { progressToken: 'p1' } } }) + '\n')
   const reply = await new Promise((resolve) => {
     const tick = setInterval(() => {
       const msgs = out.split('\n').filter(Boolean).map((l) => JSON.parse(l))
@@ -87,6 +88,7 @@ test('dsh_wait waits in short chunks, reports progress, and returns before the c
   const result = JSON.parse(reply.r.result.content[0].text)
   assert.equal(result.timed_out, true)
   assert.match(result.hint, /Call dsh_wait again/)
+  assert.equal(result.recent_events, undefined, 'an unfinished wait carries no event log')
   assert.ok(Date.now() - t0 < 6000, 'returned near its 2 s budget')
   assert.ok(waits.every((s) => s >= 1 && s <= 10), `chunks: ${waits}`)
   const progress = reply.msgs.filter((m) => m.method === 'notifications/progress')
@@ -124,14 +126,20 @@ test('dsh_send tells the host who is sending, from the client name in initialize
   assert.match(sent.hint, /background/)
 })
 
-test('DSH_BRIDGE_WAIT_S sets the default dsh_wait length', async () => {
-  const run = (env) => new Promise((resolve) => {
-    const child = spawn(process.execPath, [SERVER], { env: { ...process.env, ...env } })
+test('dsh_wait length is chosen per client, and DSH_BRIDGE_WAIT_S overrides it', async () => {
+  const { DSH_BRIDGE_WAIT_S, ...base } = process.env
+  const run = (env, clientName) => new Promise((resolve) => {
+    const child = spawn(process.execPath, [SERVER], { env: { ...base, ...env } })
     let out = ''
     child.stdout.on('data', (d) => { out += d })
-    child.on('close', () => resolve(JSON.parse(out.trim().split('\n')[0]).result.tools.find((t) => t.name === 'dsh_wait')))
-    child.stdin.end(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) + '\n')
+    child.on('close', () => resolve(out.trim().split('\n').map((l) => JSON.parse(l)).find((m) => m.id === 2).result.tools.find((t) => t.name === 'dsh_wait').description))
+    child.stdin.end([
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: clientName } } },
+      { jsonrpc: '2.0', id: 2, method: 'tools/list' },
+    ].map((m) => JSON.stringify(m)).join('\n') + '\n')
   })
-  assert.equal((await run({ DSH_BRIDGE_WAIT_S: '1740' })).inputSchema.properties.timeout_s.default, 1740)
-  assert.equal((await run({ DSH_BRIDGE_WAIT_S: 'nope' })).inputSchema.properties.timeout_s.default, 50)
+  assert.match(await run({}, 'codex-mcp-client'), /up to 270 s/)
+  assert.match(await run({}, 'claude-code'), /up to 50 s/)
+  assert.match(await run({ DSH_BRIDGE_WAIT_S: '1740' }, 'codex-mcp-client'), /up to 1740 s/)
+  assert.match(await run({ DSH_BRIDGE_WAIT_S: 'nope' }, 'codex-mcp-client'), /up to 270 s/)
 })

@@ -3,6 +3,7 @@
 import readline from 'node:readline'
 import path from 'node:path'
 import * as core from './core.mjs'
+import { stableNodePath } from './setup.mjs'
 
 const SERVER = { name: 'dsh-bridge', version: '0.2.0' }
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
@@ -10,12 +11,17 @@ const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
 const str = (description) => ({ type: 'string', description })
 const int = (description, d) => ({ type: 'integer', description, default: d })
 
-// How long one dsh_wait call waits by default. 50 s stays under Codex's default 60 s
-// tool timeout; a client whose timeout was raised (Codex: tool_timeout_sec) sets
-// DSH_BRIDGE_WAIT_S a little below it, so one call covers the whole run.
+// How long one dsh_wait call waits, chosen by the server so it always ends before the
+// client gives up on the tool call: Codex stops a call after 300 s, so it gets 270 s;
+// other clients get 50 s (Claude Code waits with wait_command instead). DSH_BRIDGE_WAIT_S
+// overrides it for a client whose timeout was raised. A timeout_s from the model is
+// ignored, so a model cannot pick a short wait and poll.
 const MAX_WAIT_S = 24 * 3600
 const envWait = Math.floor(Number(process.env.DSH_BRIDGE_WAIT_S))
-const DEFAULT_WAIT_S = envWait >= 1 ? Math.min(envWait, MAX_WAIT_S) : 50
+const waitSeconds = () => {
+  if (envWait >= 1) return Math.min(envWait, MAX_WAIT_S)
+  return core.senderOf(clientName) === 'codex' ? 270 : 50
+}
 const WAIT_CHUNK_S = 10
 
 // A shell command that blocks until a run ends and prints its reply. Run in the
@@ -24,12 +30,13 @@ const WAIT_CHUNK_S = 10
 // in POSIX shells and in Git Bash, which Claude Code uses on Windows too.
 const quote = (p) => `"${p}"`
 const waitCommand = (runId) =>
-  /^[\w.-]+$/.test(runId ?? '') ? `${quote(process.execPath)} ${quote(path.join(core.ROOT, 'src', 'cli.mjs'))} wait ${runId}` : undefined
+  /^[\w.-]+$/.test(runId ?? '') ? `${quote(stableNodePath())} ${quote(path.join(core.ROOT, 'src', 'cli.mjs'))} wait ${runId}` : undefined
 
-// Wait in short chunks so each one stays well inside any client's tool timeout,
-// reporting progress between chunks (clients that support it reset their timer).
-async function waitInChunks({ run_id, timeout_s = DEFAULT_WAIT_S }, progress) {
-  const total = Number.isFinite(Number(timeout_s)) ? Math.max(0, Number(timeout_s)) : DEFAULT_WAIT_S
+// Wait in short chunks, reporting progress between them (clients that support it can
+// show it or reset their timer). An unfinished wait returns only the state, not the run's
+// recent events, so the client has nothing to summarise and simply waits again.
+async function waitInChunks({ run_id }, progress) {
+  const total = waitSeconds()
   const started = Date.now()
   const deadline = started + total * 1000
   for (;;) {
@@ -39,7 +46,15 @@ async function waitInChunks({ run_id, timeout_s = DEFAULT_WAIT_S }, progress) {
     if (!st.timed_out) return st
     // Never spin: a chunk that came back early still takes a moment before the next one.
     if (Date.now() - t0 < 500) await new Promise((r) => setTimeout(r, 500))
-    if (Date.now() >= deadline) return { ...st, hint: `Still ${st.state}. Call dsh_wait again with run_id ${run_id} to keep waiting.` }
+    if (Date.now() >= deadline) {
+      return {
+        run_id, state: st.state, timed_out: true,
+        ...(st.waiting_on ? { waiting_on: st.waiting_on } : {}),
+        hint: st.state === 'waiting'
+          ? 'The run is waiting for a person to answer in the Harness UI. Tell the user, then call dsh_wait again.'
+          : `Still ${st.state}. Call dsh_wait again with the same run_id; no need to report progress.`,
+      }
+    }
     progress?.(Math.round((Date.now() - started) / 1000), `run ${run_id} is ${st.state}`)
   }
 }
@@ -90,8 +105,8 @@ const TOOLS = [
   },
   {
     name: 'dsh_wait',
-    description: `Wait for a run to finish and return its final status and reply. Prefer the background wait_command from dsh_send when your client can run background shell commands and wake you when they exit: it costs no turns while waiting. Returns after timeout_s (default ${DEFAULT_WAIT_S}, set with DSH_BRIDGE_WAIT_S to stay under the client's tool timeout) with timed_out: true if the run is still going: then call dsh_wait again with the same run_id. Sends progress notifications while waiting when the client asks for them.`,
-    inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send'), timeout_s: int('Seconds to wait before returning with timed_out', DEFAULT_WAIT_S) } },
+    description: () => `Wait for a run to finish and return its final status and reply. Prefer the background wait_command from dsh_send when your client can run background shell commands and wake you when they exit: it costs no turns while waiting. Each call waits up to ${waitSeconds()} s (set by the server to stay under this client's tool timeout); if the run is still going it returns timed_out: true with just the state: then call dsh_wait again with the same run_id, without summarising progress. Sends progress notifications while waiting when the client asks for them.`,
+    inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send') } },
     run: (a, { progress }) => waitInChunks(a, progress),
   },
   {
@@ -147,7 +162,7 @@ async function handle(req) {
     case 'ping':
       return {}
     case 'tools/list':
-      return { tools: TOOLS.map(({ run, ...t }) => t) }
+      return { tools: TOOLS.map(({ run, ...t }) => ({ ...t, description: typeof t.description === 'function' ? t.description() : t.description })) }
     case 'tools/call': {
       const tool = TOOLS.find((t) => t.name === req.params?.name)
       if (!tool) throw Object.assign(new Error(`Unknown tool: ${req.params?.name}`), { code: -32602 })

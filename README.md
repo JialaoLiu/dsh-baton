@@ -24,103 +24,51 @@ Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in), Node.js ≥ 22.15 and git.
 
 > The npm packages `dsh-bridge-host` and `dsh-bridge-mcp` are not published yet, so install from a clone of this repo as below. There is nothing to `npm install`: dsh-bridge has no dependencies.
 
-**Fastest:** paste this into Claude Code or Codex and let it do the setup:
-
-```text
-Set up dsh-bridge for me, registered globally so every conversation can use it.
-1. Clone it: git clone https://github.com/JialaoLiu/dsh-bridge.git ~/dsh-bridge
-2. Tell me to install the plugin in DeepSeek Harness myself: Plugins → Add plugin → paste the absolute path of ~/dsh-bridge/host → Install → Enable now. Wait until I confirm.
-3. Register the MCP server at user scope, with the absolute path of node:
-   Claude Code: claude mcp add dsh-bridge -s user -- "$(command -v node)" ~/dsh-bridge/src/server.mjs
-   Codex:       codex mcp add dsh-bridge --env DSH_BRIDGE_WAIT_S=1740 -- "$(command -v node)" ~/dsh-bridge/src/server.mjs
-                then add tool_timeout_sec = 1800 to [mcp_servers.dsh-bridge] in ~/.codex/config.toml
-   If a command is not on PATH, write the same entry yourself: "mcpServers" in ~/.claude.json (user scope), [mcp_servers.dsh-bridge] in ~/.codex/config.toml (with env DSH_BRIDGE_WAIT_S = "1740" and tool_timeout_sec = 1800).
-4. Check: claude mcp get dsh-bridge shows "Scope: User config" and "Connected"; codex mcp list lists dsh-bridge. Then call dsh_list_workspaces and show me the result.
-```
-
-Or do it by hand:
-
-### 1. Get the code
+Two commands in a terminal, then one paste in Harness:
 
 ```bash
 git clone https://github.com/JialaoLiu/dsh-bridge.git
-cd dsh-bridge
+node dsh-bridge/src/cli.mjs setup
 ```
 
-### 2. Install the plugin in Harness
+`setup` registers the MCP server once, user-wide, for Claude Code and Codex: every new conversation, in any folder, has the `dsh_*` tools. It writes `~/.claude.json` and `~/.codex/config.toml` directly (a backup of each is kept as `*.bak-dsh-bridge`), so it also works when only the desktop apps are installed and `claude` / `codex` are not on your `PATH`. Running it again is safe.
 
-Print the absolute path of the plugin folder:
+Then finish in Harness. `setup` copies the plugin folder path to your clipboard:
+
+**Plugins** (插件) → **Add plugin** (添加插件) → paste → **Install** (安装) → **Enable now** (立即启用)
+
+Check: start a **new** conversation in Claude Code or Codex and ask it to call `dsh_list_workspaces`. It lists your Harness workspaces.
+
+**Or let Claude Code or Codex do it:** paste *"Run `git clone https://github.com/JialaoLiu/dsh-bridge.git ~/dsh-bridge && node ~/dsh-bridge/src/cli.mjs setup`, then tell me the Harness step it prints."*
+
+Nothing else to configure:
+- **Claude Code** waits for a run in the background (the `wait_command` that `dsh_send` returns) and is woken once, when the run ends.
+- **Codex** waits inside `dsh_wait`, up to 270 s per call, just under its 300 s tool timeout. An unfinished wait returns only the state, so Codex calls again without summarising.
+- Codex asks you to approve MCP tool calls: approve the `dsh-bridge` tools. For unattended `codex exec` runs, add `--approve-for-me`.
+
+**Updating:** `git pull` in the clone, then restart Harness to load plugin changes; new conversations pick up MCP server changes.
+
+**Removing:** `node dsh-bridge/src/cli.mjs setup --remove`, then Harness → Plugins → dsh-bridge-host → Uninstall.
+
+<details>
+<summary>Manual registration and the Claude desktop app</summary>
+
+`setup` writes the same entries these commands would (with the absolute path of `node`, since desktop apps start MCP servers without your shell's `PATH`):
 
 ```bash
-echo "$PWD/host"
+claude mcp add dsh-bridge -s user -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs"
+codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs"
 ```
 
-Harness → **Plugins** → **Add plugin** → paste that path → **Install** → **Enable now** (Chinese UI: 立即应用). It starts right away: `~/.dsh-bridge/host.sock` appears. If it does not, restart Harness.
+`-s user` matters: without it, Claude Code registers the server for the current project folder only.
 
-### 3. Register the MCP server, once, for every conversation
-
-Register it at user scope, not per conversation or per project. Then every new conversation, in any folder, already has the `dsh_*` tools: no reconnecting when you switch or start conversations.
-
-**Claude Code**: `-s user` is the important part. Without it, Claude Code registers the server for the current project folder only.
-
-```bash
-claude mcp add dsh-bridge -s user -- "$(command -v node)" "$PWD/src/server.mjs"
-```
-
-Check: `claude mcp get dsh-bridge` shows `Scope: User config (available in all your projects)` and `Status: ✔ Connected`.
-
-Nothing else to set: after `dsh_send`, Claude Code runs the returned `wait_command` as a background command and is woken when the run ends, with no polling in between.
-
-**Codex**: `codex mcp add` is already user-wide. It writes to `~/.codex/config.toml`, which the Codex CLI and app share.
-
-```bash
-codex mcp add dsh-bridge --env DSH_BRIDGE_WAIT_S=1740 -- "$(command -v node)" "$PWD/src/server.mjs"
-```
-
-Then let one `dsh_wait` cover a whole run. Codex stops a tool call after 60 s by default, so raise it for this server: in `~/.codex/config.toml`, add `tool_timeout_sec` to the `[mcp_servers.dsh-bridge]` entry that the command wrote.
-
-```toml
-tool_timeout_sec = 1800
-```
-
-`DSH_BRIDGE_WAIT_S=1740` keeps each wait just under that. Without the two settings, `dsh_wait` returns every 50 s and Codex calls it again, one turn each time.
-
-Check: `codex mcp list` lists `dsh-bridge`. Codex asks you to approve MCP tool calls: approve the `dsh-bridge` tools. For unattended `codex exec` runs, add `--approve-for-me`.
-
-**Claude desktop app (optional)**: for the chat app's connectors (Claude Code above is separate), add this to `~/Library/Application Support/Claude/claude_desktop_config.json` and restart the app. It shows as a "Local dev" connector.
+**Claude desktop app (optional)**: for the chat app's connectors (separate from Claude Code), add this to `~/Library/Application Support/Claude/claude_desktop_config.json` and restart the app. It shows as a "Local dev" connector.
 
 ```json
 { "mcpServers": { "dsh-bridge": { "command": "/absolute/path/to/node", "args": ["/absolute/path/to/dsh-bridge/src/server.mjs"] } } }
 ```
 
-Notes:
-- Use the absolute path of `node` (`command -v node` prints it): desktop apps start MCP servers without your shell's `PATH`.
-- `claude` or `codex` not found? With only the desktop apps installed they may not be on your `PATH`. Write the entry directly instead. It is the same user-wide registration:
-  - Claude Code: add it under the top-level `"mcpServers"` key of `~/.claude.json`:
-
-    ```json
-    "dsh-bridge": { "type": "stdio", "command": "/absolute/path/to/node", "args": ["/absolute/path/to/dsh-bridge/src/server.mjs"] }
-    ```
-
-  - Codex: add it to `~/.codex/config.toml`:
-
-    ```toml
-    [mcp_servers.dsh-bridge]
-    command = "/absolute/path/to/node"
-    args = ["/absolute/path/to/dsh-bridge/src/server.mjs"]
-    tool_timeout_sec = 1800
-
-    [mcp_servers.dsh-bridge.env]
-    DSH_BRIDGE_WAIT_S = "1740"
-    ```
-
-  The **Fastest** prompt tells Claude Code or Codex to do this for you.
-
-### 4. Check it end to end
-
-Start a **new** conversation in Claude Code or Codex (no reconnecting needed) and ask it to call `dsh_list_workspaces`. It lists your Harness workspaces.
-
-**Updating:** `git pull` in the clone. Restart Harness to load plugin changes; new conversations pick up MCP server changes.
+</details>
 
 ## How it works
 
@@ -153,7 +101,7 @@ Start a **new** conversation in Claude Code or Codex (no reconnecting needed) an
 | `dsh_read_session` | Recent prompts and replies of one session (with tool names) |
 | `dsh_send` | Send a message: `session_id` continues that session; `cwd` or `workspace_id` starts a new one (a `cwd` that is not a workspace yet is registered first). Returns a `run_id` at once. In Harness the message is marked "Sent by Claude / ChatGPT from another chat" |
 | `dsh_status` | Run progress: state, recent text and tool calls, final reply; `waiting_on` when the turn is over but sub-agents or jobs still run; `human_interjections` when someone typed in the Harness UI mid-run; state `interrupted` for a run cut short by a Harness restart |
-| `dsh_wait` | Wait for the run to end. Returns after `DSH_BRIDGE_WAIT_S` (default 50 s) with `timed_out` if it is still going: call it again. Sends progress notifications while waiting. Clients that can wait in the background use `dsh_send`'s `wait_command` instead |
+| `dsh_wait` | Wait for the run to end: up to 270 s per call for Codex, 50 s for other clients. Still going: returns `timed_out` with just the state; call it again. Clients that can wait in the background use `dsh_send`'s `wait_command` instead |
 | `dsh_session_activity` | What a session is doing now: running turn, sub-agents (any depth), background jobs |
 | `dsh_cancel` | Stop everything a session is doing, by `run_id` or `session_id`: turn, sub-agents, jobs (queued messages stay) |
 | `dsh_rename_session` | Rename a session |
@@ -186,7 +134,7 @@ dsh-bridge rename-workspace ~/code/new-app "New name"
 | `DSH_BRIDGE_BACKEND` | `auto` | `auto`, `host` or `headless` |
 | `DSH_BRIDGE_HOME` | `~/.dsh-bridge` | Socket and headless run records |
 | `DSH_BRIDGE_SOCKET` | `$DSH_BRIDGE_HOME/host.sock` | Plugin socket path (must match on both sides); on Windows mapped to a per-user named pipe |
-| `DSH_BRIDGE_WAIT_S` | `50` | How long one `dsh_wait` call waits; keep it under the client's tool timeout |
+| `DSH_BRIDGE_WAIT_S` | `270` for Codex, else `50` | How long one `dsh_wait` call waits; set it only if you raised the client's tool timeout, and keep it below that |
 | `DSH_BIN` | the `dsh` inside the macOS app, else `PATH` | Harness CLI for headless mode |
 | `DSH_HOME` | `~/.dsh` | Harness data folder (headless session reads) |
 | `DSH_BRIDGE_ACCOUNT` | `1` | `0` uses the API-key route in headless mode |
@@ -206,7 +154,7 @@ When the plugin is unreachable, the MCP server falls back to Harness's `dsh head
 </p>
 
 <p align="center">
-  <img src="./assets/readme/limits.svg" width="100%" alt="Good to know: a message typed in the UI mid-run is flagged on the run as a human interjection, run records survive a Harness restart (cut-short runs show interrupted), dsh_wait returns within about 50 s so call it again while a run is going">
+  <img src="./assets/readme/limits.svg" width="100%" alt="Good to know: a message typed in the UI mid-run is flagged on the run as a human interjection, run records survive a Harness restart (cut-short runs show interrupted), Claude Code is woken once when a run ends and Codex waits up to 270 s per call">
 </p>
 
 Any process running as your OS user can drive Harness through the socket, the same as running `dsh` directly. dsh-bridge relies on Harness 0.2.1-series internal service APIs, so a major Harness update may need a follow-up release.

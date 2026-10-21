@@ -20,27 +20,28 @@ Verified on Windows 11 with DeepSeek Harness 0.2.1-rc.2 (desktop app), Node.js 2
 
 ## Install
 
-Requires DeepSeek Harness ≥ 0.2.1-rc.2, Node.js ≥ 22.15 and git. The npm packages are not published yet, so install from a clone, for example:
+Requires DeepSeek Harness ≥ 0.2.1-rc.2, Node.js ≥ 22.15 and git. The npm packages are not published yet, so install from a clone. In PowerShell:
 
 ```powershell
 git clone https://github.com/JialaoLiu/dsh-bridge.git C:\dev\dsh-bridge
+node C:\dev\dsh-bridge\src\cli.mjs setup
 ```
 
-### 1. The plugin in Harness
+`setup` registers the MCP server once, user-wide, for Claude Code (`%USERPROFILE%\.claude.json`) and Codex (`%USERPROFILE%\.codex\config.toml`), with the absolute path of `node`. It edits the files directly, so it works with the desktop apps alone: their `claude.exe` / `codex.exe` are usually not on `PATH`. It also copies the plugin path to the clipboard.
 
-Harness → **Plugins / 插件** → **Add plugin / 添加插件** → paste `C:\dev\dsh-bridge\host` → **Install** → **Enable now / 立即应用**. The pipe appears right away (see [Verify](#verify)); if it does not, restart Harness.
+Then, in Harness: **Plugins / 插件** → **Add plugin / 添加插件** → paste `C:\dev\dsh-bridge\host` → **Install / 安装** → **Enable now / 立即启用**. The pipe appears right away (see [Verify](#verify)); if it does not, restart Harness.
 
-**If the Add plugin dialog refuses the folder**, link it by hand. `dsh plugin --profile desktop` refuses with "profile "desktop" is managed exclusively by the Electron application", so do this instead:
+Nothing else to configure: Claude Code waits for a run in the background (Git Bash runs the `wait_command` that `dsh_send` returns), and Codex waits up to 270 s per `dsh_wait` call, under its 300 s tool timeout. Approve the `dsh-bridge` tools when Codex asks; for unattended `codex exec`, add `--approve-for-me`.
 
-1. Quit Harness, including its tray icon.
-2. In `%USERPROFILE%\.dsh\profiles\desktop\package.json`, add the link to `dependencies` and the bundle to `dsh.profile.bundles`:
+Remove: `node C:\dev\dsh-bridge\src\cli.mjs setup --remove`, then Harness → Plugins → dsh-bridge-host → Uninstall.
 
-   ```json
-   "dependencies": { "dsh-bridge-host": "link:C:/dev/dsh-bridge/host" },
-   "dsh": { "profile": { "bundles": [ "...existing bundles...", "dsh-bridge-host" ] } }
-   ```
+### If the Plugins page cannot uninstall or install it
 
-3. Install with Harness's bundled pnpm and its own store. Adjust `$app` to your install folder. Without `--store-dir`, pnpm wants to delete and rebuild `node_modules`.
+**Uninstall fails with `ERR_PNPM_UNEXPECTED_STORE`** ("Unexpected store location"), or Add plugin says the plugin is already installed (该插件已安装) while Uninstall fails. This happens when the profile was installed by an older Harness build that used another pnpm store. Move the profile onto the current store once, and the Plugins page works again:
+
+1. Quit Harness from its menu (应用 → 退出), including its tray icon.
+2. Rename `%USERPROFILE%\.dsh\profiles\desktop\node_modules` to keep it as a backup, for example `node_modules.old-store`.
+3. Reinstall the profile with Harness's bundled pnpm, without `--store-dir`. Set `$app` to your Harness folder, for example `E:\Software\DeepSeek Harness` for a custom install.
 
    ```powershell
    $app = "$env:LOCALAPPDATA\Programs\DeepSeek Harness"
@@ -50,52 +51,12 @@ Harness → **Plugins / 插件** → **Add plugin / 添加插件** → paste `C:
    cd "$env:USERPROFILE\.dsh\profiles\desktop"
    # Harness ≥ 0.2.1; older builds have it at resources\runtime\pnpm\bin\pnpm.mjs
    $pnpm = "$app\resources\runtime\primary-runtime\dependencies\pnpm\bin\pnpm.mjs"
-   & "$app\DeepSeek Harness.exe" $pnpm install --store-dir "$env:USERPROFILE\.dsh\desktop\pnpm\store\v11"
+   & "$app\DeepSeek Harness.exe" $pnpm install --frozen-lockfile
    ```
 
-   `node_modules\dsh-bridge-host` becomes a junction to your `host` folder.
-4. Start Harness. Restart it after changing plugin code.
+4. Start Harness. Plugins → dsh-bridge-host → Uninstall now works; then Add plugin as above. A failed uninstall earlier may have left the plugin switched off: switch it on if so.
 
-### 2. The MCP server, registered once for every conversation
-
-Register it at user scope, not per conversation or per project, so every new conversation already has the `dsh_*` tools. Use the absolute path of `node`: desktop apps start MCP servers without your shell's `PATH`, and they cannot start `npx.cmd` directly.
-
-**Claude Code**: `-s user` is the important part. Without it, Claude Code registers the server for the current project folder only.
-
-```powershell
-claude mcp add dsh-bridge -s user -- (Get-Command node).Source C:\dev\dsh-bridge\src\server.mjs
-```
-
-Check: `claude mcp get dsh-bridge` shows `Scope: User config (available in all your projects)` and `Status: ✓ Connected`.
-
-**Codex**: `codex mcp add` is already user-wide. It writes to `%USERPROFILE%\.codex\config.toml`, which the Codex CLI and app share.
-
-```powershell
-codex mcp add dsh-bridge --env DSH_BRIDGE_WAIT_S=1740 -- (Get-Command node).Source C:\dev\dsh-bridge\src\server.mjs
-```
-
-Then add `tool_timeout_sec = 1800` to the `[mcp_servers.dsh-bridge]` entry in `%USERPROFILE%\.codex\config.toml`, so one `dsh_wait` can cover a whole run instead of returning every 50 s (Codex stops a tool call after 60 s by default).
-
-Claude Code needs nothing more: it runs the `wait_command` that `dsh_send` returns as a background command and is woken when the run ends.
-
-Check: `codex mcp list` lists `dsh-bridge`. Approve the `dsh-bridge` tools when Codex asks; for unattended `codex exec`, add `--approve-for-me`.
-
-**If `claude` or `codex` is not on `PATH`** (desktop apps only), write the same user-wide entry by hand:
-
-- Claude Code: under the top-level `"mcpServers"` key of `%USERPROFILE%\.claude.json`: `"dsh-bridge": { "type": "stdio", "command": "C:\\Program Files\\nodejs\\node.exe", "args": ["C:\\dev\\dsh-bridge\\src\\server.mjs"] }`.
-- Codex: in `%USERPROFILE%\.codex\config.toml`:
-
-  ```toml
-  [mcp_servers.dsh-bridge]
-  command = 'C:\Program Files\nodejs\node.exe'
-  args = ['C:\dev\dsh-bridge\src\server.mjs']
-  tool_timeout_sec = 1800
-
-  [mcp_servers.dsh-bridge.env]
-  DSH_BRIDGE_WAIT_S = '1740'
-  ```
-
-**Claude desktop app (optional)**: the same `"mcpServers"` entry in `%APPDATA%\Claude\claude_desktop_config.json`, then restart the app.
+`dsh plugin --profile desktop` cannot do this: it refuses with "profile "desktop" is managed exclusively by the Electron application".
 
 ## Verify
 
@@ -141,10 +102,7 @@ The suite runs on Windows with named pipes. Two POSIX-only checks are skipped: f
 
 - **套接字改为命名管道。** Windows 上 Node 不能监听 Unix 套接字文件，所以同一路径被映射成按用户区分的命名管道 `\\.\pipe\dsh-bridge-<哈希>`。插件和 MCP 两边算法一致，`DSH_BRIDGE_SOCKET` 仍然可用，Harness 退出后管道自动消失。
 - **headless 用 Harness 自带的 CLI。** Harness ≥ 0.2.1 自带 `resources\runtime\cli\bin\dsh.cmd`；更早的版本只有打包在 `app.asar` 里的 CLI，由 Harness 自己的 exe 以 Node 模式运行。会按顺序自动查找：`DSH_BIN`、`PATH` 里的 `dsh`、默认安装位置，以及注册表里的自定义安装目录。
-- **从源码安装插件要手动来。** `dsh plugin --profile desktop` 会拒绝桌面版托管的 profile，所以：
-  1. 退出 Harness；
-  2. 在 profile 的 `package.json` 里加 `link:` 依赖，并在 `dsh.profile.bundles` 里加上 `dsh-bridge-host`；
-  3. 用 Harness 自带的 pnpm 安装，记得加 `--store-dir`；
-  4. 启动 Harness。
-- **MCP 服务器要全局注册。** npm 包还没发布，所以用 `node` 的绝对路径加克隆下来的 `src\server.mjs`。Claude Code 用 `claude mcp add … -s user`（用户级，所有项目都能用）；Codex 用 `codex mcp add --env DSH_BRIDGE_WAIT_S=1740`，本来就写在用户级的 `config.toml` 里，再在那一项里加 `tool_timeout_sec = 1800`，一次 `dsh_wait` 就能等完整个任务。注册一次后，新开对话不用再连。
+- **插件用 Harness 插件页安装。** 插件 → 添加插件 → 粘贴 `C:\dev\dsh-bridge\host` → 安装 → 立即启用（`setup` 已把路径复制到剪贴板）。
+- **一条命令注册 MCP。** `node C:\dev\dsh-bridge\src\cli.mjs setup` 直接写 Claude Code 和 Codex 的用户级配置（用 `node` 的绝对路径），桌面版的 `claude` / `codex` 不在 `PATH` 里也没关系。之后新开对话就有 `dsh_*` 工具；Codex 每次最多等 270 秒，不用再配超时。
+- **插件页卸不掉或装不上时**（`ERR_PNPM_UNEXPECTED_STORE`，或提示"该插件已安装"）：是旧版 Harness 装 profile 时用了另一个 pnpm store。一次性修好：从菜单退出 Harness，把 `%USERPROFILE%\.dsh\profiles\desktop\node_modules` 改名备份，用 Harness 自带的 pnpm 运行 `install --frozen-lockfile`（不加 `--store-dir`；`$app` 改成你的安装目录，比如 `E:\Software\DeepSeek Harness`），再启动 Harness，插件页的卸载和添加就正常了；如果插件被关掉了，记得重新打开。
 - **headless 需要独立凭据。** 要么登录账户，要么设置 `DEEPSEEK_API_KEY`。桌面版里保存的 Key，headless CLI 读不到。
