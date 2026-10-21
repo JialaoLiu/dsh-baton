@@ -43,7 +43,7 @@ Check: start a **new** conversation in Claude Code or Codex and ask it to call `
 
 Nothing else to configure:
 - **Claude Code** waits for a run in the background (the `wait_command` that `dsh_send` returns) and is woken once, when the run ends.
-- **Codex** waits inside `dsh_wait`, up to 270 s per call, just under its 300 s tool timeout. An unfinished wait returns only the state, so Codex calls again without summarising.
+- **Codex** waits inside `dsh_wait`, up to 270 s per call, just under its 300 s tool timeout. An unfinished wait returns only the state, so Codex calls again without summarising. Codex gets no `wait_command`: its terminal cannot wake it, so it would poll.
 - Codex asks you to approve MCP tool calls: approve the `dsh-bridge` tools. For unattended `codex exec` runs, add `--approve-for-me`.
 
 **Updating:** `git pull` in the clone, then restart Harness to load plugin changes; new conversations pick up MCP server changes.
@@ -101,7 +101,7 @@ codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs
 | `dsh_read_session` | Recent prompts and replies of one session (with tool names) |
 | `dsh_send` | Send a message: `session_id` continues that session; `cwd` or `workspace_id` starts a new one (a `cwd` that is not a workspace yet is registered first). Returns a `run_id` at once. In Harness the message is marked "Sent by Claude / ChatGPT from another chat" |
 | `dsh_status` | Run progress: state, recent text and tool calls, final reply; `waiting_on` when the turn is over but sub-agents or jobs still run; `human_interjections` when someone typed in the Harness UI mid-run; state `interrupted` for a run cut short by a Harness restart |
-| `dsh_wait` | Wait for the run to end: up to 270 s per call for Codex, 50 s for other clients. Still going: returns `timed_out` with just the state; call it again. Clients that can wait in the background use `dsh_send`'s `wait_command` instead |
+| `dsh_wait` | Wait for the run to end: up to 270 s per call for Codex, 50 s for other clients. Still going: returns `timed_out` with just the state; call it again. Clients that can wait in the background use `dsh_send`'s `wait_command` instead. `dsh_status` is a one-off look, not a way to wait |
 | `dsh_session_activity` | What a session is doing now: running turn, sub-agents (any depth), background jobs |
 | `dsh_cancel` | Stop everything a session is doing, by `run_id` or `session_id`: turn, sub-agents, jobs (queued messages stay) |
 | `dsh_rename_session` | Rename a session |

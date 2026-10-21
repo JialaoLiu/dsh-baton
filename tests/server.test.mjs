@@ -96,7 +96,7 @@ test('dsh_wait waits in short chunks, reports progress, and returns before the c
   assert.equal(progress[0].params.progressToken, 'p1')
 })
 
-test('dsh_send tells the host who is sending, from the client name in initialize', async () => {
+async function sendAs(clientName) {
   const net = await import('node:net')
   const fs = await import('node:fs')
   const { socketEndpoint } = await import('../host/lib/socket.js')
@@ -114,16 +114,30 @@ test('dsh_send tells the host who is sending, from the client name in initialize
   let out = ''
   child.stdout.on('data', (d) => { out += d })
   for (const m of [
-    { id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: 'codex-mcp-client', version: '1' } } },
+    { id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: clientName, version: '1' } } },
     { id: 2, method: 'tools/call', params: { name: 'dsh_send', arguments: { session_id: 's1', message: 'hi' } } },
   ]) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n')
   await new Promise((resolve) => { const tick = setInterval(() => { if (out.includes('"id":2')) { clearInterval(tick); resolve() } }, 50) })
   child.stdin.end(); server.close(); fs.rmSync(dir, { recursive: true, force: true })
-  assert.equal(sends[0].sender, 'codex')
-  assert.equal(sends[0].message, 'hi')
-  const sent = JSON.parse(out.split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((m) => m.id === 2).result.content[0].text)
-  assert.match(sent.wait_command, /cli\.mjs" wait hrun-1$/)
-  assert.match(sent.hint, /background/)
+  const lines = out.split('\n').filter(Boolean).map((l) => JSON.parse(l))
+  return { host: sends[0], instructions: lines.find((m) => m.id === 1).result.instructions, sent: JSON.parse(lines.find((m) => m.id === 2).result.content[0].text) }
+}
+
+test('dsh_send tells the host who is sending, from the client name in initialize', async () => {
+  const { host } = await sendAs('codex-mcp-client')
+  assert.equal(host.sender, 'codex')
+  assert.equal(host.message, 'hi')
+})
+
+test('Claude Code gets a background wait_command; Codex, which cannot be woken by one, gets dsh_wait only', async () => {
+  const claude = await sendAs('claude-code')
+  assert.match(claude.sent.wait_command, /cli\.mjs" wait hrun-1$/)
+  assert.match(claude.sent.hint, /background/)
+  assert.match(claude.instructions, /wait_command/)
+  const codex = await sendAs('codex-mcp-client')
+  assert.equal(codex.sent.wait_command, undefined)
+  assert.match(codex.sent.hint, /Call dsh_wait/)
+  assert.doesNotMatch(codex.instructions, /wait_command/)
 })
 
 test('dsh_wait length is chosen per client, and DSH_BRIDGE_WAIT_S overrides it', async () => {
@@ -138,8 +152,14 @@ test('dsh_wait length is chosen per client, and DSH_BRIDGE_WAIT_S overrides it',
       { jsonrpc: '2.0', id: 2, method: 'tools/list' },
     ].map((m) => JSON.stringify(m)).join('\n') + '\n')
   })
-  assert.match(await run({}, 'codex-mcp-client'), /up to 270 s/)
-  assert.match(await run({}, 'claude-code'), /up to 50 s/)
+  const codex = await run({}, 'codex-mcp-client')
+  assert.match(codex, /up to 270 s/)
+  assert.doesNotMatch(codex, /wait_command/)
+  assert.match(codex, /"yield_time_ms": 290000/)
+  const claude = await run({}, 'claude-code')
+  assert.match(claude, /up to 50 s/)
+  assert.match(claude, /wait_command/)
+  assert.doesNotMatch(claude, /yield_time_ms/)
   assert.match(await run({ DSH_BRIDGE_WAIT_S: '1740' }, 'codex-mcp-client'), /up to 1740 s/)
   assert.match(await run({ DSH_BRIDGE_WAIT_S: 'nope' }, 'codex-mcp-client'), /up to 270 s/)
 })

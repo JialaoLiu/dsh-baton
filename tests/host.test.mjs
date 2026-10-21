@@ -12,7 +12,7 @@ import { socketEndpoint } from '../host/lib/socket.js'
 
 const IS_WIN = process.platform === 'win32'
 
-function startHost({ activity = () => [], sessions = [], workspaces = [], sock: sockPath, home } = {}) {
+function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-'))
   // Run records go to the bridge home: keep them out of the real ~/.dsh-bridge.
   process.env.DSH_BRIDGE_HOME = home ?? path.join(dir, 'bridge')
@@ -31,7 +31,7 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], sock: 
     workspaceRegistry: {
       list: () => ws,
       get: (id) => ws.find((w) => w.id === id),
-      archivedSessionIds: [],
+      archivedSessionIds: archived,
       resolveByPath: async (p) => ws.find((w) => w.path === p),
       create: async (p, title) => {
         const w = { id: `w${ws.length + 1}`, path: p, title: title ?? path.basename(p), sessionIds: [], setTitle: async function (t) { this.title = t } }
@@ -190,6 +190,17 @@ test('cancel stops the whole session through the archive stop path', async (t) =
   assert.deepEqual(h.calls.stop, ['s1'])
   assert.equal(r.run.state, 'cancelled')
   assert.deepEqual(r.queued_runs, [queued.run_id])
+})
+
+test('send refuses an archived session, and cancel settles a run that never started', async (t) => {
+  const h = startHost({ archived: ['old'] }); t.after(h.close); await h.ready
+  await assert.rejects(h.call('send', { session_id: 'old', message: 'x' }), /archived/)
+  assert.equal(h.calls.prompt.length, 0)
+  assert.equal((await h.call('activity', { session_id: 'old' })).archived, true)
+  const run = await h.call('send', { session_id: 's1', message: 'never delivered' })
+  const r = await h.call('cancel', { run_id: run.run_id })
+  assert.equal(r.run.state, 'cancelled')
+  assert.equal((await h.call('wait', { run_id: run.run_id, timeout_s: 1 })).state, 'cancelled')
 })
 
 test('cancel re-issues the stop when the first one is lost', async (t) => {

@@ -399,6 +399,9 @@ export function apply(ctx) {
     return { id: ws.id, path: ws.path, title: ws.title, created: !existed }
   }
 
+  // archivedSessionIds may be any iterable, so read it through a Set.
+  const isArchived = (sessionId) => new Set(registry.archivedSessionIds ?? []).has(sessionId)
+
   async function listSessions({ cwd, query, limit = 20, include_subagents = false } = {}) {
     const { items } = await controller.list({}, signal())
     const want = cwd ? normalizePath(cwd) : null
@@ -436,7 +439,7 @@ export function apply(ctx) {
         if (text || tools.length) messages.push({ role: 'assistant', time: iso(e.time), text, ...(tools.length ? { tools } : {}) })
       }
     }
-    return { session_id, cwd: meta?.cwd ?? null, title, total_messages: messages.length, messages: messages.slice(-last) }
+    return { session_id, ...(isArchived(session_id) ? { archived: true } : {}), cwd: meta?.cwd ?? null, title, total_messages: messages.length, messages: messages.slice(-last) }
   }
 
   async function send({ message, session_id, cwd, workspace_id, mode = 'followup', sender }) {
@@ -444,6 +447,10 @@ export function apply(ctx) {
     if (sender != null && !SENDER_RE.test(sender)) throw new Error('sender must be 1-32 characters of a-z, 0-9 or -')
     let sessionId = session_id
     let workspace = null
+    // Harness never runs a prompt sent to an archived session: the run would stay queued forever.
+    if (sessionId && isArchived(sessionId)) {
+      throw new Error(`Session ${sessionId} is archived. Unarchive it in Harness, or start a new session with cwd or workspace_id.`)
+    }
     if (!sessionId) {
       if (!cwd && !workspace_id) throw new Error('A new session needs cwd or workspace_id. Pass session_id to continue an existing one.')
       // A folder that is not a workspace yet is registered first, so the new session shows in the sidebar.
@@ -514,6 +521,7 @@ export function apply(ctx) {
     const items = await sessionActivity(session_id)
     return {
       session_id,
+      ...(isArchived(session_id) ? { archived: true } : {}),
       busy: items.length > 0,
       activity: items,
       bridge_runs: activeRunsFor(session_id).map((r) => ({ run_id: r.id, state: r.state, in_conversation: r.sawPrompt })),
@@ -541,6 +549,9 @@ export function apply(ctx) {
       } while (still.busy && Date.now() < deadline)
       if (!still.busy) break
     }
+    // The named run never reached the conversation (still queued, or sent to a session
+    // that will not run it): settle it too, so nothing waits on it forever.
+    if (run && isActive(run) && !run.sawPrompt) settle(run, 'cancelled')
     return {
       session_id: sessionId,
       ...(run ? { run: publicRun(run, 0) } : {}),

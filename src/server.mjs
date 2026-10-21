@@ -18,9 +18,10 @@ const int = (description, d) => ({ type: 'integer', description, default: d })
 // ignored, so a model cannot pick a short wait and poll.
 const MAX_WAIT_S = 24 * 3600
 const envWait = Math.floor(Number(process.env.DSH_BRIDGE_WAIT_S))
+const isCodex = () => core.senderOf(clientName) === 'codex'
 const waitSeconds = () => {
   if (envWait >= 1) return Math.min(envWait, MAX_WAIT_S)
-  return core.senderOf(clientName) === 'codex' ? 270 : 50
+  return isCodex() ? 270 : 50
 }
 const WAIT_CHUNK_S = 10
 
@@ -52,7 +53,7 @@ async function waitInChunks({ run_id }, progress) {
         ...(st.waiting_on ? { waiting_on: st.waiting_on } : {}),
         hint: st.state === 'waiting'
           ? 'The run is waiting for a person to answer in the Harness UI. Tell the user, then call dsh_wait again.'
-          : `Still ${st.state}. Call dsh_wait again with the same run_id; no need to report progress.`,
+          : `Still ${st.state}. Call dsh_wait again with the same run_id, with no dsh_status call and no progress note.`,
       }
     }
     progress?.(Math.round((Date.now() - started) / 1000), `run ${run_id} is ${st.state}`)
@@ -86,10 +87,13 @@ const TOOLS = [
   },
   {
     name: 'dsh_send',
-    description: 'Send a message to DeepSeek Harness. With session_id it continues that existing session (same context, no new session); with cwd or workspace_id it starts a new session there (a cwd that is not a workspace yet is registered in the sidebar first). Returns immediately with a run_id; the turn runs in the background. If the session is already working, mode followup (default) queues the message after the current turn and steer adds it to the running turn; each message gets its own run_id. The message is delivered verbatim as a user message, with no prefix or label added: write it in the language the user works in, self-contained (Harness does not see this conversation), and say who is asking only if it matters. Follow up with dsh_wait or dsh_status.',
+    description: 'Send a message to DeepSeek Harness. With session_id it continues that existing session (same context, no new session); with cwd or workspace_id it starts a new session there (a cwd that is not a workspace yet is registered in the sidebar first). Returns immediately with a run_id; the turn runs in the background. If the session is already working, mode followup (default) queues the message after the current turn and steer adds it to the running turn; each message gets its own run_id. The message is delivered verbatim as a user message, with no prefix or label added: write it in the language the user works in, self-contained (Harness does not see this conversation), and say who is asking only if it matters. Then wait for the reply with dsh_wait (or the wait_command it returns, where offered).',
     inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: 'followup queues after the current turn (default); steer injects into a running turn', default: 'followup' } } },
     run: async (a) => {
       const st = await core.api.send({ ...a, sender: core.senderOf(process.env.DSH_BRIDGE_SENDER || clientName) })
+      // Codex has no wake-on-exit for shell commands: offered wait_command, it runs it in a
+      // terminal and polls that, so it gets dsh_wait only.
+      if (isCodex()) return { ...st, hint: 'Run started. Call dsh_wait with this run_id; it returns when the run ends. Do not poll dsh_status.' }
       return {
         ...st,
         wait_command: waitCommand(st.run_id),
@@ -99,13 +103,13 @@ const TOOLS = [
   },
   {
     name: 'dsh_status',
-    description: 'Progress of a run: state (queued/running/waiting/completed/failed/cancelled, or interrupted when a Harness restart cut it short), session_id, recent events (text, tool calls), final reply, waiting_on when the turn is over but sub-agents or background jobs are still working, and human_interjections when someone typed in the Harness UI during the run (its result then reflects that input too).',
+    description: 'Progress of a run: state (queued/running/waiting/completed/failed/cancelled, or interrupted when a Harness restart cut it short), session_id, recent events (text, tool calls), final reply, waiting_on when the turn is over but sub-agents or background jobs are still working, and human_interjections when someone typed in the Harness UI during the run (its result then reflects that input too). A one-off look, never a way to wait: to wait for the reply use dsh_wait, and if dsh_wait timed out, call dsh_wait again.',
     inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send'), tail: int('How many recent events', 20) } },
     run: (a) => core.api.status(a),
   },
   {
     name: 'dsh_wait',
-    description: () => `Wait for a run to finish and return its final status and reply. Prefer the background wait_command from dsh_send when your client can run background shell commands and wake you when they exit: it costs no turns while waiting. Each call waits up to ${waitSeconds()} s (set by the server to stay under this client's tool timeout); if the run is still going it returns timed_out: true with just the state: then call dsh_wait again with the same run_id, without summarising progress. Sends progress notifications while waiting when the client asks for them.`,
+    description: () => `Wait for a run to finish and return its final status and reply.${isCodex() ? '' : ' Prefer the background wait_command from dsh_send when your client can run background shell commands and wake you when they exit: it costs no turns while waiting.'} Each call waits up to ${waitSeconds()} s (set by the server to stay under this client's tool timeout); if the run is still going it returns timed_out: true with just the state: then call dsh_wait again with the same run_id, without summarising progress.${isCodex() ? ` If you call tools from a script cell that yields ("Script running with cell ID …"), give it a yield longer than the wait so you are not woken every 30 s: start the script with // @exec: {"yield_time_ms": ${(waitSeconds() + 20) * 1000}} and pass the same yield_time_ms to wait.` : ''} Sends progress notifications while waiting when the client asks for them.`,
     inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send') } },
     run: (a, { progress }) => waitInChunks(a, progress),
   },
@@ -156,7 +160,7 @@ async function handle(req) {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: {} },
         serverInfo: SERVER,
-        instructions: 'Bridge to a local DeepSeek Harness. Find a session with dsh_list_sessions, continue it with dsh_send {session_id, message}, then wait for the reply: run the wait_command it returns as a background shell command if your client wakes you when one exits, otherwise call dsh_wait. A run in state "waiting" needs a person to answer in the Harness UI.',
+        instructions: `Bridge to a local DeepSeek Harness. Find a session with dsh_list_sessions, continue it with dsh_send {session_id, message}, then wait for the reply: ${isCodex() ? 'call dsh_wait with the run_id until it returns the final state (not dsh_status)' : 'run the wait_command it returns as a background shell command if your client wakes you when one exits, otherwise call dsh_wait'}. A run in state "waiting" needs a person to answer in the Harness UI.`,
       }
     }
     case 'ping':
