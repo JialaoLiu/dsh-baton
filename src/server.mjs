@@ -20,10 +20,11 @@ const WAIT_CHUNK_S = 10
 
 // A shell command that blocks until a run ends and prints its reply. Run in the
 // background by a client that wakes the model when the command exits (Claude Code),
-// it waits without spending any turns.
+// it waits without spending any turns. Plain "<node>" "<cli>" wait <id> form: it runs
+// in POSIX shells and in Git Bash, which Claude Code uses on Windows too.
 const quote = (p) => `"${p}"`
 const waitCommand = (runId) =>
-  `${process.platform === 'win32' ? '& ' : ''}${quote(process.execPath)} ${quote(path.join(core.ROOT, 'src', 'cli.mjs'))} wait ${runId}`
+  /^[\w.-]+$/.test(runId ?? '') ? `${quote(process.execPath)} ${quote(path.join(core.ROOT, 'src', 'cli.mjs'))} wait ${runId}` : undefined
 
 // Wait in short chunks so each one stays well inside any client's tool timeout,
 // reporting progress between chunks (clients that support it reset their timer).
