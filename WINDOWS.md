@@ -20,25 +20,11 @@ Verified on Windows 11 with DeepSeek Harness 0.2.1-rc.2 (desktop app), Node.js 2
 
 ## Install
 
-Requires DeepSeek Harness ≥ 0.2.1-rc.2 and Node.js ≥ 22.15. In PowerShell:
+Exactly as in the [README](README.md#quick-start), in PowerShell: `npx -y dsh-baton-mcp setup`, then in Harness add the plugin `dsh-baton-host`. Updating and removing are the same too ([Install details](README.md#install-details)). On Windows:
 
-```powershell
-npx -y dsh-baton-mcp setup
-```
-
-`setup` copies itself to `%USERPROFILE%\.dsh-baton\app` (npx's cache is not a stable place) and registers the MCP server once, user-wide, for Claude Code (`%USERPROFILE%\.claude.json`) and Codex (`%USERPROFILE%\.codex\config.toml`), with the absolute path of `node`. It edits the files directly, so it works with the desktop apps alone: their `claude.exe` / `codex.exe` are usually not on `PATH`. It also copies the plugin's package name to the clipboard.
-
-Then, in Harness: **Plugins / 插件** → **Add plugin / 添加插件** → registry **Official npm registry** → `dsh-baton-host` → **Install / 安装** → **Enable now / 立即启用**. The pipe appears right away (see [Verify](#verify)); if it does not, restart Harness.
-
-Nothing else to configure: Claude Code waits for a run in the background (Git Bash runs the `wait_command` that `dsh_send` returns), and Codex waits up to 270 s per `dsh_wait` call, under its 300 s tool timeout. Approve the `dsh-baton` tools when Codex asks; for unattended `codex exec`, add `--approve-for-me`.
-
-Update: `npx -y dsh-baton-mcp@latest setup` for the MCP server; for the plugin, Harness → Plugins → dsh-baton-host → Uninstall, then Add plugin → `dsh-baton-host` again (Harness has no update button for non-official plugins).
-
-Remove: Harness → Plugins → dsh-baton-host → Uninstall, and `npx -y dsh-baton-mcp setup --remove`.
-
-Upgrading from dsh-bridge: `setup` replaces the old MCP entries and reuses an existing `%USERPROFILE%\.dsh-bridge` (the app then goes to `.dsh-bridge\app`). Uninstall `dsh-bridge-host` in Harness, then add `dsh-baton-host` by name. A plugin added earlier from `.dsh-baton\app\host` (0.3) also works, but `setup` suggests swapping it for the npm package, which is the one that gets updates. With the hoisted profile layout, uninstalling may leave a `node_modules\dsh-bridge-host` link behind in `%USERPROFILE%\.dsh\profiles\desktop`; `setup --remove` deletes such a leftover link (old or new name) once the profile no longer lists the plugin.
-
-From source instead: `git clone https://github.com/JialaoLiu/dsh-baton.git C:\dev\dsh-baton` and `node C:\dev\dsh-baton\src\cli.mjs setup`; setup then has you add the plugin from `C:\dev\dsh-baton\host` (Add plugin → paste the path it copies).
+- The app goes to `%USERPROFILE%\.dsh-baton\app`, and setup writes `%USERPROFILE%\.claude.json` and `%USERPROFILE%\.codex\config.toml` with the absolute path of `node`, so the desktop apps work even though their `claude.exe` / `codex.exe` are usually not on `PATH`.
+- Claude Code runs the background `wait_command` in Git Bash.
+- With the hoisted profile layout, uninstalling a plugin can leave a `node_modules\dsh-baton-host` (or old `dsh-bridge-host`) link in `%USERPROFILE%\.dsh\profiles\desktop`; `setup --remove` deletes it once the profile no longer lists the plugin.
 
 ### If the Plugins page cannot uninstall or install it
 
@@ -109,7 +95,7 @@ The suite runs on Windows with named pipes. Two POSIX-only checks are skipped: f
 
 - **套接字改为命名管道。** Windows 上 Node 不能监听 Unix 套接字文件，所以同一路径被映射成按用户区分的命名管道 `\\.\pipe\dsh-baton-<哈希>`。插件和 MCP 两边算法一致，`DSH_BATON_SOCKET` 仍然可用，Harness 退出后管道自动消失。
 - **headless 用 Harness 自带的 CLI。** Harness ≥ 0.2.1 自带 `resources\runtime\cli\bin\dsh.cmd`；更早的版本只有打包在 `app.asar` 里的 CLI，由 Harness 自己的 exe 以 Node 模式运行。会按顺序自动查找：`DSH_BIN`、`PATH` 里的 `dsh`、默认安装位置，以及注册表里的自定义安装目录。
-- **插件用 Harness 插件页按包名安装。** 插件 → 添加插件 → 来源选 Official npm registry → 输入 `dsh-baton-host` → 安装 → 立即启用（`setup` 已把包名复制到剪贴板）。更新插件要先卸载再重新添加，Harness 只给官方插件提供更新按钮。
+- **安装和 macOS 完全相同。** 在 PowerShell 里运行 `npx -y dsh-baton-mcp setup`，再到 Harness 插件页添加 `dsh-baton-host`，详见 [README](README.zh-CN.md#快速上手)。
 - **一条命令注册 MCP。** `npx -y dsh-baton-mcp setup` 把自己复制到 `%USERPROFILE%\.dsh-baton\app`，再直接写 Claude Code 和 Codex 的用户级配置（用 `node` 的绝对路径），桌面版的 `claude` / `codex` 不在 `PATH` 里也没关系。之后新开对话就有 `dsh_*` 工具；Codex 每次最多等 270 秒，不用再配超时。
 - **插件页卸不掉或装不上时**（`ERR_PNPM_UNEXPECTED_STORE`，或提示"该插件已安装"）：是旧版 Harness 装 profile 时用了另一个 pnpm store。一次性修好：从菜单退出 Harness，把 `%USERPROFILE%\.dsh\profiles\desktop\node_modules` 改名备份，用 Harness 自带的 pnpm 运行 `install --frozen-lockfile`（不加 `--store-dir`；`$app` 改成你的安装目录，比如 `E:\Software\DeepSeek Harness`），再启动 Harness，插件页的卸载和添加就正常了；如果插件被关掉了，记得重新打开。
 - **headless 需要独立凭据。** 要么登录账户，要么设置 `DEEPSEEK_API_KEY`。桌面版里保存的 Key，headless CLI 读不到。

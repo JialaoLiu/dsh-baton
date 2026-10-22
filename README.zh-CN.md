@@ -40,7 +40,7 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
   <img src="./assets/readme/zh/install.svg" width="100%" alt="第一步：运行 npx -y dsh-baton-mcp setup。第二步：Harness → 插件 → 添加插件 → 从 npm 输入 dsh-baton-host → 安装 → 立即启用。第三步：新开对话，让它调用 dsh_list_workspaces">
 </p>
 
-需要：DeepSeek Harness ≥ 0.2.1-rc.2 并已登录；Node.js ≥ 22.15。Windows 见 [WINDOWS.md](WINDOWS.md)。
+需要：DeepSeek Harness ≥ 0.2.1-rc.2 并已登录；Node.js ≥ 22.15。macOS 和 Windows 步骤完全相同（Windows 在 PowerShell 里运行）。
 
 **1. 运行 setup**，在终端里：
 
@@ -48,55 +48,13 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 npx -y dsh-baton-mcp setup
 ```
 
-dsh-baton 没有任何依赖。`setup` 会把自己复制到 `~/.dsh-baton/app` 这个固定的文件夹（npx 的缓存目录会变），然后在用户级别给 Claude Code 和 Codex 注册一次 MCP 服务器：之后在任何文件夹新开的对话都有 `dsh_*` 工具。它直接写 `~/.claude.json` 和 `~/.codex/config.toml`（各留一份 `*.bak-dsh-baton` 备份），所以只装了桌面应用、`claude` / `codex` 不在 `PATH` 里也能用。重复运行也没问题。
+它会给 Claude Code 和 Codex 注册 MCP 服务器（对所有文件夹生效），并把插件包名复制到剪贴板。
 
-**2. 在 Harness 里按包名添加插件**（`setup` 已经把包名复制到剪贴板）：
+**2. 在 Harness 里添加插件：** 插件 → 添加插件 → 输入 `dsh-baton-host` → 安装 → 立即启用。
 
-**插件** → **添加插件** → 输入 `dsh-baton-host` → **安装** → **立即启用**
+**3. 检查：**在 Claude Code 或 Codex 里**新开**一个对话，让它调用 `dsh_list_workspaces`，会列出你的 Harness 工作区。
 
-输入包名后，安装源会自动切到「npm 官方源」（英文界面是 "Official npm registry"），不用另外选择，也不用重启 Harness。
-
-**3. 检查。**在 Claude Code 或 Codex 里**新开**一个对话，让它调用 `dsh_list_workspaces`，应该会列出你的 Harness 工作区。
-
-**也可以让 Claude Code 或 Codex 帮你装：** 发给它 *"运行 `npx -y dsh-baton-mcp setup`，然后告诉我它提示的 Harness 那一步。"*
-
-**各客户端怎么等待**（不需要配置）：
-- **Claude Code** 在后台等待任务（`dsh_send` 返回的 `wait_command`），任务结束时只被唤醒一次。
-- **Codex** 在 `dsh_wait` 里等待，每次最多 270 秒，刚好低于它 300 秒的工具超时。没做完时只返回状态，Codex 会直接再调用，不会去总结进度。Codex 不会收到 `wait_command`：它的终端无法在命令结束时唤醒它，只能轮询。
-- Codex 调用 MCP 工具时会请你批准，批准 `dsh-baton` 的工具即可；无人值守的 `codex exec` 加上 `--approve-for-me`。
-
-**更新：** MCP 服务器和插件分开更新，两者版本号相同。
-- MCP 服务器：`npx -y dsh-baton-mcp@latest setup`，新开的对话就会用上。
-- 插件：Harness 只给官方插件提供"更新"按钮，所以这个插件要：插件 → dsh-baton-host → **卸载**，再**添加插件** → `dsh-baton-host`。
-- 两边版本对不上时，`setup` 会提示，第一次发现不一致的工具调用也会提示。
-
-**卸载：** Harness → 插件 → dsh-baton-host → **卸载**，再运行 `npx -y dsh-baton-mcp setup --remove`。它会删掉 MCP 注册和 `~/.dsh-baton/app`；运行记录留在 `~/.dsh-baton`，不需要的话自己删掉。
-
-**从 dsh-bridge 升级：**照上面运行 `setup`。它会替换掉旧的 `dsh-bridge` MCP 注册；在 Harness 里先卸载 `dsh-bridge-host`，再按第 2 步添加 `dsh-baton-host`。`DSH_BRIDGE_*` 环境变量和已有的 `~/.dsh-bridge` 文件夹暂时继续可用。工具前缀变成 `mcp__dsh-baton__…`，权限白名单里写了旧前缀的要改一下。
-
-**0.4 之前从本地文件夹装的插件：**旧版本让你粘贴 `~/.dsh-baton/app/host`。这样装的仍然能用，但不会跟着 npm 更新：卸载它，再按包名添加 `dsh-baton-host`。`setup` 会提示这一点。
-
-**从源码安装**（想跟进 `main` 或改代码）：`git clone https://github.com/JialaoLiu/dsh-baton.git`，再运行 `node dsh-baton/src/cli.mjs setup`。这时 setup 注册的就是克隆目录本身，插件也从克隆目录的 `host` 文件夹添加（添加插件 → 粘贴它复制的路径），这样插件改动在发布前就能跑起来；更新用 `git pull`。
-
-<details>
-<summary>手动注册与 Claude 桌面应用</summary>
-
-`setup` 写入的内容和下面两条命令等价（用 `node` 的绝对路径，因为桌面应用启动 MCP 服务器时没有你 shell 的 `PATH`）：
-
-```bash
-claude mcp add dsh-baton -s user -- "$(command -v node)" "$PWD/dsh-baton/src/server.mjs"
-codex mcp add dsh-baton -- "$(command -v node)" "$PWD/dsh-baton/src/server.mjs"
-```
-
-`-s user` 很关键：不加的话，Claude Code 只给当前项目文件夹注册。
-
-**Claude 桌面应用（可选）**：聊天应用的连接器（和 Claude Code 是两回事），把下面这段加到 `~/Library/Application Support/Claude/claude_desktop_config.json`，然后重启应用，会显示为 "Local dev" 连接器。
-
-```json
-{ "mcpServers": { "dsh-baton": { "command": "/node 的绝对路径", "args": ["/dsh-baton 的绝对路径/src/server.mjs"] } } }
-```
-
-</details>
+就这些。想让 Claude Code 或 Codex 替你做第 1 步，就发给它 *"运行 `npx -y dsh-baton-mcp setup`，然后告诉我它提示的 Harness 那一步。"* 更新、卸载和 Windows 说明在[后面](#安装细节)。
 
 ## 工作原理
 
@@ -107,6 +65,11 @@ codex mcp add dsh-baton -- "$(command -v node)" "$PWD/dsh-baton/src/server.mjs"
 <p align="center">
   <img src="./assets/readme/zh/comparison.svg" width="100%" alt="插件和 headless 对比：只有插件能在 Harness 界面实时可见、续接桌面版的对话、使用桌面版智能体预设；两者都沿用桌面版登录">
 </p>
+
+**各客户端怎么等待**（不需要配置）：
+- **Claude Code** 在后台等待任务（`dsh_send` 返回的 `wait_command`），任务结束时只被唤醒一次。
+- **Codex** 在 `dsh_wait` 里等待，每次最多 270 秒，刚好低于它 300 秒的工具超时。没做完时只返回状态，Codex 会直接再调用，不会去总结进度。Codex 不会收到 `wait_command`：它的终端无法在命令结束时唤醒它，只能轮询。
+- Codex 调用 MCP 工具时会请你批准，批准 `dsh-baton` 的工具即可；无人值守的 `codex exec` 加上 `--approve-for-me`。
 
 ## 工具
 
@@ -174,6 +137,43 @@ dsh-baton rename-workspace ~/code/new-app 新名字
 <summary>headless 后备模式说明</summary>
 
 插件不可用时，MCP 服务器会自动改用 Harness 自带的 `dsh headless` 命令。它只能续接自己新建的对话，不能续接桌面版里建的对话（headless 不加载 `standard` 等智能体预设）；新建的对话也不会出现在桌面版侧边栏。默认通过 [`patches/account.patch.yml`](patches/account.patch.yml) 沿用桌面版的 DeepSeek 账号登录，不需要 API key。
+
+</details>
+
+## 安装细节
+
+**setup 做了什么。**它把自己复制到 `~/.dsh-baton/app` 这个固定的文件夹（npx 的缓存目录会变），再直接把 MCP 注册写进 `~/.claude.json` 和 `~/.codex/config.toml`，各留一份 `*.bak-dsh-baton` 备份。所以只装了桌面应用、`claude` / `codex` 不在 `PATH` 里也能用，重复运行也没问题。在 Harness 里输入包名后，安装源会自动切到「npm 官方源」（英文界面是 "Official npm registry"），不用另外选择，也不用重启。
+
+**更新。**MCP 服务器和插件分开更新，两者版本号相同。
+- MCP 服务器：`npx -y dsh-baton-mcp@latest setup`，新开的对话就会用上。
+- 插件：Harness 只给官方插件提供"更新"按钮，所以要：插件 → dsh-baton-host → **卸载**，再**添加插件** → `dsh-baton-host`。
+- 两边版本对不上时，`setup` 会提示，第一次发现不一致的工具调用也会提示。
+
+**卸载。**Harness → 插件 → dsh-baton-host → **卸载**，再运行 `npx -y dsh-baton-mcp setup --remove`。它会删掉 MCP 注册和 `~/.dsh-baton/app`；运行记录留在 `~/.dsh-baton`，不需要的话自己删掉。
+
+**从 dsh-bridge 升级。**运行 `setup`。它会替换掉旧的 `dsh-bridge` MCP 注册；在 Harness 里先卸载 `dsh-bridge-host`，再添加 `dsh-baton-host`。`DSH_BRIDGE_*` 环境变量和已有的 `~/.dsh-bridge` 文件夹暂时继续可用。工具前缀变成 `mcp__dsh-baton__…`，权限白名单里写了旧前缀的要改一下。0.4 之前通过粘贴 `~/.dsh-baton/app/host` 装的插件仍然能用，但不会跟着 npm 更新：卸载它，再按包名添加 `dsh-baton-host`（`setup` 会提示）。
+
+**从源码安装**（想跟进 `main` 或改代码）：`git clone https://github.com/JialaoLiu/dsh-baton.git`，再运行 `node dsh-baton/src/cli.mjs setup`。这时 setup 注册的就是克隆目录本身，插件也从克隆目录的 `host` 文件夹添加（添加插件 → 粘贴它复制的路径），这样插件改动在发布前就能跑起来；更新用 `git pull`。
+
+**Windows。**步骤相同；[WINDOWS.md](WINDOWS.md) 说明了不同之处（用命名管道代替套接字文件），以及插件页装不上或卸不掉时的修法。
+
+<details>
+<summary>手动注册与 Claude 桌面应用</summary>
+
+`setup` 写入的内容和下面两条命令等价（用 `node` 的绝对路径，因为桌面应用启动 MCP 服务器时没有你 shell 的 `PATH`）：
+
+```bash
+claude mcp add dsh-baton -s user -- "$(command -v node)" "$PWD/dsh-baton/src/server.mjs"
+codex mcp add dsh-baton -- "$(command -v node)" "$PWD/dsh-baton/src/server.mjs"
+```
+
+`-s user` 很关键：不加的话，Claude Code 只给当前项目文件夹注册。
+
+**Claude 桌面应用（可选）**：聊天应用的连接器（和 Claude Code 是两回事），把下面这段加到 `~/Library/Application Support/Claude/claude_desktop_config.json`，然后重启应用，会显示为 "Local dev" 连接器。
+
+```json
+{ "mcpServers": { "dsh-baton": { "command": "/node 的绝对路径", "args": ["/dsh-baton 的绝对路径/src/server.mjs"] } } }
+```
 
 </details>
 
