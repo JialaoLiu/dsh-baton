@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  macOS · Windows (<a href="WINDOWS.md">guide</a>) · Node.js ≥ 22.15 · zero dependencies · MIT
+  macOS · Windows (<a href="WINDOWS.md">guide</a>) · no Node.js needed · zero dependencies · MIT
 </p>
 
 Claude Code and Codex each hand a task to DeepSeek Harness, and its subagents build this rainy-night street in 1 h 41 min (40 s, sound on):
@@ -44,7 +44,7 @@ Codex and Claude take turns in the same Harness session, and every message is la
   <img src="./assets/readme/install.svg" width="100%" alt="Step 1: in Harness open Plugins, Add plugin, enter dsh-baton-host, Install, Enable now; it registers dsh-baton for Claude Code and Codex. Step 2: in a new chat, ask for dsh_list_workspaces">
 </p>
 
-Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in), Node.js ≥ 22.15, and Claude Code or Codex. The steps are the same on macOS and Windows.
+Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in) and Claude Code or Codex. Nothing else: no Node.js, no terminal. The steps are the same on macOS and Windows.
 
 **1. Add the plugin in Harness:** **Plugins** (插件) → **Add plugin** (添加插件) → type `dsh-baton-host` → **Install** (安装) → **Enable now** (立即启用).
 
@@ -52,7 +52,7 @@ Switched on, the plugin registers dsh-baton for Claude Code and Codex, for every
 
 **2. Check:** in a **new** Claude Code or Codex conversation, ask it to call `dsh_list_workspaces`. It lists your Harness workspaces.
 
-That is all. If Harness says it could not register (no Node.js found, say), run `npx -y dsh-baton-mcp setup` in a terminal; it does the same registration. Updating, removing and Windows details are [further down](#install-details).
+That is all. If Harness says it could not register, run `npx -y dsh-baton-mcp setup` in a terminal (this needs Node.js ≥ 22.15); it does the same registration. Updating, removing and Windows details are [further down](#install-details).
 
 ## How it works
 
@@ -138,7 +138,7 @@ When the plugin is unreachable, the MCP server falls back to Harness's `dsh head
 
 ## Install details
 
-**What the plugin does when switched on.** It copies the MCP server to `~/.dsh-baton/app`, a folder that stays put, and writes the MCP entry into `~/.claude.json` and `~/.codex/config.toml` directly, keeping a `*.bak-dsh-baton` backup of each. It registers the `node` it finds on `PATH` (never the one inside Harness), so it works with only the desktop apps installed, when `claude` / `codex` are not on your `PATH`. It runs again on each Harness start: an entry that is already right, or a working one that starts another copy of dsh-baton, is left alone. In Harness, the source switches to the npm registry ("Official npm registry", 「npm 官方源」) by itself once you type the package name, and no restart is needed. To turn the registration off, set `DSH_BATON_AUTO_REGISTER=0` for Harness.
+**What the plugin does when switched on.** It copies the MCP server to `~/.dsh-baton/app`, a folder that stays put, and writes the MCP entry into `~/.claude.json` and `~/.codex/config.toml` directly, keeping a `*.bak-dsh-baton` backup of each. It starts the server with your own Node.js ≥ 22.15 when it finds one on `PATH`; without one, with Harness's own runtime (the Harness app in Node mode, `ELECTRON_RUN_AS_NODE=1`), so nothing else has to be installed. Either way it works with only the desktop apps installed, when `claude` / `codex` are not on your `PATH`. It runs again on each Harness start: an entry that is already right, or a working one that starts another copy of dsh-baton, is left alone. In Harness, the source switches to the npm registry ("Official npm registry", 「npm 官方源」) by itself once you type the package name, and no restart is needed. To turn the registration off, set `DSH_BATON_AUTO_REGISTER=0` for Harness.
 
 **`npx -y dsh-baton-mcp setup`** does the same registration from a terminal: for a plugin that could not register, or when you come from an MCP directory. With the plugin already registered it changes nothing, then points you to the plugin if it is missing.
 

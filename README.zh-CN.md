@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  macOS · Windows（<a href="WINDOWS.md">说明</a>）· Node.js ≥ 22.15 · 零依赖 · MIT
+  macOS · Windows（<a href="WINDOWS.md">说明</a>）· 不用装 Node.js · 零依赖 · MIT
 </p>
 
 <p align="center">
@@ -40,7 +40,7 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
   <img src="./assets/readme/zh/install.svg" width="100%" alt="第一步：Harness → 插件 → 添加插件 → 输入 dsh-baton-host → 安装 → 立即启用，它会为 Claude Code 和 Codex 注册 dsh-baton。第二步：新开对话，让它调用 dsh_list_workspaces">
 </p>
 
-需要：DeepSeek Harness ≥ 0.2.1-rc.2 并已登录；Node.js ≥ 22.15；装了 Claude Code 或 Codex。macOS 和 Windows 步骤完全相同。
+需要：DeepSeek Harness ≥ 0.2.1-rc.2 并已登录；装了 Claude Code 或 Codex。别的都不用装，不用 Node.js，也不用开终端。macOS 和 Windows 步骤完全相同。
 
 **1. 在 Harness 里添加插件：** 插件 → 添加插件 → 输入 `dsh-baton-host` → 安装 → 立即启用。
 
@@ -48,7 +48,7 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 
 **2. 检查：**在 Claude Code 或 Codex 里**新开**一个对话，让它调用 `dsh_list_workspaces`，会列出你的 Harness 工作区。
 
-就这些。如果 Harness 提示没能注册（比如找不到 Node.js），在终端运行 `npx -y dsh-baton-mcp setup`，它做的是同样的注册。更新、卸载和 Windows 说明在[后面](#安装细节)。
+就这些。如果 Harness 提示没能注册，在终端运行 `npx -y dsh-baton-mcp setup`（这需要 Node.js ≥ 22.15），它做的是同样的注册。更新、卸载和 Windows 说明在[后面](#安装细节)。
 
 ## 工作原理
 
@@ -136,7 +136,7 @@ dsh-baton rename-workspace ~/code/new-app 新名字
 
 ## 安装细节
 
-**插件启用时做了什么。**它把 MCP 服务器复制到 `~/.dsh-baton/app` 这个固定的文件夹，再直接把 MCP 注册写进 `~/.claude.json` 和 `~/.codex/config.toml`，各留一份 `*.bak-dsh-baton` 备份。注册的是 `PATH` 里找到的 `node`（不会用 Harness 自带的那个），所以只装了桌面应用、`claude` / `codex` 不在 `PATH` 里也能用。每次 Harness 启动都会再检查一遍：已经正确的注册、或者指向另一份可用 dsh-baton 的注册，都不会改动。在 Harness 里输入包名后，安装源会自动切到「npm 官方源」（英文界面是 "Official npm registry"），不用另外选择，也不用重启。不想让插件自动注册，给 Harness 设置 `DSH_BATON_AUTO_REGISTER=0`。
+**插件启用时做了什么。**它把 MCP 服务器复制到 `~/.dsh-baton/app` 这个固定的文件夹，再直接把 MCP 注册写进 `~/.claude.json` 和 `~/.codex/config.toml`，各留一份 `*.bak-dsh-baton` 备份。电脑上有 Node.js ≥ 22.15（在 `PATH` 里能找到）就用它启动服务器；没有的话，就用 Harness 自带的运行环境（Harness 应用本身以 Node 模式运行，`ELECTRON_RUN_AS_NODE=1`），不用另外安装任何东西。两种情况下，只装了桌面应用、`claude` / `codex` 不在 `PATH` 里也能用。每次 Harness 启动都会再检查一遍：已经正确的注册、或者指向另一份可用 dsh-baton 的注册，都不会改动。在 Harness 里输入包名后，安装源会自动切到「npm 官方源」（英文界面是 "Official npm registry"），不用另外选择，也不用重启。不想让插件自动注册，给 Harness 设置 `DSH_BATON_AUTO_REGISTER=0`。
 
 **`npx -y dsh-baton-mcp setup`** 在终端里做同样的注册：用于插件没能注册的情况，或者从 MCP 目录过来的用户。插件已经注册过时它什么都不改；插件没装的话，它会提示去添加。
 

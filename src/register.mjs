@@ -25,7 +25,7 @@ export function editClaudeConfig(text, entry) {
   const cfg = text.trim() ? JSON.parse(text) : {}
   const servers = { ...(cfg.mcpServers ?? {}) }
   delete servers[OLD_NAME]
-  if (entry) servers[NAME] = { type: 'stdio', command: entry.command, args: entry.args, env: {} }
+  if (entry) servers[NAME] = { type: 'stdio', command: entry.command, args: entry.args, env: entry.env ?? {} }
   else delete servers[NAME]
   return JSON.stringify({ ...cfg, mcpServers: servers }, null, 2) + '\n'
 }
@@ -55,6 +55,8 @@ export function editCodexConfig(text, entry) {
   let out = kept.join('\n').replace(/\s+$/, '')
   if (entry) {
     out += `${out ? '\n\n' : ''}[mcp_servers.${NAME}]\ncommand = ${tomlString(entry.command)}\nargs = [${entry.args.map(tomlString).join(', ')}]`
+    const env = Object.entries(entry.env ?? {})
+    if (env.length) out += `\n\n[mcp_servers.${NAME}.env]\n${env.map(([k, v]) => `${k} = ${tomlString(v)}`).join('\n')}`
   }
   return out ? out + '\n' : ''
 }
@@ -185,6 +187,11 @@ export function compareVersions(a, b) {
   return (String(b).includes('-') ? 1 : 0) - (String(a).includes('-') ? 1 : 0)
 }
 
+// Without a Node.js of the user's own, the server runs on Harness's: the app binary in
+// Node mode, the way Harness runs its own scripts. Its path is the app's own (it moves
+// only if the app does), and if it ever breaks, the next Harness start rewrites it.
+export const harnessRuntime = (exe) => ({ command: exe, env: { ELECTRON_RUN_AS_NODE: '1' } })
+
 // Run by the Harness plugin when it is switched on (and on every Harness start, so a
 // plugin update brings the server along). `root` holds the MCP server package: the repo
 // checkout the plugin was added from, or the dsh-baton-mcp package installed with it.
@@ -192,9 +199,11 @@ export function compareVersions(a, b) {
 //     as is, like `setup` from a clone) or that copy is already as new.
 //   - An entry that already starts this server, or a working one that starts another copy
 //     (a clone, say), is left alone; a missing or broken one is (re)written.
+//   - It starts the server with the user's Node.js when there is a new enough one, else
+//     with `fallback` (Harness's own runtime, see harnessRuntime).
 // Never throws: the result says what happened to each client.
-export function autoRegister({ root, home = os.homedir(), env = process.env, node = null, harnessDir = null, find = findNode, app = appDir(batonHome(env, home)) } = {}) {
-  const result = { ok: false, version: versionOf(root), clients: [], error: null, node: null }
+export function autoRegister({ root, home = os.homedir(), env = process.env, node = null, harnessDir = null, fallback = null, find = findNode, app = appDir(batonHome(env, home)) } = {}) {
+  const result = { ok: false, version: versionOf(root), clients: [], error: null, node: null, runtime: null }
   try {
     let serverRoot = root
     if (!fs.existsSync(path.join(root, '.git')) && path.resolve(root) !== path.resolve(app)) {
@@ -205,7 +214,7 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
     const script = path.join(serverRoot, 'src', 'server.mjs')
     const works = (e) => e && fs.existsSync(e.command) && e.args?.[0] && fs.existsSync(e.args[0])
     const list = clients(env, home)
-    let bin = node
+    let launch = node ? { command: node } : null
     for (const c of list) {
       if (!c.present) { result.clients.push({ id: c.id, label: c.label, state: 'not-installed' }); continue }
       try {
@@ -216,15 +225,19 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
           result.clients.push({ id: c.id, label: c.label, state: same ? 'unchanged' : 'kept', script: current.args[0] })
           continue
         }
-        bin ??= find({ env, exclude: [harnessDir] })
-        if (!bin) { result.clients.push({ id: c.id, label: c.label, state: 'failed', error: 'no-node' }); continue }
-        rewrite(c.file, (t) => c.edit(t, { command: bin, args: [script] }))
+        if (!launch) {
+          const found = find({ env, exclude: [harnessDir] })
+          launch = found ? { command: found } : fallback
+        }
+        if (!launch) { result.clients.push({ id: c.id, label: c.label, state: 'failed', error: 'no-node' }); continue }
+        rewrite(c.file, (t) => c.edit(t, { ...launch, args: [script] }))
         result.clients.push({ id: c.id, label: c.label, state: 'registered' })
       } catch (e) {
         result.clients.push({ id: c.id, label: c.label, state: 'failed', error: e.message })
       }
     }
-    result.node = bin
+    result.node = launch?.command ?? null
+    result.runtime = !launch ? null : launch === fallback ? 'harness' : 'node'
     const present = result.clients.filter((c) => c.state !== 'not-installed')
     result.ok = present.length > 0 && present.every((c) => c.state !== 'failed')
     if (!present.length) result.error = 'no-clients'

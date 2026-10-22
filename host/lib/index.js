@@ -663,8 +663,10 @@ export function apply(ctx) {
     setImmediate(guard('register', async () => {
       const root = serverRoot()
       if (!root) { registration = { state: 'done', ok: false, error: 'no-server', clients: [] }; return }
-      const { autoRegister } = await import(pathToFileURL(path.join(root, 'src', 'register.mjs')).href)
-      const result = autoRegister({ root, harnessDir: harnessDir() })
+      const { autoRegister, harnessRuntime } = await import(pathToFileURL(path.join(root, 'src', 'register.mjs')).href)
+      // Inside the desktop app, its own binary can stand in for a missing Node.js.
+      const fallback = process.versions.electron && harnessRuntime ? harnessRuntime(process.execPath) : null
+      const result = autoRegister({ root, harnessDir: harnessDir(), fallback })
       registration = { state: 'done', ...result }
       const summary = result.clients.map((c) => `${c.label}: ${c.state}${c.error ? ` (${c.error})` : ''}`).join(', ')
       ctx.logger?.[result.ok ? 'info' : 'error']?.(`dsh-baton-host MCP registration: ${summary || result.error}`)
@@ -678,9 +680,9 @@ export function apply(ctx) {
         kind: 'exact',
         path: '/dsh-baton/status',
         handler: (request, response) => {
-          const { state, ok, error, version, clients = [] } = registration
+          const { state, ok, error, version, runtime, clients = [] } = registration
           response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
-          response.end(JSON.stringify({ version: VERSION, registration: { state, ok, error, version, clients: clients.map(({ id, label, state }) => ({ id, label, state })) } }))
+          response.end(JSON.stringify({ version: VERSION, registration: { state, ok, error, version, runtime, clients: clients.map(({ id, label, state }) => ({ id, label, state })) } }))
         },
       }), 'dsh-baton-host status route')
     })

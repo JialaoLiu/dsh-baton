@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { autoRegister, findNode, readClaudeEntry, readCodexEntry, editClaudeConfig, editCodexConfig, compareVersions, nodeVersionOk } from '../src/register.mjs'
+import { autoRegister, harnessRuntime, findNode, readClaudeEntry, readCodexEntry, editClaudeConfig, editCodexConfig, compareVersions, nodeVersionOk } from '../src/register.mjs'
 
 const REPO = path.resolve(import.meta.dirname, '..')
 const VERSION = JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).version
@@ -97,6 +97,29 @@ test('a git checkout is registered where it is, without a copy', () => {
     s.run()
     assert.equal(readClaudeEntry(fs.readFileSync(s.claudeFile, 'utf8')).args[0], path.join(s.pkg, 'src', 'server.mjs'))
     assert.equal(fs.existsSync(s.app), false)
+  } finally { s.done() }
+})
+
+test('without a Node.js of its own, the server runs on Harness in Node mode', () => {
+  const s = sandbox()
+  try {
+    const exe = path.join(s.dir, 'DeepSeek Harness')
+    fs.writeFileSync(exe, '')
+    const r = s.run({ find: () => null, fallback: harnessRuntime(exe) })
+    assert.equal(r.ok, true)
+    assert.equal(r.runtime, 'harness')
+    const script = path.join(s.app, 'src', 'server.mjs')
+    const claude = JSON.parse(fs.readFileSync(s.claudeFile, 'utf8')).mcpServers['dsh-baton']
+    assert.deepEqual(claude, { type: 'stdio', command: exe, args: [script], env: { ELECTRON_RUN_AS_NODE: '1' } })
+    const codex = fs.readFileSync(s.codexFile, 'utf8')
+    assert.deepEqual(readCodexEntry(codex), { command: exe, args: [script] })
+    assert.match(codex, /\[mcp_servers\.dsh-baton\.env\]\nELECTRON_RUN_AS_NODE = '1'\n$/)
+    // A later run finds it working and leaves it, and a later edit replaces the env table too.
+    assert.deepEqual(states(s.run({ find: () => null, fallback: harnessRuntime(exe) })), { claude: 'unchanged', codex: 'unchanged' })
+    assert.doesNotMatch(editCodexConfig(codex, { command: '/n', args: ['/s'] }), /ELECTRON_RUN_AS_NODE/)
+    // The user's own Node.js still comes first.
+    fs.rmSync(s.claudeFile); fs.rmSync(s.codexFile)
+    assert.equal(s.run({ fallback: harnessRuntime(exe) }).runtime, 'node')
   } finally { s.done() }
 })
 

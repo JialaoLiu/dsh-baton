@@ -36,10 +36,12 @@ const ARCHIVED = 'Sessions not in dsh_list_sessions are archived or gone: do not
 // A shell command that blocks until a run ends and prints its reply. Run in the
 // background by a client that wakes the model when the command exits (Claude Code),
 // it waits without spending any turns. Plain "<node>" "<cli>" wait <id> form: it runs
-// in POSIX shells and in Git Bash, which Claude Code uses on Windows too.
+// in POSIX shells and in Git Bash, which Claude Code uses on Windows too. Registered on
+// Harness's own binary (no Node.js installed), the command keeps it in Node mode.
 const quote = (p) => `"${p}"`
+const nodeMode = process.versions.electron ? 'ELECTRON_RUN_AS_NODE=1 ' : ''
 const waitCommand = (runId) =>
-  /^[\w.-]+$/.test(runId ?? '') ? `${quote(stableNodePath())} ${quote(path.join(core.ROOT, 'src', 'cli.mjs'))} wait ${runId}` : undefined
+  /^[\w.-]+$/.test(runId ?? '') ? `${nodeMode}${quote(stableNodePath())} ${quote(path.join(core.ROOT, 'src', 'cli.mjs'))} wait ${runId}` : undefined
 
 // Wait in short chunks, reporting progress between them (clients that support it can
 // show it or reset their timer). An unfinished wait returns only the state, not the run's
