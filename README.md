@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  English | <a href="README.zh-CN.md">中文</a> · Formerly <b>dsh-bridge</b> · Unofficial; not affiliated with DeepSeek.
+  English | <a href="README.zh-CN.md">中文</a> · Unofficial; not affiliated with DeepSeek.
 </p>
 
 <p align="center">
@@ -67,7 +67,7 @@ dsh-baton has no dependencies. `setup` copies itself to `~/.dsh-baton/app`, a fo
 
 **Removing:** `npx -y dsh-baton-mcp setup --remove`, then Harness → Plugins → dsh-baton-host → Uninstall, then `setup --remove` once more to delete `~/.dsh-baton/app`.
 
-**Upgrading from dsh-bridge** (the old name): run `setup` as above. It replaces the old `dsh-bridge` MCP entries; in Harness, uninstall `dsh-bridge-host`, then add the new path. `DSH_BRIDGE_*` variables and an existing `~/.dsh-bridge` folder keep working for now. Tools get a new prefix (`mcp__dsh-baton__…`), so update any permission allowlists.
+**Upgrading from dsh-bridge**: run `setup` as above. It replaces the old `dsh-bridge` MCP entries; in Harness, uninstall `dsh-bridge-host`, then add the new path. `DSH_BRIDGE_*` variables and an existing `~/.dsh-bridge` folder keep working for now. Tools get a new prefix (`mcp__dsh-baton__…`), so update any permission allowlists.
 
 **From source** (to follow `main` or to change the code): `git clone https://github.com/JialaoLiu/dsh-baton.git` and `node dsh-baton/src/cli.mjs setup`. setup then registers the clone itself; update with `git pull`.
 

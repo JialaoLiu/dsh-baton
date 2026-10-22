@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> | 中文 · 原名 <b>dsh-bridge</b> · 非官方项目，与 DeepSeek 无关。
+  <a href="README.md">English</a> | 中文 · 非官方项目，与 DeepSeek 无关。
 </p>
 
 <p align="center">
@@ -67,7 +67,7 @@ dsh-baton 没有任何依赖。`setup` 会把自己复制到 `~/.dsh-baton/app` 
 
 **卸载：** `npx -y dsh-baton-mcp setup --remove`，再到 Harness → 插件 → dsh-baton-host → 卸载，最后再运行一次 `setup --remove` 删除 `~/.dsh-baton/app`。
 
-**从 dsh-bridge（旧名）升级：**照上面运行 `setup`。它会替换掉旧的 `dsh-bridge` MCP 注册；在 Harness 里先卸载 `dsh-bridge-host`，再添加新路径。`DSH_BRIDGE_*` 环境变量和已有的 `~/.dsh-bridge` 文件夹暂时继续可用。工具前缀变成 `mcp__dsh-baton__…`，权限白名单里写了旧前缀的要改一下。
+**从 dsh-bridge 升级：**照上面运行 `setup`。它会替换掉旧的 `dsh-bridge` MCP 注册；在 Harness 里先卸载 `dsh-bridge-host`，再添加新路径。`DSH_BRIDGE_*` 环境变量和已有的 `~/.dsh-bridge` 文件夹暂时继续可用。工具前缀变成 `mcp__dsh-baton__…`，权限白名单里写了旧前缀的要改一下。
 
 **从源码安装**（想跟进 `main` 或改代码）：`git clone https://github.com/JialaoLiu/dsh-baton.git`，再运行 `node dsh-baton/src/cli.mjs setup`。这时 setup 注册的就是克隆目录本身，更新用 `git pull`。
 
