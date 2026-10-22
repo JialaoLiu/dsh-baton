@@ -2,7 +2,7 @@
 
 One package, `dsh-baton-mcp`, carries both halves: the MCP server and CLI (`src/`) and the Harness plugin (`host/`). `npx -y dsh-baton-mcp setup` copies them to `~/.dsh-baton/app`, registers the server from there and puts `~/.dsh-baton/app/host` on the clipboard for Harness → Plugins → Add plugin. `dsh-baton-host` is not published on its own: Harness installs plugins from a local folder, so a separate package would add nothing.
 
-The project was called dsh-bridge before; that npm name belongs to an unrelated project. `dsh-baton`, `dsh-baton-host` and `dsh-baton-mcp` are reserved as 0.0.1 placeholders; 0.3.0 publishes over the `dsh-baton-mcp` one.
+The npm name `dsh-bridge` belongs to an unrelated project. `dsh-baton`, `dsh-baton-host` and `dsh-baton-mcp` are reserved as 0.0.1 placeholders; 0.3.0 publishes over the `dsh-baton-mcp` one.
 
 ## Checklist
 
