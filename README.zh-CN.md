@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> | 中文 · 非官方项目，与 DeepSeek 无关。
+  <a href="README.md">English</a> | 中文 · 原名 <b>dsh-bridge</b> · 非官方项目，与 DeepSeek 无关。
 </p>
 
 <p align="center">

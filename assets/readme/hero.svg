@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
   <title id="title">dsh-baton</title>
-  <desc id="desc">dsh-baton lets Claude Code or Codex hand a task to a local DeepSeek Harness over an owner-only local socket. A dsh_send call returns a run id; the same session appears in Harness, runs, and completes.</desc>
+  <desc id="desc">dsh-baton lets Claude Code or Codex pass a task, like a relay baton, to a local DeepSeek Harness over an owner-only local socket. A dsh_send call returns a run id; the same session appears in Harness, runs, and completes.</desc>
   <rect width="1200" height="420" rx="24" fill="#FFFFFF"/>
 <g id="title-block" transform="translate(64 0)">
 <text x="0" y="92" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#5B6577" letter-spacing="2">MCP SERVER  +  HARNESS PLUGIN</text>
 <text x="-3" y="170" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="76" fill="#0F172A" font-weight="700" letter-spacing="-2">dsh-baton</text>
-<text x="0" y="226" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="27" fill="#0F172A">Hand a task from Claude Code or Codex</text>
+<text x="0" y="226" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="27" fill="#0F172A">Pass the baton from Claude Code or Codex</text>
 <text x="0" y="262" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="27" fill="#0F172A">to DeepSeek Harness, watch it run live,</text>
-<text x="0" y="298" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="27" fill="#0F172A">and get woken <tspan fill="#2563EB">when it's done</tspan>.</text>
+<text x="0" y="298" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="27" fill="#0F172A">and get it handed back <tspan fill="#2563EB">when it's done</tspan>.</text>
 <text x="0" y="356" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#5B6577">zero deps · local socket only · no API key · MIT</text>
 </g>
 <g id="proof" transform="translate(640 48)">

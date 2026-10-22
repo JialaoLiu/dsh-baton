@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  English | <a href="README.zh-CN.md">中文</a> · Unofficial; not affiliated with DeepSeek.
+  English | <a href="README.zh-CN.md">中文</a> · Formerly <b>dsh-bridge</b> · Unofficial; not affiliated with DeepSeek.
 </p>
 
 <p align="center">
