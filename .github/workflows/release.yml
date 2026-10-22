@@ -1,0 +1,46 @@
+# Publishes dsh-baton-host and dsh-baton-mcp to npm when a version tag is pushed.
+# npm trusts this workflow (Trusted Publishing, set up once per package on npmjs.com),
+# so it needs no token and no one-time password. See docs/RELEASE.md.
+#   v0.4.1        -> both packages under `latest`
+#   v0.5.0-next.0 -> both packages under `next`
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write # lets npm verify this workflow instead of a token
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # Trusted Publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@11.21.1
+
+      - name: Tag and both package versions agree
+        run: |
+          node scripts/version.mjs
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $version"
+            exit 1
+          fi
+
+      - run: npm test
+
+      - name: Publish
+        run: |
+          version=$(node -p "require('./package.json').version")
+          case "$version" in *-*) tag=next ;; *) tag=latest ;; esac
+          (cd host && npm publish --access public --tag "$tag")
+          npm publish --access public --tag "$tag"

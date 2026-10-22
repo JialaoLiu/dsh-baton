@@ -47,22 +47,19 @@ The npm name `dsh-bridge` belongs to an unrelated project. `dsh-baton`, `dsh-bat
 
    Create `/tmp/dshb/codex` first, or setup skips Codex. `npx ./file.tgz` does not work: the tarball goes in `--package`.
 
-5. Sign in and publish (you, not an assistant):
+5. Publish by pushing a tag. `.github/workflows/release.yml` runs the tests, checks the tag against both versions and publishes both packages, with no token and no one-time password:
 
    ```bash
-   npm login
-   (cd host && npm publish --access public --tag next)
-   npm publish --access public --tag next
+   git commit -am "<version>"
+   git tag v<version>
+   git push && git push origin v<version>
    ```
 
-   `next` keeps users on the previous `latest` while you test: `npx -y dsh-baton-mcp@next setup`, and in Harness add `dsh-baton-host@next` (or the exact version) if the dialog accepts it. When it works, move both:
+   A plain version (`v0.4.1`) goes to `latest`. A pre-release (`v0.5.0-next.0`) goes to `next`, for trying a release before users get it: `npx -y dsh-baton-mcp@next setup`, and `dsh-baton-host@next` in Harness. Then release the plain version; Trusted Publishing can publish but not move tags, so moving an existing version to `latest` stays a manual `npm dist-tag add <package>@<version> latest` (with your one-time password).
 
-   ```bash
-   npm dist-tag add dsh-baton-host@<version> latest
-   npm dist-tag add dsh-baton-mcp@<version> latest
-   ```
+   Watch the run under the repo's **Actions** tab.
 
-6. Check from a clean shell:
+6. Check:
 
    ```bash
    npm view dsh-baton-mcp dist-tags
@@ -70,9 +67,14 @@ The npm name `dsh-bridge` belongs to an unrelated project. `dsh-baton`, `dsh-bat
    npx -y dsh-baton-mcp setup
    ```
 
-7. Tag the release:
+## One-time setup: Trusted Publishing
 
-   ```bash
-   git tag v<version>
-   git push origin v<version>
-   ```
+npm accepts the workflow's publishes once each package trusts it. On npmjs.com, signed in, for **both** `dsh-baton-mcp` and `dsh-baton-host`:
+
+1. Package page → **Settings** → **Trusted Publisher** → **GitHub Actions**.
+2. Organization or user: `JialaoLiu`. Repository: `dsh-baton`. Workflow filename: `release.yml`. Environment: leave empty.
+3. Save.
+
+Optional, once the workflow has published successfully: in the same Settings, under **Publishing access**, choose "Require two-factor authentication and disallow tokens". Trusted Publishing keeps working, and nothing else can publish without your one-time password.
+
+Publishing by hand still works: `npm login`, then `(cd host && npm publish --access public)` and `npm publish --access public`, each asking for a one-time password.
