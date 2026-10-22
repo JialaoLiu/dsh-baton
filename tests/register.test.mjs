@@ -76,6 +76,16 @@ test('keeps other servers and a working entry that starts another copy; repairs 
   } finally { s.done() }
 })
 
+test('an npx entry from an MCP directory is kept; a bare node with a missing script is repaired', () => {
+  const s = sandbox()
+  try {
+    fs.writeFileSync(s.claudeFile, JSON.stringify({ mcpServers: { 'dsh-baton': { command: 'npx', args: ['-y', 'dsh-baton-mcp'] } } }))
+    fs.writeFileSync(s.codexFile, `[mcp_servers.dsh-baton]\ncommand = 'node'\nargs = ['/gone/server.mjs']\n`)
+    assert.deepEqual(states(s.run()), { claude: 'kept', codex: 'registered' })
+    assert.deepEqual(readClaudeEntry(fs.readFileSync(s.claudeFile, 'utf8')), { command: 'npx', args: ['-y', 'dsh-baton-mcp'] })
+  } finally { s.done() }
+})
+
 test('a newer server in the app folder is not replaced by an older plugin', () => {
   const s = sandbox()
   try {
@@ -112,11 +122,15 @@ test('without a Node.js of its own, the server runs on Harness in Node mode', ()
     const claude = JSON.parse(fs.readFileSync(s.claudeFile, 'utf8')).mcpServers['dsh-baton']
     assert.deepEqual(claude, { type: 'stdio', command: exe, args: [script], env: { ELECTRON_RUN_AS_NODE: '1' } })
     const codex = fs.readFileSync(s.codexFile, 'utf8')
-    assert.deepEqual(readCodexEntry(codex), { command: exe, args: [script] })
+    assert.deepEqual(readCodexEntry(codex), { command: exe, args: [script], env: { ELECTRON_RUN_AS_NODE: '1' } })
     assert.match(codex, /\[mcp_servers\.dsh-baton\.env\]\nELECTRON_RUN_AS_NODE = '1'\n$/)
     // A later run finds it working and leaves it, and a later edit replaces the env table too.
     assert.deepEqual(states(s.run({ find: () => null, fallback: harnessRuntime(exe) })), { claude: 'unchanged', codex: 'unchanged' })
     assert.doesNotMatch(editCodexConfig(codex, { command: '/n', args: ['/s'] }), /ELECTRON_RUN_AS_NODE/)
+    // Without Node mode, Harness's binary would open the app: such an entry is rewritten.
+    fs.writeFileSync(s.codexFile, editCodexConfig('', { command: exe, args: [script] }))
+    assert.equal(states(s.run({ find: () => null, fallback: harnessRuntime(exe) })).codex, 'registered')
+    assert.equal(readCodexEntry(fs.readFileSync(s.codexFile, 'utf8')).env.ELECTRON_RUN_AS_NODE, '1')
     // The user's own Node.js still comes first.
     fs.rmSync(s.claudeFile); fs.rmSync(s.codexFile)
     assert.equal(s.run({ fallback: harnessRuntime(exe) }).runtime, 'node')

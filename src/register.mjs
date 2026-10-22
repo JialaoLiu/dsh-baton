@@ -32,7 +32,8 @@ export function editClaudeConfig(text, entry) {
 
 export function readClaudeEntry(text) {
   const e = text.trim() ? JSON.parse(text).mcpServers?.[NAME] : null
-  return e?.command ? { command: e.command, args: e.args ?? [] } : null
+  if (!e?.command) return null
+  return { command: e.command, args: e.args ?? [], ...(e.env && Object.keys(e.env).length ? { env: e.env } : {}) }
 }
 
 const tomlString = (s) => (/['\n\r]/.test(s) ? JSON.stringify(s) : `'${s}'`)
@@ -61,22 +62,29 @@ export function editCodexConfig(text, entry) {
   return out ? out + '\n' : ''
 }
 
-// The command and args of [mcp_servers.dsh-baton], as setup writes them (single-line strings).
+// The command, args and env of [mcp_servers.dsh-baton] (and its .env table), as setup
+// writes them (single-line strings).
 export function readCodexEntry(text) {
   const str = String.raw`'[^'\n]*'|"(?:[^"\\\n]|\\.)*"`
   const unquote = (s) => (s.startsWith("'") ? s.slice(1, -1) : JSON.parse(s))
-  let inTable = false
+  let table = null
   let command = null, args = []
+  const env = {}
   for (const line of text.split(/\r?\n/)) {
-    if (ANY_TABLE.test(line)) inTable = /^\s*\[\s*mcp_servers\s*\.\s*(["']?)dsh-baton\1\s*\]/.test(line)
-    else if (inTable) {
+    if (ANY_TABLE.test(line)) {
+      const m = line.match(/^\s*\[\s*mcp_servers\s*\.\s*(["']?)dsh-baton\1\s*(\.\s*env\s*)?\]/)
+      table = m ? (m[2] ? 'env' : 'main') : null
+    } else if (table === 'main') {
       const c = line.match(new RegExp(`^\\s*command\\s*=\\s*(${str})`))
       if (c) command = unquote(c[1])
       const a = line.match(/^\s*args\s*=\s*\[(.*)\]/)
       if (a) args = [...a[1].matchAll(new RegExp(str, 'g'))].map((m) => unquote(m[0]))
+    } else if (table === 'env') {
+      const kv = line.match(new RegExp(`^\\s*([\\w-]+)\\s*=\\s*(${str})`))
+      if (kv) env[kv[1]] = unquote(kv[2])
     }
   }
-  return command ? { command, args } : null
+  return command ? { command, args, ...(Object.keys(env).length ? { env } : {}) } : null
 }
 
 // Write only when the content changes, keep one backup, and replace the file atomically.
@@ -124,10 +132,10 @@ export function nodeVersionOk(version) {
   return major > MIN_NODE[0] || (major === MIN_NODE[0] && minor >= MIN_NODE[1])
 }
 
-// A Node.js for the MCP server when the caller is not one itself: the Harness plugin runs
-// on the app's own binary, whose path changes with every Harness update. So: the first
-// `node` on PATH, then the usual install folders, never one inside the Harness app, and
-// only a new enough one.
+// The user's own Node.js for the MCP server, preferred over Harness's runtime (see
+// harnessRuntime): the first `node` on PATH, then the usual install folders, never the
+// launcher scripts inside the Harness app (they only work from Harness itself), and only
+// a new enough one.
 export function findNode({ env = process.env, platform = process.platform, exclude = [], version = nodeVersion } = {}) {
   const exe = platform === 'win32' ? 'node.exe' : 'node'
   const p = platform === 'win32' ? path.win32 : path.posix
@@ -212,7 +220,17 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
       serverRoot = app
     }
     const script = path.join(serverRoot, 'src', 'server.mjs')
-    const works = (e) => e && fs.existsSync(e.command) && e.args?.[0] && fs.existsSync(e.args[0])
+    // Whether an entry can start a server. A bare command (`npx -y dsh-baton-mcp`, as MCP
+    // directories suggest) is the user's own choice and resolved on the client's PATH: kept.
+    // Harness's own binary only works in Node mode.
+    const bare = (cmd) => !/[\\/]/.test(cmd)
+    const works = (e) => {
+      if (!e?.command) return false
+      // `node /old/path/server.mjs` with that file gone is still broken.
+      if (bare(e.command)) return !e.args?.[0] || bare(e.args[0]) || fs.existsSync(e.args[0])
+      if (!fs.existsSync(e.command) || !e.args?.[0] || !fs.existsSync(e.args[0])) return false
+      return !fallback || path.resolve(e.command) !== path.resolve(fallback.command) || e.env?.ELECTRON_RUN_AS_NODE === '1'
+    }
     const list = clients(env, home)
     let launch = node ? { command: node } : null
     for (const c of list) {
@@ -221,7 +239,7 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
         const text = fs.existsSync(c.file) ? fs.readFileSync(c.file, 'utf8') : ''
         const current = c.read(text)
         if (works(current)) {
-          const same = path.resolve(current.args[0]) === path.resolve(script)
+          const same = !bare(current.command) && path.resolve(current.args[0]) === path.resolve(script)
           result.clients.push({ id: c.id, label: c.label, state: same ? 'unchanged' : 'kept', script: current.args[0] })
           continue
         }
