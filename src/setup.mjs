@@ -85,6 +85,31 @@ function installedPlugins() {
   }
 }
 
+// With pnpm's hoisted layout, uninstalling the plugin can leave its node_modules link
+// behind. Remove such a link once the profile no longer lists the plugin; only the
+// link itself goes, never the folder it points to. Returns the links removed and the
+// ones that could not be.
+export function cleanStalePluginLinks(profile = path.join(config.dshHome, 'profiles', 'desktop')) {
+  let deps
+  try { deps = JSON.parse(fs.readFileSync(path.join(profile, 'package.json'), 'utf8')).dependencies ?? {} } catch { return { removed: [], failed: [] } }
+  const removed = [], failed = []
+  for (const name of ['dsh-baton-host', 'dsh-bridge-host']) {
+    const link = path.join(profile, 'node_modules', name)
+    if (deps[name]) continue
+    let st
+    try { st = fs.lstatSync(link) } catch { continue }
+    if (!st.isSymbolicLink()) continue
+    try {
+      // A Windows junction is a directory link: rmdir removes the link, not its target.
+      try { fs.unlinkSync(link) } catch { fs.rmdirSync(link) }
+      removed.push(link)
+    } catch {
+      failed.push(link)
+    }
+  }
+  return { removed, failed }
+}
+
 const pluginFrom = (source, hostDir) => source === `link:${hostDir}` || source === `link:${hostDir.split(path.sep).join('/')}`
 
 // The node to register: the one on PATH when it is this same binary, since that path
@@ -143,12 +168,23 @@ export async function setup({ remove = false } = {}) {
 
   if (remove) {
     const plugins = installedPlugins()
-    lines.push('', `To remove the Harness plugin: Harness → Plugins → ${plugins.old && !plugins.current ? 'dsh-bridge-host' : 'dsh-baton-host'} → Uninstall.`)
+    if (plugins.current || plugins.old) {
+      lines.push('', `To remove the Harness plugin: Harness → Plugins → ${plugins.current ? 'dsh-baton-host' : 'dsh-bridge-host'} → Uninstall.`)
+    } else {
+      lines.push('', 'Harness plugin: not installed.')
+      const links = cleanStalePluginLinks()
+      for (const l of links.removed) lines.push(`Removed the leftover plugin link ${l}.`)
+      for (const l of links.failed) lines.push(`Could not remove the leftover plugin link ${l}: quit Harness and delete it.`)
+    }
     const app = appDir()
     if (fs.existsSync(app)) {
       // Harness loads the plugin from this folder: delete it only once the plugin is gone.
       if (pluginFrom(plugins.current, path.join(app, 'host'))) lines.push(`Then run this again to delete ${app}.`)
       else { fs.rmSync(app, { recursive: true, force: true }); lines.push(`Deleted ${app}.`) }
+    }
+    const home = config.batonHome
+    if (['runs', 'host-runs'].some((d) => fs.existsSync(path.join(home, d)))) {
+      lines.push(`Run records are kept in ${home} (runs, host-runs); delete that folder to remove them too.`)
     }
     return lines.join('\n')
   }

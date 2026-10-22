@@ -1,6 +1,6 @@
 {
   "name": "dsh-baton-host",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "DeepSeek Harness plugin for dsh-baton: takes the baton from Claude Code or Codex over a local, owner-only control socket, runs it in a specific session through the host's own session controller, and hands the result back when the turn is done.",
   "type": "module",
   "main": "lib/index.js",

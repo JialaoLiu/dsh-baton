@@ -5,7 +5,7 @@ import path from 'node:path'
 import * as core from './core.mjs'
 import { stableNodePath } from './setup.mjs'
 
-const SERVER = { name: 'dsh-baton', version: '0.3.0' }
+const SERVER = { name: 'dsh-baton', version: '0.3.1' }
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
 
 const str = (description) => ({ type: 'string', description })

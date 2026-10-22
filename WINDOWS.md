@@ -34,7 +34,7 @@ Nothing else to configure: Claude Code waits for a run in the background (Git Ba
 
 Remove: `npx -y dsh-baton-mcp setup --remove`, then Harness → Plugins → dsh-baton-host → Uninstall, then `setup --remove` once more to delete the app folder.
 
-Upgrading from dsh-bridge: `setup` replaces the old MCP entries and reuses an existing `%USERPROFILE%\.dsh-bridge` (the app then goes to `.dsh-bridge\app`). Uninstall `dsh-bridge-host` in Harness, then add the path `setup` copied. With the hoisted profile layout, uninstalling may leave a `node_modules\dsh-bridge-host` link behind in `%USERPROFILE%\.dsh\profiles\desktop`; it is no longer in the profile's dependencies, so delete it with Harness quit.
+Upgrading from dsh-bridge: `setup` replaces the old MCP entries and reuses an existing `%USERPROFILE%\.dsh-bridge` (the app then goes to `.dsh-bridge\app`). Uninstall `dsh-bridge-host` in Harness, then add the path `setup` copied. With the hoisted profile layout, uninstalling may leave a `node_modules\dsh-bridge-host` link behind in `%USERPROFILE%\.dsh\profiles\desktop`; `setup --remove` deletes such a leftover link (old or new name) once the profile no longer lists the plugin.
 
 From source instead: `git clone https://github.com/JialaoLiu/dsh-baton.git C:\dev\dsh-baton` and `node C:\dev\dsh-baton\src\cli.mjs setup`; the plugin path is then `C:\dev\dsh-baton\host`.
 
