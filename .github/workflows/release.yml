@@ -6,6 +6,8 @@
 #   v0.5.0-next.0 -> both packages under `next`
 # A version that is already on npm (say, tried under `next` first) is not published
 # again: pushing its plain tag moves `latest` to it.
+# A plain version is then listed in the official MCP Registry (server.json), signed in
+# as this repo through GitHub's OIDC token; one already listed there is skipped.
 name: Release
 
 on:
@@ -14,7 +16,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write # lets npm verify this workflow instead of a token
+  id-token: write # lets npm and the MCP Registry verify this workflow instead of a token
 
 jobs:
   publish:
@@ -55,3 +57,29 @@ jobs:
               (cd "$dir" && npm publish --access public --tag "$tag")
             fi
           done
+
+      - name: List the release in the MCP Registry
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          PUBLISHER: https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz
+          PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+        run: |
+          name=$(node -p "require('./server.json').name")
+          version=$(node -p "require('./server.json').version")
+          listed="https://registry.modelcontextprotocol.io/v0/servers/$(node -p "encodeURIComponent('$name')")/versions/$version"
+          if [ "$(curl -s -o /dev/null -w '%{http_code}' "$listed")" = 200 ]; then
+            echo "$name $version is already in the MCP Registry"
+            exit 0
+          fi
+          curl -sSfL -o publisher.tar.gz "$PUBLISHER"
+          echo "$PUBLISHER_SHA256  publisher.tar.gz" | sha256sum -c -
+          tar xzf publisher.tar.gz mcp-publisher
+          ./mcp-publisher login github-oidc
+          # The registry checks the npm package's mcpName, and npm can take a few minutes
+          # to serve a version it has just accepted.
+          for try in 1 2 3 4 5 6 7 8 9 10; do
+            ./mcp-publisher publish && exit 0
+            echo "Not accepted yet (try $try); retrying in 30 s"
+            sleep 30
+          done
+          exit 1

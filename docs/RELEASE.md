@@ -92,7 +92,11 @@ Publishing by hand still works: `npm login`, then `npm publish --access public` 
 
 ## MCP Registry
 
-`server.json` lists `dsh-baton-mcp` in the official MCP Registry as `io.github.JialaoLiu/dsh-baton`; the registry checks that the npm package's `mcpName` matches. After a release is on npm:
+`server.json` lists `dsh-baton-mcp` in the official MCP Registry as `io.github.JialaoLiu/dsh-baton` (the namespace is case-sensitive); the registry checks that the npm package's `mcpName` matches.
+
+The release workflow does this by itself for a plain version, after npm: it signs in with `mcp-publisher login github-oidc` (GitHub's OIDC token for this repo proves the `io.github.JialaoLiu/` namespace, through `id-token: write`) and runs `mcp-publisher publish`, retrying for a few minutes while npm catches up. A version already listed is skipped. Pre-releases are not listed. `mcp-publisher` is pinned to v1.8.1 and checked against its published SHA-256; to update it, change both in `release.yml`.
+
+By hand, if the workflow step fails:
 
 ```bash
 brew install mcp-publisher
@@ -100,4 +104,4 @@ mcp-publisher login github
 mcp-publisher publish
 ```
 
-`login github` signs in as the GitHub account that owns the repo, which proves the `io.github.JialaoLiu/` namespace (case-sensitive). Publish again for each new version.
+`login github` asks for a browser sign-in as the repo owner, and its token expires within minutes, so publish right after.
