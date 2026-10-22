@@ -26,8 +26,11 @@ const waitSeconds = () => {
 const WAIT_CHUNK_S = 10
 // The Codex app runs tools from a script cell that yields every 30 s and wakes the model
 // to resume it; a yield longer than one dsh_wait keeps the whole wait in one turn.
-const codeModeYield = () => `If you call tools from a script cell that yields ("Script running with cell ID …"), give it a yield longer than the wait so you are not woken every 30 s: start the script with // @exec: {"yield_time_ms": ${(waitSeconds() + 20) * 1000}} and pass the same yield_time_ms to wait.`
-const NO_POLL = 'While waiting, do not call dsh_status, dsh_session_activity or dsh_read_session.'
+const codeModeYield = () => {
+  const ms = (waitSeconds() + 20) * 1000
+  return `Required when you call tools from a script cell ("Script running with cell ID …"): the script that calls dsh_wait must start with the line // @exec: {"yield_time_ms": ${ms}}, never a shorter value; if the cell still yields, resume it with wait and yield_time_ms ${ms} (or the largest value wait accepts), never a short value such as 30000 or 55000.`
+}
+const NO_POLL = 'While waiting, make no other calls: no dsh_status, dsh_session_activity or dsh_read_session, and do not list or read the target folder or files to check progress. The final dsh_wait result carries the reply of the run; check files only after the run ends, if needed.'
 const ARCHIVED = 'Sessions not in dsh_list_sessions are archived or gone: do not look for them on disk.'
 
 // A shell command that blocks until a run ends and prints its reply. Run in the
