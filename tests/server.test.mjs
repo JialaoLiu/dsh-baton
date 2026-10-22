@@ -137,6 +137,9 @@ test('Claude Code gets a background wait_command; Codex, which cannot be woken b
   const codex = await sendAs('codex-mcp-client')
   assert.equal(codex.sent.wait_command, undefined)
   assert.match(codex.sent.hint, /Call dsh_wait/)
+  assert.match(codex.sent.hint, /dsh_session_activity/)
+  assert.match(codex.sent.hint, /yield_time_ms/)
+  assert.match(codex.instructions, /archived/)
   assert.doesNotMatch(codex.instructions, /wait_command/)
 })
 
