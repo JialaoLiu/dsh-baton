@@ -11,8 +11,11 @@ import { apply } from '../host/lib/index.js'
 import { socketEndpoint } from '../host/lib/socket.js'
 
 const IS_WIN = process.platform === 'win32'
+// Switching the plugin on registers the MCP server in the user's real config files: off
+// here, except in the test that points it at a throwaway home.
+process.env.DSH_BATON_AUTO_REGISTER = '0'
 
-function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home } = {}) {
+function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-'))
   // Run records go to the bridge home: keep them out of the real ~/.dsh-baton.
   process.env.DSH_BATON_HOME = home ?? path.join(dir, 'bridge')
@@ -28,6 +31,7 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
     effect: (fn) => disposers.push(fn()),
     waterfall: async (ev, { sessionId }) => activity(sessionId),
     logger: { info: () => {}, error: (m) => logs.push(m) },
+    ...(web ? { inject: (deps, fn) => fn({ effect: (f) => disposers.push(f()), webServer: web }) } : {}),
     workspaceRegistry: {
       list: () => ws,
       get: (id) => ws.find((w) => w.id === id),
@@ -86,6 +90,34 @@ test('ping reports the plugin version', async (t) => {
   const r = await h.call('ping')
   assert.equal(r.name, 'dsh-baton-host')
   assert.match(r.version, /^\d+\.\d+\.\d+$/)
+})
+
+test('switched on, the plugin registers the MCP server and serves the outcome to the Plugins page', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-home-'))
+  const saved = { ...process.env }
+  t.after(() => { process.env = saved; fs.rmSync(dir, { recursive: true, force: true }) })
+  fs.mkdirSync(path.join(dir, '.claude'))
+  fs.mkdirSync(path.join(dir, '.codex'))
+  Object.assign(process.env, { HOME: dir, USERPROFILE: dir, CLAUDE_CONFIG_DIR: dir, CODEX_HOME: path.join(dir, '.codex'), DSH_BATON_AUTO_REGISTER: '1' })
+  let route = null
+  const h = startHost({ home: path.join(dir, '.dsh-baton'), web: { register: (r) => { route = r; return () => { route = null } } } })
+  t.after(h.close)
+  assert.equal(route.path, '/dsh-baton/status')
+  const status = async () => {
+    let body = ''
+    const res = { writeHead: () => {}, end: (b) => { body = b } }
+    route.handler({ method: 'GET' }, res)
+    return JSON.parse(body)
+  }
+  let s = await status()
+  for (let i = 0; i < 50 && s.registration.state === 'pending'; i++) { await sleep(100); s = await status() }
+  assert.equal(s.registration.state, 'done')
+  assert.equal(s.registration.ok, true, JSON.stringify(s))
+  assert.deepEqual(s.registration.clients.map((c) => [c.id, c.state]), [['claude', 'registered'], ['codex', 'registered']])
+  // This repo is a git checkout: its own server is registered, no copy is made.
+  const entry = JSON.parse(fs.readFileSync(path.join(dir, '.claude.json'), 'utf8')).mcpServers['dsh-baton']
+  assert.equal(entry.args[0], path.resolve(import.meta.dirname, '..', 'src', 'server.mjs'))
+  assert.match(fs.readFileSync(path.join(dir, '.codex', 'config.toml'), 'utf8'), /\[mcp_servers\.dsh-baton\]/)
 })
 
 test('list_sessions reads titles from projections and hides sub-agent sessions', async (t) => {

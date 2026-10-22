@@ -1,0 +1,148 @@
+// Registration as the Harness plugin runs it when switched on (src/register.mjs), in a
+// throwaway home folder: copy to the app folder, write each client's entry, leave alone
+// what is already right.
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { autoRegister, findNode, readClaudeEntry, readCodexEntry, editClaudeConfig, editCodexConfig, compareVersions, nodeVersionOk } from '../src/register.mjs'
+
+const REPO = path.resolve(import.meta.dirname, '..')
+const VERSION = JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).version
+
+// A home with Claude Code and Codex installed, and a package root that looks like the
+// dsh-baton-mcp package installed with the plugin (no .git).
+function sandbox({ claude = true, codex = true } = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-reg-'))
+  const home = path.join(dir, 'home')
+  fs.mkdirSync(home)
+  if (claude) fs.mkdirSync(path.join(home, '.claude'))
+  if (codex) fs.mkdirSync(path.join(home, '.codex'))
+  const pkg = path.join(dir, 'pkg')
+  for (const part of ['src', 'host', 'package.json']) fs.cpSync(path.join(REPO, part), path.join(pkg, part), { recursive: true })
+  const env = { PATH: '' }
+  const app = path.join(home, '.dsh-baton', 'app')
+  const run = (opts = {}) => autoRegister({ root: pkg, home, env, app, find: () => process.execPath, ...opts })
+  const claudeFile = path.join(home, '.claude.json')
+  const codexFile = path.join(home, '.codex', 'config.toml')
+  return { dir, home, pkg, app, run, claudeFile, codexFile, done: () => fs.rmSync(dir, { recursive: true, force: true }) }
+}
+
+const states = (r) => Object.fromEntries(r.clients.map((c) => [c.id, c.state]))
+
+test('reads back the entries setup writes', () => {
+  const entry = { command: "C:\\Program Files\\nodejs\\node.exe", args: ["C:\\Users\\o'neil\\app\\src\\server.mjs"] }
+  assert.deepEqual(readCodexEntry(editCodexConfig('model = "x"\n', entry)), entry)
+  assert.deepEqual(readClaudeEntry(editClaudeConfig('{}', entry)), entry)
+  assert.equal(readCodexEntry('[mcp_servers.other]\ncommand = "x"\n'), null)
+  assert.equal(readClaudeEntry(''), null)
+})
+
+test('first switch-on copies the server to the app folder and registers it for both clients', () => {
+  const s = sandbox()
+  try {
+    const r = s.run()
+    assert.equal(r.ok, true)
+    assert.deepEqual(states(r), { claude: 'registered', codex: 'registered' })
+    const script = path.join(s.app, 'src', 'server.mjs')
+    assert.ok(fs.existsSync(script))
+    assert.deepEqual(readClaudeEntry(fs.readFileSync(s.claudeFile, 'utf8')), { command: process.execPath, args: [script] })
+    assert.deepEqual(readCodexEntry(fs.readFileSync(s.codexFile, 'utf8')), { command: process.execPath, args: [script] })
+    // Every Harness start runs it again: nothing changes.
+    const before = fs.readFileSync(s.claudeFile, 'utf8')
+    assert.deepEqual(states(s.run()), { claude: 'unchanged', codex: 'unchanged' })
+    assert.equal(fs.readFileSync(s.claudeFile, 'utf8'), before)
+  } finally { s.done() }
+})
+
+test('keeps other servers and a working entry that starts another copy; repairs a broken one', () => {
+  const s = sandbox()
+  try {
+    const clone = path.join(s.dir, 'clone', 'src', 'server.mjs')
+    fs.mkdirSync(path.dirname(clone), { recursive: true })
+    fs.writeFileSync(clone, '')
+    fs.writeFileSync(s.claudeFile, JSON.stringify({ numStartups: 2, mcpServers: { godot: { command: 'g' }, 'dsh-baton': { command: process.execPath, args: [clone] } } }))
+    fs.writeFileSync(s.codexFile, `[mcp_servers.dsh-baton]\ncommand = '${process.execPath}'\nargs = ['/gone/server.mjs']\n\n[mcp_servers.other]\ncommand = "o"\n`)
+    const r = s.run()
+    assert.deepEqual(states(r), { claude: 'kept', codex: 'registered' })
+    const claude = JSON.parse(fs.readFileSync(s.claudeFile, 'utf8'))
+    assert.equal(claude.mcpServers['dsh-baton'].args[0], clone)
+    assert.deepEqual(claude.mcpServers.godot, { command: 'g' })
+    const codex = fs.readFileSync(s.codexFile, 'utf8')
+    assert.match(codex, /\[mcp_servers\.other\]\ncommand = "o"/)
+    assert.equal(readCodexEntry(codex).args[0], path.join(s.app, 'src', 'server.mjs'))
+    assert.ok(fs.existsSync(`${s.codexFile}.bak-dsh-baton`), 'a backup of the edited file')
+  } finally { s.done() }
+})
+
+test('a newer server in the app folder is not replaced by an older plugin', () => {
+  const s = sandbox()
+  try {
+    fs.mkdirSync(path.join(s.app, 'src'), { recursive: true })
+    fs.writeFileSync(path.join(s.app, 'src', 'server.mjs'), '// newer')
+    fs.writeFileSync(path.join(s.app, 'package.json'), JSON.stringify({ version: '99.0.0' }))
+    s.run()
+    assert.equal(fs.readFileSync(path.join(s.app, 'src', 'server.mjs'), 'utf8'), '// newer')
+    fs.writeFileSync(path.join(s.app, 'package.json'), JSON.stringify({ version: '0.0.1' }))
+    s.run()
+    assert.notEqual(fs.readFileSync(path.join(s.app, 'src', 'server.mjs'), 'utf8'), '// newer')
+  } finally { s.done() }
+})
+
+test('a git checkout is registered where it is, without a copy', () => {
+  const s = sandbox()
+  try {
+    fs.mkdirSync(path.join(s.pkg, '.git'))
+    s.run()
+    assert.equal(readClaudeEntry(fs.readFileSync(s.claudeFile, 'utf8')).args[0], path.join(s.pkg, 'src', 'server.mjs'))
+    assert.equal(fs.existsSync(s.app), false)
+  } finally { s.done() }
+})
+
+test('says why when it cannot register: no Node.js, no clients', () => {
+  let s = sandbox()
+  try {
+    const r = s.run({ find: () => null })
+    assert.equal(r.ok, false)
+    assert.equal(r.error, 'no-node')
+    assert.deepEqual(states(r), { claude: 'failed', codex: 'failed' })
+    assert.equal(fs.existsSync(s.claudeFile), false)
+  } finally { s.done() }
+  s = sandbox({ claude: false, codex: false })
+  try {
+    const r = s.run()
+    assert.equal(r.ok, false)
+    assert.equal(r.error, 'no-clients')
+    assert.deepEqual(states(r), { claude: 'not-installed', codex: 'not-installed' })
+  } finally { s.done() }
+  s = sandbox({ codex: false })
+  try {
+    const r = s.run()
+    assert.equal(r.ok, true, 'one client is enough')
+    assert.deepEqual(states(r), { claude: 'registered', codex: 'not-installed' })
+  } finally { s.done() }
+})
+
+test('finds a new enough node on PATH, never the one inside Harness', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-node-'))
+  const exe = process.platform === 'win32' ? 'node.exe' : 'node'
+  try {
+    const harness = path.join(dir, 'DeepSeek Harness.app')
+    const mine = path.join(dir, 'bin')
+    for (const d of [path.join(harness, 'runtime'), mine]) { fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, exe), '') }
+    const env = { PATH: [path.join(harness, 'runtime'), mine].join(path.delimiter) }
+    const opts = { env, platform: process.platform, exclude: [harness] }
+    assert.equal(findNode({ ...opts, version: () => 'v24.1.0' }), path.join(mine, exe))
+    assert.notEqual(findNode({ ...opts, version: (b) => (b.startsWith(mine) ? 'v20.0.0' : 'v24.1.0') }), path.join(mine, exe), 'an old node on PATH is skipped')
+  } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+  assert.equal(nodeVersionOk('v22.15.0'), true)
+  assert.equal(nodeVersionOk('v22.14.1'), false)
+  assert.equal(nodeVersionOk(''), false)
+})
+
+test('versions compare numerically, a prerelease before its release', () => {
+  assert.ok(compareVersions('0.10.0', '0.9.9') > 0)
+  assert.ok(compareVersions('0.5.0-next.0', '0.5.0') < 0)
+  assert.equal(compareVersions(VERSION, VERSION), 0)
+})

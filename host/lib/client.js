@@ -1,5 +1,9 @@
-// dsh-baton-host, browser half: labels chat messages sent through dsh-baton with
-// their sender ("Sent by Claude from another chat"). The host half puts the sender
+// dsh-baton-host, browser half. Two jobs:
+//   - On the Plugins page: right after the plugin is switched on, and on its detail page,
+//     say whether the host half registered the MCP server for Claude Code and Codex
+//     (it serves the outcome at /dsh-baton/status).
+//   - In the chat: label messages sent through dsh-baton with their sender ("Sent by
+//     Claude from another chat"). The host half puts the sender
 // into the prompt's request id ("dsh-baton.<sender>.<uuid>"); the chat records it as
 // the user message's source.rpcId, so the label survives reloads with no extra state.
 //
@@ -14,7 +18,10 @@ window.__ModuleLoader__.load({
   id: 'dsh-baton-host',
   factory: (require) => {
     const module = { exports: {} }
-    const { createElement: h } = require('react')
+    const { createElement: h, useState, useEffect } = require('react')
+    // Harness's dialog and button; without them (an older or newer Harness), plain elements.
+    let ui = null
+    try { ui = require('@deepseek-ai/dsh-client-ui-primitives') } catch { /* fall back */ }
 
     const SLOT = 'conversation.chat.node'
     const KEYS = ['user', 'steering']
@@ -25,8 +32,124 @@ window.__ModuleLoader__.load({
     // Codex shows as ChatGPT, the way the ChatGPT app labels its own cross-chat messages.
     const NAMES = { claude: 'Claude', codex: 'ChatGPT' }
 
-    const zh = { sentFrom: '由 {name} 从另一个聊天发送' }
-    const en = { sentFrom: 'Sent by {name} from another chat' }
+    const PACKAGE = 'dsh-baton-host'
+    const SETUP = 'npx -y dsh-baton-mcp setup'
+
+    const zh = {
+      sentFrom: '由 {name} 从另一个聊天发送',
+      readyTitle: 'dsh-baton 已就绪',
+      failTitle: 'dsh-baton 还差一步',
+      pending: '正在为 Claude Code 和 Codex 注册 dsh-baton…',
+      ready: '已为 {clients} 注册 dsh-baton。在 Claude Code 或 Codex 里新开一个对话，就能用 dsh_* 工具。',
+      partial: '{clients} 没能注册：',
+      noNode: '没找到 Node.js 22.15 或更新版本。装好 Node.js 后，',
+      noClients: '没找到 Claude Code 或 Codex。装好之后，',
+      failed: '没能自动注册 MCP。',
+      runSetup: '请在终端运行 {cmd}。',
+      unknown: '如果新对话里没有 dsh_* 工具，请在终端运行 {cmd}。',
+      off: '已关闭自动注册（DSH_BATON_AUTO_REGISTER=0）。',
+      ok: '知道了',
+      status: 'MCP 注册',
+      registered: '已注册',
+      notInstalled: '未安装',
+      notRegistered: '未注册',
+      and: '和',
+    }
+    const en = {
+      sentFrom: 'Sent by {name} from another chat',
+      readyTitle: 'dsh-baton is ready',
+      failTitle: 'dsh-baton needs one more step',
+      pending: 'Registering dsh-baton for Claude Code and Codex…',
+      ready: 'dsh-baton is registered for {clients}. Start a new conversation in Claude Code or Codex to use the dsh_* tools.',
+      partial: 'Could not register for {clients}: ',
+      noNode: 'Node.js 22.15 or later was not found. Once it is installed, ',
+      noClients: 'Neither Claude Code nor Codex was found. Once one is installed, ',
+      failed: 'The MCP server could not be registered automatically. ',
+      runSetup: 'run {cmd} in a terminal.',
+      unknown: 'If new conversations have no dsh_* tools, run {cmd} in a terminal.',
+      off: 'Automatic registration is off (DSH_BATON_AUTO_REGISTER=0).',
+      ok: 'OK',
+      status: 'MCP registration',
+      registered: 'registered',
+      notInstalled: 'not installed',
+      notRegistered: 'not registered',
+      and: 'and',
+    }
+
+    // --- Plugins page ------------------------------------------------------------
+
+    const statusUrl = () => new URL('dsh-baton/status', document.baseURI).pathname
+    const REGISTERED = ['registered', 'unchanged', 'kept']
+
+    // The host half registers right after it starts, so poll until it says it is done.
+    function useRegistration() {
+      const [reg, setReg] = useState(null)
+      useEffect(() => {
+        let stopped = false
+        let tries = 0
+        const poll = async () => {
+          let next = null
+          try {
+            const res = await fetch(statusUrl(), { cache: 'no-store' })
+            if (res.ok) next = (await res.json()).registration
+          } catch { /* not served yet */ }
+          if (stopped) return
+          if (next && next.state !== 'pending') return setReg(next)
+          if (++tries >= 30) return setReg({ state: 'unknown' })
+          setTimeout(poll, 700)
+        }
+        poll()
+        return () => { stopped = true }
+      }, [])
+      return reg
+    }
+
+    // What to tell the user: [title or null, text]. null while the host is still working.
+    function describe(reg, t) {
+      if (!reg || reg.state === 'pending') return [null, t('pending')]
+      if (reg.state === 'off') return [t('readyTitle'), t('off')]
+      if (reg.state === 'unknown') return [t('readyTitle'), t('unknown', { cmd: SETUP })]
+      const clients = reg.clients ?? []
+      const done = clients.filter((c) => REGISTERED.includes(c.state)).map((c) => c.label)
+      const failed = clients.filter((c) => c.state === 'failed').map((c) => c.label)
+      const list = (names) => names.join(` ${t('and')} `)
+      const fix = (reg.error === 'no-node' ? t('noNode') : reg.error === 'no-clients' ? t('noClients') : '') + t('runSetup', { cmd: SETUP })
+      if (reg.ok) return [t('readyTitle'), t('ready', { clients: list(done) })]
+      if (done.length) return [t('failTitle'), `${t('ready', { clients: list(done) })} ${t('partial', { clients: list(failed) })}${fix}`]
+      return [t('failTitle'), (reg.error === 'no-node' || reg.error === 'no-clients' ? '' : t('failed')) + fix]
+    }
+
+    // Shown once, right after "Enable now".
+    function wrapActivation(t) {
+      return function DshBatonActivation({ onDismiss }) {
+        const [title, text] = describe(useRegistration(), t)
+        if (ui?.Modal && ui?.Button) {
+          return h(ui.Modal, {
+            open: true, title: title ?? t('readyTitle'), closeLabel: t('ok'), onClose: onDismiss,
+            footer: h(ui.Button, { variant: 'primary', 'data-modal-autofocus': true, onClick: onDismiss }, t('ok')),
+          }, h('p', null, text))
+        }
+        return h('div', { role: 'status', style: { margin: '12px 0', padding: 12, borderRadius: 8, border: '1px solid var(--dsw-alias-border-l3)', color: 'var(--dsw-alias-label-primary)' } },
+          title ? h('strong', null, title) : null,
+          h('p', { style: { margin: '6px 0' } }, text),
+          h('button', { type: 'button', onClick: onDismiss }, t('ok')))
+      }
+    }
+
+    // The plugin's detail page: one line per client.
+    function wrapDetails(t) {
+      return function DshBatonStatus({ view }) {
+        const reg = useRegistration()
+        if (view === 'summary') return null
+        const [, text] = describe(reg, t)
+        const word = (s) => (REGISTERED.includes(s) ? t('registered') : s === 'not-installed' ? t('notInstalled') : t('notRegistered'))
+        const rows = (reg?.clients ?? []).map((c) => `${c.label}: ${word(c.state)}`)
+        return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 4, color: 'var(--dsw-alias-label-secondary)' } },
+          h('strong', { style: { color: 'var(--dsw-alias-label-primary)' } }, t('status')),
+          rows.length ? h('span', null, rows.join(' · ')) : null,
+          h('span', null, text))
+      }
+    }
 
     function senderOf(node) {
       const rpcId = node?.data?.source?.rpcId
@@ -92,6 +215,8 @@ window.__ModuleLoader__.load({
         // locale 'chat': the shipped renderer reads its strings through the `t` it is handed.
         for (const key of KEYS) yield ctx.slots.register({ name: SLOT, key, priority: PRIORITY, locale: 'chat' }, wrapperFor(ctx, key, t))
       })
+      ctx.slots.inject('plugins.bundle.activation', () => ctx.slots.register({ name: 'plugins.bundle.activation', key: PACKAGE, locale: NS }, wrapActivation(t)))
+      ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({ name: 'plugins.bundle.config', key: PACKAGE, locale: NS }, wrapDetails(t)))
     }
     return module.exports
   },

@@ -6,11 +6,15 @@ DeepSeek Harness 插件，配合 [dsh-baton](https://github.com/JialaoLiu/dsh-ba
 
 ## Install / 安装
 
-Harness → Plugins / 插件 → Add plugin / 添加插件 → registry Official npm registry → `dsh-baton-host` → Install / 安装 → Enable now / 立即启用
+Harness → Plugins / 插件 → Add plugin / 添加插件 → `dsh-baton-host` → Install / 安装 → Enable now / 立即启用
 
-Update / 更新: uninstall, then add it again / 先卸载再重新添加. Keep it on the same version as `dsh-baton-mcp` / 版本与 `dsh-baton-mcp` 保持一致.
+That is the whole install: switched on, the plugin registers the dsh-baton MCP server (the `dsh-baton-mcp` package, installed with it) for Claude Code and Codex, user-wide, and Harness says so. New conversations then have the `dsh_*` tools. If it could not register, run `npx -y dsh-baton-mcp setup`. Details: [dsh-baton](https://github.com/JialaoLiu/dsh-baton#install-details).
 
-Then connect the MCP server / 然后接入 MCP 服务器: see [dsh-baton](https://github.com/JialaoLiu/dsh-baton#readme).
+装好就完成了：插件启用时会为 Claude Code 和 Codex 注册 dsh-baton MCP 服务器（`dsh-baton-mcp` 包，随插件一起安装），Harness 里会提示。新开的对话就有 `dsh_*` 工具。没能注册的话，运行 `npx -y dsh-baton-mcp setup`。详见 [dsh-baton](https://github.com/JialaoLiu/dsh-baton/blob/main/README.zh-CN.md#安装细节)。
+
+Update / 更新: uninstall, then add it again; the MCP server is updated with it / 先卸载再重新添加，MCP 服务器会一起更新.
+
+Remove / 卸载: uninstall, then `npx -y dsh-baton-mcp setup --remove` / 卸载插件后运行 `npx -y dsh-baton-mcp setup --remove`.
 
 ## Socket protocol / 套接字协议
 
@@ -32,7 +36,9 @@ Newline-delimited JSON: request `{"id", "method", "params"}`, reply `{"id", "res
 | `rename_workspace` | `workspace_id` or `path`, `title` |
 | `list_runs` | `limit?` |
 
-`DSH_BATON_SOCKET` / `DSH_BATON_HOME` in the Harness process environment move the socket.
+`DSH_BATON_SOCKET` / `DSH_BATON_HOME` in the Harness process environment move the socket. `DSH_BATON_AUTO_REGISTER=0` turns off the MCP registration.
+
+The Plugins page reads the registration outcome from `GET /dsh-baton/status` on the Harness web server.
 
 ## License
 

@@ -1,7 +1,7 @@
 {
   "name": "dsh-baton-host",
-  "version": "0.4.0",
-  "description": "DeepSeek Harness plugin for dsh-baton: takes the baton from Claude Code or Codex over a local, owner-only control socket, runs it in a specific session through the host's own session controller, and hands the result back when the turn is done.",
+  "version": "0.5.0",
+  "description": "DeepSeek Harness plugin for dsh-baton: adding it is the whole install. Switched on, it registers the dsh-baton MCP server for Claude Code and Codex, then takes the baton over a local, owner-only control socket, runs it in a specific session through the host's own session controller, and hands the result back when the turn is done.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -19,6 +19,9 @@
     "README.md",
     "LICENSE"
   ],
+  "dependencies": {
+    "dsh-baton-mcp": "0.5.0"
+  },
   "license": "MIT",
   "dsh": {
     "manifestVersion": 1,
@@ -33,7 +36,8 @@
       "inject": [
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-renderer",
-        "@deepseek-ai/dsh-client-ui-chat"
+        "@deepseek-ai/dsh-client-ui-chat",
+        "@deepseek-ai/dsh-client-ui-primitives"
       ]
     }
   },

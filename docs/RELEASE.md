@@ -2,7 +2,7 @@
 
 Two packages, released together with one version:
 - `dsh-baton-mcp` (repo root): the MCP server and CLI. It also carries `host/lib`, whose socket code the server shares. `npx -y dsh-baton-mcp setup` copies it to `~/.dsh-baton/app` and registers the server from there.
-- `dsh-baton-host` (`host/`): the Harness plugin. Users add it in Harness → Plugins → Add plugin → Official npm registry → `dsh-baton-host`.
+- `dsh-baton-host` (`host/`): the Harness plugin. Users add it in Harness → Plugins → Add plugin → `dsh-baton-host`. It depends on exactly the same version of `dsh-baton-mcp`, and switched on, copies that to `~/.dsh-baton/app` and registers it (`src/register.mjs`). So `dsh-baton-mcp` must be on npm before anyone installs the plugin: the workflow publishes it first.
 
 The npm name `dsh-bridge` belongs to an unrelated project. `dsh-baton`, `dsh-baton-host` and `dsh-baton-mcp` are reserved as 0.0.1 placeholders; `dsh-baton-mcp` is published from 0.3.0 on.
 
@@ -15,7 +15,7 @@ The npm name `dsh-bridge` belongs to an unrelated project. `dsh-baton`, `dsh-bat
    npm test
    ```
 
-2. Version: set both packages at once with `node scripts/version.mjs <version>`. The server and the plugin read their version from their own `package.json`; `prepublishOnly` refuses to publish when the two differ.
+2. Version: `node scripts/version.mjs <version>` sets both packages, the plugin's dependency on `dsh-baton-mcp` and `server.json`. The server and the plugin read their version from their own `package.json`; `prepublishOnly` refuses to publish when any of them differ.
 
 3. Check the contents:
 
@@ -23,21 +23,32 @@ The npm name `dsh-bridge` belongs to an unrelated project. `dsh-baton`, `dsh-bat
    npm pack --dry-run
    ```
 
-   Expect 18 files, about 46 kB packed and 133 kB unpacked:
+   Expect 20 files, about 56 kB packed and 163 kB unpacked:
 
    ```
-   LICENSE  README.md  README.zh-CN.md  WINDOWS.md  package.json
+   LICENSE  README.md  README.zh-CN.md  WINDOWS.md  package.json  server.json
    host/LICENSE  host/README.md  host/cordis.patch.yml  host/package.json
    host/lib/client.js  host/lib/index.js  host/lib/socket.js
    patches/account.patch.yml
-   src/bin.mjs  src/cli.mjs  src/core.mjs  src/server.mjs  src/setup.mjs
+   src/bin.mjs  src/cli.mjs  src/core.mjs  src/register.mjs  src/server.mjs  src/setup.mjs
    ```
 
    No `tests/`, `assets/`, `docs/` or `demo/`.
 
    And `(cd host && npm pack --dry-run)`: 7 files (`lib/client.js`, `lib/index.js`, `lib/socket.js`, `cordis.patch.yml`, `package.json`, `README.md`, `LICENSE`).
 
-4. Optional dry run of the real flow from the tarball, in a throwaway config:
+4. Optional: try the plugin as npm will install it, before publishing. Unpack both tarballs into one folder and add that folder in Harness (Add plugin → paste the path):
+
+   ```bash
+   npm pack && (cd host && npm pack --pack-destination ..)
+   mkdir -p /tmp/dshb-plugin/node_modules/dsh-baton-mcp
+   tar -xzf dsh-baton-host-<version>.tgz -C /tmp/dshb-plugin --strip-components=1
+   tar -xzf dsh-baton-mcp-<version>.tgz -C /tmp/dshb-plugin/node_modules/dsh-baton-mcp --strip-components=1
+   ```
+
+   Switched on, it should say it registered Claude Code and Codex, and the entries should point to `~/.dsh-baton/app/src/server.mjs`.
+
+   And a dry run of `setup` from the tarball, in a throwaway config:
 
    ```bash
    npm pack
@@ -77,4 +88,16 @@ npm accepts the workflow's publishes once each package trusts it. On npmjs.com, 
 
 Optional, once the workflow has published successfully: in the same Settings, under **Publishing access**, choose "Require two-factor authentication and disallow tokens". Trusted Publishing keeps working, and nothing else can publish without your one-time password.
 
-Publishing by hand still works: `npm login`, then `(cd host && npm publish --access public)` and `npm publish --access public`, each asking for a one-time password.
+Publishing by hand still works: `npm login`, then `npm publish --access public` and `(cd host && npm publish --access public)`, in that order, each asking for a one-time password.
+
+## MCP Registry
+
+`server.json` lists `dsh-baton-mcp` in the official MCP Registry as `io.github.jialaoliu/dsh-baton`; the registry checks that the npm package's `mcpName` matches. After a release is on npm:
+
+```bash
+brew install mcp-publisher
+mcp-publisher login github
+mcp-publisher publish
+```
+
+`login github` signs in as the GitHub account that owns the repo, which proves the `io.github.jialaoliu/` namespace. Publish again for each new version.

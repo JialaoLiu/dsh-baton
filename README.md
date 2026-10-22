@@ -37,24 +37,18 @@ Codex and Claude take turns in the same Harness session, and every message is la
 ## Quick start
 
 <p align="center">
-  <img src="./assets/readme/install.svg" width="100%" alt="Step 1: run npx -y dsh-baton-mcp setup. Step 2: in Harness open Plugins, Add plugin, enter dsh-baton-host from the npm registry, Install, Enable now. Step 3: in a new chat, ask for dsh_list_workspaces">
+  <img src="./assets/readme/install.svg" width="100%" alt="Step 1: in Harness open Plugins, Add plugin, enter dsh-baton-host, Install, Enable now; it registers dsh-baton for Claude Code and Codex. Step 2: in a new chat, ask for dsh_list_workspaces">
 </p>
 
-Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in) and Node.js ≥ 22.15. The steps are the same on macOS and Windows (in PowerShell there).
+Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in), Node.js ≥ 22.15, and Claude Code or Codex. The steps are the same on macOS and Windows.
 
-**1. Run setup** in a terminal:
+**1. Add the plugin in Harness:** **Plugins** (插件) → **Add plugin** (添加插件) → type `dsh-baton-host` → **Install** (安装) → **Enable now** (立即启用).
 
-```bash
-npx -y dsh-baton-mcp setup
-```
+Switched on, the plugin registers dsh-baton for Claude Code and Codex, for every folder, and Harness says so.
 
-It registers the MCP server for Claude Code and Codex, for every folder, and copies the plugin name to your clipboard.
+**2. Check:** in a **new** Claude Code or Codex conversation, ask it to call `dsh_list_workspaces`. It lists your Harness workspaces.
 
-**2. Add the plugin in Harness:** **Plugins** (插件) → **Add plugin** (添加插件) → type `dsh-baton-host` → **Install** (安装) → **Enable now** (立即启用).
-
-**3. Check:** in a **new** Claude Code or Codex conversation, ask it to call `dsh_list_workspaces`. It lists your Harness workspaces.
-
-That is all. To have Claude Code or Codex do step 1 for you, paste *"Run `npx -y dsh-baton-mcp setup`, then tell me the Harness step it prints."* Updating, removing and Windows details are [further down](#install-details).
+That is all. If Harness says it could not register (no Node.js found, say), run `npx -y dsh-baton-mcp setup` in a terminal; it does the same registration. Updating, removing and Windows details are [further down](#install-details).
 
 ## How it works
 
@@ -140,25 +134,24 @@ When the plugin is unreachable, the MCP server falls back to Harness's `dsh head
 
 ## Install details
 
-**What setup does.** It copies itself to `~/.dsh-baton/app`, a folder that stays put (npx's cache does not), and writes the MCP entry into `~/.claude.json` and `~/.codex/config.toml` directly, keeping a `*.bak-dsh-baton` backup of each. So it also works with only the desktop apps installed, when `claude` / `codex` are not on your `PATH`. Running it again is safe. In Harness, the source switches to the npm registry ("Official npm registry", 「npm 官方源」) by itself once you type the package name, and no restart is needed.
+**What the plugin does when switched on.** It copies the MCP server to `~/.dsh-baton/app`, a folder that stays put, and writes the MCP entry into `~/.claude.json` and `~/.codex/config.toml` directly, keeping a `*.bak-dsh-baton` backup of each. It registers the `node` it finds on `PATH` (never the one inside Harness), so it works with only the desktop apps installed, when `claude` / `codex` are not on your `PATH`. It runs again on each Harness start: an entry that is already right, or a working one that starts another copy of dsh-baton, is left alone. In Harness, the source switches to the npm registry ("Official npm registry", 「npm 官方源」) by itself once you type the package name, and no restart is needed. To turn the registration off, set `DSH_BATON_AUTO_REGISTER=0` for Harness.
 
-**Updating.** The MCP server and the plugin update separately and carry the same version.
-- MCP server: `npx -y dsh-baton-mcp@latest setup`. New conversations use it.
-- Plugin: Harness has an update button only for its official plugins, so: Plugins → dsh-baton-host → **Uninstall**, then **Add plugin** → `dsh-baton-host`.
-- `setup` says when the two are out of step, and so does the first tool call that notices it.
+**`npx -y dsh-baton-mcp setup`** does the same registration from a terminal: for a plugin that could not register, or when you come from an MCP directory. With the plugin already registered it changes nothing, then points you to the plugin if it is missing.
 
-**Removing.** Harness → Plugins → dsh-baton-host → **Uninstall**, and `npx -y dsh-baton-mcp setup --remove`. That removes the MCP entries and `~/.dsh-baton/app`; run records stay in `~/.dsh-baton` until you delete it.
+**Updating.** Harness has an update button only for its official plugins, so: Plugins → dsh-baton-host → **Uninstall**, then **Add plugin** → `dsh-baton-host`. Switched on again, the plugin brings the MCP server to the same version; new conversations use it. If the two are ever out of step, the first tool call that notices it says so.
 
-**Upgrading from dsh-bridge.** Run `setup`. It replaces the old `dsh-bridge` MCP entries; in Harness, uninstall `dsh-bridge-host`, then add `dsh-baton-host`. `DSH_BRIDGE_*` variables and an existing `~/.dsh-bridge` folder keep working for now. Tools get a new prefix (`mcp__dsh-baton__…`), so update any permission allowlists. A plugin added before 0.4 by pasting `~/.dsh-baton/app/host` still works but does not update with npm: uninstall it and add `dsh-baton-host` by name (`setup` points this out).
+**Removing.** Harness → Plugins → dsh-baton-host → **Uninstall**, then `npx -y dsh-baton-mcp setup --remove`. The plugin cannot tell an uninstall from Harness quitting, so it leaves the MCP entries to that command, which also deletes `~/.dsh-baton/app`; run records stay in `~/.dsh-baton` until you delete it.
 
-**From source** (to follow `main` or change the code): `git clone https://github.com/JialaoLiu/dsh-baton.git`, then `node dsh-baton/src/cli.mjs setup`. setup registers the clone itself and has you add the plugin from the clone's `host` folder (Add plugin → paste the path it copies), so plugin changes run before they are published. Update with `git pull`.
+**Upgrading from dsh-bridge.** In Harness, uninstall `dsh-bridge-host`, then add `dsh-baton-host`; switched on, it replaces the old `dsh-bridge` MCP entries. `DSH_BRIDGE_*` variables and an existing `~/.dsh-bridge` folder keep working for now. Tools get a new prefix (`mcp__dsh-baton__…`), so update any permission allowlists. A plugin added before 0.4 by pasting `~/.dsh-baton/app/host` still works but does not update with npm: uninstall it and add `dsh-baton-host` by name.
+
+**From source** (to follow `main` or change the code): `git clone https://github.com/JialaoLiu/dsh-baton.git`, then in Harness add the plugin from the clone's `host` folder (Add plugin → paste the path). Switched on, it registers the clone itself, so changes run before they are published. Update with `git pull`. `node dsh-baton/src/cli.mjs setup` registers the clone from a terminal.
 
 **Windows.** Same steps; [WINDOWS.md](WINDOWS.md) covers what differs (a named pipe instead of a socket file) and fixes for a Plugins page that cannot install or uninstall.
 
 <details>
 <summary>Manual registration and the Claude desktop app</summary>
 
-`setup` writes the same entries these commands would (with the absolute path of `node`, since desktop apps start MCP servers without your shell's `PATH`):
+The plugin and `setup` write the same entries these commands would (with the absolute path of `node`, since desktop apps start MCP servers without your shell's `PATH`):
 
 ```bash
 claude mcp add dsh-baton -s user -- "$(command -v node)" "$PWD/dsh-baton/src/server.mjs"

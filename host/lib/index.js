@@ -10,7 +10,9 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { socketEndpoint, batonHome, socketPath as socketPathSetting } from './socket.js'
+import { createRequire } from 'node:module'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { socketEndpoint, batonHome, setting, socketPath as socketPathSetting } from './socket.js'
 
 export const name = 'dsh-baton-host'
 export const inject = ['sessionController', 'workspaceRegistry']
@@ -84,6 +86,26 @@ function toolCallsOf(content) {
 }
 
 const iso = (t) => (typeof t === 'number' ? new Date(t).toISOString() : t ?? null)
+
+// The MCP server package this plugin registers: the checkout or ~/.dsh-baton/app folder
+// this host folder sits in, else the dsh-baton-mcp package installed with the plugin.
+function serverRoot() {
+  const up = fileURLToPath(new URL('../../', import.meta.url))
+  if (fs.existsSync(path.join(up, 'src', 'register.mjs'))) return path.resolve(up)
+  try { return path.dirname(createRequire(import.meta.url).resolve('dsh-baton-mcp/package.json')) } catch { return null }
+}
+
+// The Harness install this process runs from, so its bundled Node (whose path changes
+// with every Harness update) is never registered.
+function harnessDir() {
+  const exe = process.execPath
+  const app = exe.match(/^(.*?\.app)(?=[\\/])/)
+  if (app) return app[1]
+  // Windows: the install folder, e.g. %LOCALAPPDATA%\Programs\DeepSeek Harness.
+  const i = exe.toLowerCase().indexOf('deepseek harness')
+  const end = i < 0 ? -1 : exe.slice(i).search(/[\\/]/)
+  return end > 0 ? exe.slice(0, i + end) : null
+}
 
 export function apply(ctx) {
   // This code runs inside the Harness host process: an uncaught error here can
@@ -629,6 +651,40 @@ export function apply(ctx) {
     }
   }
 
+
+  // --- MCP registration -----------------------------------------------------
+  // Switching the plugin on registers the dsh-baton MCP server for Claude Code and Codex,
+  // the same entries `dsh-baton setup` writes, so adding the plugin is the whole install.
+  // It runs again on every Harness start: a plugin update brings the server along, and an
+  // entry that is already right is left untouched. The Plugins page reads the outcome from
+  // GET /dsh-baton/status (lib/client.js). DSH_BATON_AUTO_REGISTER=0 turns it off.
+  let registration = { state: 'pending' }
+  if (setting('AUTO_REGISTER') !== '0') {
+    setImmediate(guard('register', async () => {
+      const root = serverRoot()
+      if (!root) { registration = { state: 'done', ok: false, error: 'no-server', clients: [] }; return }
+      const { autoRegister } = await import(pathToFileURL(path.join(root, 'src', 'register.mjs')).href)
+      const result = autoRegister({ root, harnessDir: harnessDir() })
+      registration = { state: 'done', ...result }
+      const summary = result.clients.map((c) => `${c.label}: ${c.state}${c.error ? ` (${c.error})` : ''}`).join(', ')
+      ctx.logger?.[result.ok ? 'info' : 'error']?.(`dsh-baton-host MCP registration: ${summary || result.error}`)
+    }))
+  } else {
+    registration = { state: 'off' }
+  }
+  if (typeof ctx.inject === 'function') {
+    ctx.inject(['webServer'], (web) => {
+      web.effect(() => web.webServer.register({
+        kind: 'exact',
+        path: '/dsh-baton/status',
+        handler: (request, response) => {
+          const { state, ok, error, version, clients = [] } = registration
+          response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+          response.end(JSON.stringify({ version: VERSION, registration: { state, ok, error, version, clients: clients.map(({ id, label, state }) => ({ id, label, state })) } }))
+        },
+      }), 'dsh-baton-host status route')
+    })
+  }
 
   ctx.effect(() => {
     const sock = socketPath()

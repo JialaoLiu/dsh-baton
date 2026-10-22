@@ -37,24 +37,18 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 ## 快速上手
 
 <p align="center">
-  <img src="./assets/readme/zh/install.svg" width="100%" alt="第一步：运行 npx -y dsh-baton-mcp setup。第二步：Harness → 插件 → 添加插件 → 从 npm 输入 dsh-baton-host → 安装 → 立即启用。第三步：新开对话，让它调用 dsh_list_workspaces">
+  <img src="./assets/readme/zh/install.svg" width="100%" alt="第一步：Harness → 插件 → 添加插件 → 输入 dsh-baton-host → 安装 → 立即启用，它会为 Claude Code 和 Codex 注册 dsh-baton。第二步：新开对话，让它调用 dsh_list_workspaces">
 </p>
 
-需要：DeepSeek Harness ≥ 0.2.1-rc.2 并已登录；Node.js ≥ 22.15。macOS 和 Windows 步骤完全相同（Windows 在 PowerShell 里运行）。
+需要：DeepSeek Harness ≥ 0.2.1-rc.2 并已登录；Node.js ≥ 22.15；装了 Claude Code 或 Codex。macOS 和 Windows 步骤完全相同。
 
-**1. 运行 setup**，在终端里：
+**1. 在 Harness 里添加插件：** 插件 → 添加插件 → 输入 `dsh-baton-host` → 安装 → 立即启用。
 
-```bash
-npx -y dsh-baton-mcp setup
-```
+插件启用后会为 Claude Code 和 Codex 注册 dsh-baton（对所有文件夹生效），Harness 里会弹出提示。
 
-它会给 Claude Code 和 Codex 注册 MCP 服务器（对所有文件夹生效），并把插件包名复制到剪贴板。
+**2. 检查：**在 Claude Code 或 Codex 里**新开**一个对话，让它调用 `dsh_list_workspaces`，会列出你的 Harness 工作区。
 
-**2. 在 Harness 里添加插件：** 插件 → 添加插件 → 输入 `dsh-baton-host` → 安装 → 立即启用。
-
-**3. 检查：**在 Claude Code 或 Codex 里**新开**一个对话，让它调用 `dsh_list_workspaces`，会列出你的 Harness 工作区。
-
-就这些。想让 Claude Code 或 Codex 替你做第 1 步，就发给它 *"运行 `npx -y dsh-baton-mcp setup`，然后告诉我它提示的 Harness 那一步。"* 更新、卸载和 Windows 说明在[后面](#安装细节)。
+就这些。如果 Harness 提示没能注册（比如找不到 Node.js），在终端运行 `npx -y dsh-baton-mcp setup`，它做的是同样的注册。更新、卸载和 Windows 说明在[后面](#安装细节)。
 
 ## 工作原理
 
@@ -142,25 +136,24 @@ dsh-baton rename-workspace ~/code/new-app 新名字
 
 ## 安装细节
 
-**setup 做了什么。**它把自己复制到 `~/.dsh-baton/app` 这个固定的文件夹（npx 的缓存目录会变），再直接把 MCP 注册写进 `~/.claude.json` 和 `~/.codex/config.toml`，各留一份 `*.bak-dsh-baton` 备份。所以只装了桌面应用、`claude` / `codex` 不在 `PATH` 里也能用，重复运行也没问题。在 Harness 里输入包名后，安装源会自动切到「npm 官方源」（英文界面是 "Official npm registry"），不用另外选择，也不用重启。
+**插件启用时做了什么。**它把 MCP 服务器复制到 `~/.dsh-baton/app` 这个固定的文件夹，再直接把 MCP 注册写进 `~/.claude.json` 和 `~/.codex/config.toml`，各留一份 `*.bak-dsh-baton` 备份。注册的是 `PATH` 里找到的 `node`（不会用 Harness 自带的那个），所以只装了桌面应用、`claude` / `codex` 不在 `PATH` 里也能用。每次 Harness 启动都会再检查一遍：已经正确的注册、或者指向另一份可用 dsh-baton 的注册，都不会改动。在 Harness 里输入包名后，安装源会自动切到「npm 官方源」（英文界面是 "Official npm registry"），不用另外选择，也不用重启。不想让插件自动注册，给 Harness 设置 `DSH_BATON_AUTO_REGISTER=0`。
 
-**更新。**MCP 服务器和插件分开更新，两者版本号相同。
-- MCP 服务器：`npx -y dsh-baton-mcp@latest setup`，新开的对话就会用上。
-- 插件：Harness 只给官方插件提供"更新"按钮，所以要：插件 → dsh-baton-host → **卸载**，再**添加插件** → `dsh-baton-host`。
-- 两边版本对不上时，`setup` 会提示，第一次发现不一致的工具调用也会提示。
+**`npx -y dsh-baton-mcp setup`** 在终端里做同样的注册：用于插件没能注册的情况，或者从 MCP 目录过来的用户。插件已经注册过时它什么都不改；插件没装的话，它会提示去添加。
 
-**卸载。**Harness → 插件 → dsh-baton-host → **卸载**，再运行 `npx -y dsh-baton-mcp setup --remove`。它会删掉 MCP 注册和 `~/.dsh-baton/app`；运行记录留在 `~/.dsh-baton`，不需要的话自己删掉。
+**更新。**Harness 只给官方插件提供"更新"按钮，所以要：插件 → dsh-baton-host → **卸载**，再**添加插件** → `dsh-baton-host`。重新启用后，插件会把 MCP 服务器也更新到同一版本，新开的对话就会用上。万一两边版本对不上，第一次发现不一致的工具调用会提示。
 
-**从 dsh-bridge 升级。**运行 `setup`。它会替换掉旧的 `dsh-bridge` MCP 注册；在 Harness 里先卸载 `dsh-bridge-host`，再添加 `dsh-baton-host`。`DSH_BRIDGE_*` 环境变量和已有的 `~/.dsh-bridge` 文件夹暂时继续可用。工具前缀变成 `mcp__dsh-baton__…`，权限白名单里写了旧前缀的要改一下。0.4 之前通过粘贴 `~/.dsh-baton/app/host` 装的插件仍然能用，但不会跟着 npm 更新：卸载它，再按包名添加 `dsh-baton-host`（`setup` 会提示）。
+**卸载。**Harness → 插件 → dsh-baton-host → **卸载**，再运行 `npx -y dsh-baton-mcp setup --remove`。插件分不清"被卸载"和"Harness 退出"，所以 MCP 注册交给这条命令删，它也会删掉 `~/.dsh-baton/app`；运行记录留在 `~/.dsh-baton`，不需要的话自己删掉。
 
-**从源码安装**（想跟进 `main` 或改代码）：`git clone https://github.com/JialaoLiu/dsh-baton.git`，再运行 `node dsh-baton/src/cli.mjs setup`。这时 setup 注册的就是克隆目录本身，插件也从克隆目录的 `host` 文件夹添加（添加插件 → 粘贴它复制的路径），这样插件改动在发布前就能跑起来；更新用 `git pull`。
+**从 dsh-bridge 升级。**在 Harness 里先卸载 `dsh-bridge-host`，再添加 `dsh-baton-host`；启用后它会替换掉旧的 `dsh-bridge` MCP 注册。`DSH_BRIDGE_*` 环境变量和已有的 `~/.dsh-bridge` 文件夹暂时继续可用。工具前缀变成 `mcp__dsh-baton__…`，权限白名单里写了旧前缀的要改一下。0.4 之前通过粘贴 `~/.dsh-baton/app/host` 装的插件仍然能用，但不会跟着 npm 更新：卸载它，再按包名添加 `dsh-baton-host`。
+
+**从源码安装**（想跟进 `main` 或改代码）：`git clone https://github.com/JialaoLiu/dsh-baton.git`，然后在 Harness 里从克隆目录的 `host` 文件夹添加插件（添加插件 → 粘贴路径）。启用后注册的就是克隆目录本身，改动在发布前就能跑起来；更新用 `git pull`。在终端里运行 `node dsh-baton/src/cli.mjs setup` 也能注册克隆目录。
 
 **Windows。**步骤相同；[WINDOWS.md](WINDOWS.md) 说明了不同之处（用命名管道代替套接字文件），以及插件页装不上或卸不掉时的修法。
 
 <details>
 <summary>手动注册与 Claude 桌面应用</summary>
 
-`setup` 写入的内容和下面两条命令等价（用 `node` 的绝对路径，因为桌面应用启动 MCP 服务器时没有你 shell 的 `PATH`）：
+插件和 `setup` 写入的内容和下面两条命令等价（用 `node` 的绝对路径，因为桌面应用启动 MCP 服务器时没有你 shell 的 `PATH`）：
 
 ```bash
 claude mcp add dsh-baton -s user -- "$(command -v node)" "$PWD/dsh-baton/src/server.mjs"

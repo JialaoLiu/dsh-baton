@@ -1,67 +1,13 @@
-// One-step setup: register the dsh-baton MCP server for Claude Code and Codex, user-wide,
-// by writing their config files directly. This needs no `claude` or `codex` on PATH
-// (desktop-only installs have neither) and no hand-editing of TOML.
+// `dsh-baton setup`: register the dsh-baton MCP server for Claude Code and Codex, user-wide
+// (see register.mjs, which the Harness plugin also uses), and say what is left to do in Harness.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { ROOT, config, hostAvailable, hostVersionSeen as versionOfHost, versionWarning } from './core.mjs'
+import { appDir, installApp, rewrite, stableNodePath, claudeConfigPath, codexConfigPath, editClaudeConfig, editCodexConfig } from './register.mjs'
 
-const NAME = 'dsh-baton'
-// The name before the rename: setup removes its entries so the tools are not listed twice.
-const OLD_NAME = 'dsh-bridge'
-
-export const claudeConfigPath = (env = process.env, home = os.homedir()) =>
-  path.join(env.CLAUDE_CONFIG_DIR || home, '.claude.json')
-export const codexConfigPath = (env = process.env, home = os.homedir()) =>
-  path.join(env.CODEX_HOME || path.join(home, '.codex'), 'config.toml')
-
-// ~/.claude.json: the top-level "mcpServers" map is Claude Code's user scope.
-export function editClaudeConfig(text, entry) {
-  const cfg = text.trim() ? JSON.parse(text) : {}
-  const servers = { ...(cfg.mcpServers ?? {}) }
-  delete servers[OLD_NAME]
-  if (entry) servers[NAME] = { type: 'stdio', command: entry.command, args: entry.args, env: {} }
-  else delete servers[NAME]
-  return JSON.stringify({ ...cfg, mcpServers: servers }, null, 2) + '\n'
-}
-
-const tomlString = (s) => (/['\n\r]/.test(s) ? JSON.stringify(s) : `'${s}'`)
-// Our own table and its sub-tables ([mcp_servers.dsh-baton], [mcp_servers.dsh-baton.env], …),
-// under the current name or the one before the rename.
-const OWN_TABLE = /^\s*\[\s*mcp_servers\s*\.\s*(["']?)dsh-(?:baton|bridge)\1\s*(?:\.[^\]]*)?\]\s*(?:#.*)?$/
-const ANY_TABLE = /^\s*\[/
-
-// ~/.codex/config.toml: replace any earlier dsh-baton tables with one fresh table at the
-// end. Codex stops a tool call after 300 s; the server keeps each wait under that, so no
-// tool_timeout_sec is needed.
-export function editCodexConfig(text, entry) {
-  const kept = []
-  let skipping = false
-  for (const line of text.split(/\r?\n/)) {
-    if (OWN_TABLE.test(line)) skipping = true
-    else if (ANY_TABLE.test(line)) skipping = false
-    if (!skipping) kept.push(line)
-  }
-  let out = kept.join('\n').replace(/\s+$/, '')
-  if (entry) {
-    out += `${out ? '\n\n' : ''}[mcp_servers.${NAME}]\ncommand = ${tomlString(entry.command)}\nargs = [${entry.args.map(tomlString).join(', ')}]`
-  }
-  return out ? out + '\n' : ''
-}
-
-// Write only when the content changes, keep one backup, and replace the file atomically.
-function rewrite(file, edit) {
-  const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
-  const after = edit(before)
-  if (after === before) return 'unchanged'
-  if (before) fs.copyFileSync(file, `${file}.bak-dsh-baton`)
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  const tmp = `${file}.tmp-${process.pid}`
-  fs.writeFileSync(tmp, after, { mode: before ? fs.statSync(file).mode : 0o600 })
-  fs.renameSync(tmp, file)
-  return 'updated'
-}
+export { appDir, installApp, stableNodePath, claudeConfigPath, codexConfigPath, editClaudeConfig, editCodexConfig }
 
 function copyToClipboard(text) {
   try {
@@ -144,42 +90,12 @@ const PLUGIN = 'dsh-baton-host'
 
 const pluginFrom = (source, hostDir) => source === `link:${hostDir}` || source === `link:${hostDir.split(path.sep).join('/')}`
 
-// The node to register: the one on PATH when it is this same binary, since that path
-// survives upgrades (Homebrew's /opt/homebrew/bin/node, not the versioned Cellar path
-// that process.execPath resolves to); otherwise the running binary itself.
-export function stableNodePath(env = process.env, execPath = process.execPath) {
-  const real = (p) => { try { return fs.realpathSync(p) } catch { return null } }
-  const target = real(execPath)
-  const names = process.platform === 'win32' ? ['node.exe'] : ['node']
-  for (const dir of (env.PATH ?? env.Path ?? '').split(path.delimiter).filter(Boolean)) {
-    for (const name of names) {
-      const candidate = path.join(dir, name)
-      if (candidate !== execPath && target && real(candidate) === target) return candidate
-    }
-  }
-  return execPath
-}
-
 // Run through npx, the package sits in npm's cache, which npm may clear or replace at any
 // time. setup then copies it to a stable folder and registers that copy instead.
-export const appDir = () => path.join(config.batonHome, 'app')
 export const inNpxCache = (root = ROOT) => root.split(/[\\/]/).includes('_npx')
-const APP_PARTS = ['src', 'host', 'patches', 'package.json', 'LICENSE']
-
-export function installApp(from = ROOT, to = appDir()) {
-  fs.mkdirSync(to, { recursive: true })
-  for (const part of APP_PARTS) {
-    const src = path.join(from, part)
-    if (!fs.existsSync(src)) continue
-    // Replace each part whole, so files dropped in a newer version do not linger.
-    fs.rmSync(path.join(to, part), { recursive: true, force: true })
-    fs.cpSync(src, path.join(to, part), { recursive: true })
-  }
-  return to
-}
 
 export async function setup({ remove = false } = {}) {
-  const root = !remove && inNpxCache() ? installApp() : ROOT
+  const root = !remove && inNpxCache() ? installApp(ROOT) : ROOT
   const entry = remove ? null : { command: stableNodePath(), args: [path.join(root, 'src', 'server.mjs')] }
   const lines = []
   if (root !== ROOT) lines.push(`Installed dsh-baton to ${root}`)

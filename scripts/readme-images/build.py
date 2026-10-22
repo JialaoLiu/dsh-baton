@@ -161,14 +161,14 @@ def comparison():
 
 # ---------------------------------------------------------------- install steps
 def install():
-    """Same order as the Quick start text: setup in a terminal, one paste in Harness, then check."""
-    W, gap, x0, y0, H = 341, 24, 64, 104, 236
-    b = [eyebrow(64, 64, 'THREE STEPS')]
+    """Same order as the Quick start text: add the plugin in Harness (it registers the MCP server), then check."""
+    gap, x0, y0, H = 24, 64, 104, 236
+    W = (1072 - gap) // 2
+    b = [eyebrow(64, 64, 'TWO STEPS')]
     steps = [
-        ('1', 'Run setup', [('mono', 'npx -y dsh-baton-mcp setup'), ('mono', '# no clone, no npm install'),
-                            ('text', 'Registers Claude Code + Codex'), ('text', 'and copies the plugin name.')]),
-        ('2', 'Add in Harness', [('crumb', ['Plugins', 'Add plugin']), ('crumb', ['dsh-baton-host', 'Install']), ('crumb', ['Enable now'])]),
-        ('3', 'Check', [('text', 'Open a new chat and ask for'), ('mono', 'dsh_list_workspaces'),
+        ('1', 'Add in Harness', [('crumb', ['Plugins', 'Add plugin', 'dsh-baton-host']), ('crumb', ['Install', 'Enable now']),
+                                 ('text', 'It registers Claude Code + Codex for you.')]),
+        ('2', 'Check', [('text', 'Open a new chat and ask for'), ('mono', 'dsh_list_workspaces'),
                         ('text', 'It lists your Harness workspaces.')]),
     ]
     for i, (n, head, rows) in enumerate(steps):
@@ -197,13 +197,13 @@ def install():
                         b.append(f'<path d="M{cx + 6} {y - 13} l6 6 l-6 6" stroke="{MUTED}" stroke-width="2" fill="none"/>')
                         cx += 20
                 y += 50
-        if i < 2:
+        if i < len(steps) - 1:
             ax = x + W + 4
             b.append(f'<path d="M{ax} {y0 + H / 2} h{gap - 8}" stroke="{MUTED}" stroke-width="2"/>')
-    return svg(1200, y0 + H + 40, 'Set up dsh-baton in three steps',
-               tx('Step 1: run npx -y dsh-baton-mcp setup, which registers Claude Code and Codex and copies the plugin name. '
-                  'Step 2: in Harness open Plugins, Add plugin, enter dsh-baton-host from the npm registry, Install, Enable now. '
-                  'Step 3: in a new chat, ask for dsh_list_workspaces; it lists your Harness workspaces.'), '\n'.join(b), BG)
+    return svg(1200, y0 + H + 40, 'Set up dsh-baton in two steps',
+               tx('Step 1: in Harness open Plugins, Add plugin, enter dsh-baton-host, Install, Enable now; it registers '
+                  'dsh-baton for Claude Code and Codex. Step 2: in a new chat, ask for dsh_list_workspaces; it lists your '
+                  'Harness workspaces.'), '\n'.join(b), BG)
 
 
 # ---------------------------------------------------------------- tools map

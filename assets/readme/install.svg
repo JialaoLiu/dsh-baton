@@ -1,39 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-labelledby="title desc">
-  <title id="title">Set up dsh-baton in three steps</title>
-  <desc id="desc">Step 1: run npx -y dsh-baton-mcp setup, which registers Claude Code and Codex and copies the plugin name. Step 2: in Harness open Plugins, Add plugin, enter dsh-baton-host from the npm registry, Install, Enable now. Step 3: in a new chat, ask for dsh_list_workspaces; it lists your Harness workspaces.</desc>
+  <title id="title">Set up dsh-baton in two steps</title>
+  <desc id="desc">Step 1: in Harness open Plugins, Add plugin, enter dsh-baton-host, Install, Enable now; it registers dsh-baton for Claude Code and Codex. Step 2: in a new chat, ask for dsh_list_workspaces; it lists your Harness workspaces.</desc>
   <rect width="1200" height="380" rx="24" fill="#FFFFFF"/>
-<text x="64" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#5B6577" letter-spacing="2">THREE STEPS</text>
-<rect x="64" y="104" width="341" height="236" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
+<text x="64" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#5B6577" letter-spacing="2">TWO STEPS</text>
+<rect x="64" y="104" width="524" height="236" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <text x="88" y="162" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#2563EB" font-weight="700">1</text>
-<text x="130" y="156" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="23" fill="#0F172A" font-weight="700">Run setup</text>
-<rect x="84" y="182" width="301" height="32" rx="8" fill="#FFFFFF" stroke="#E2E7EF" stroke-width="1"/>
-<text x="94" y="203" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#2563EB">npx -y dsh-baton-mcp setup</text>
-<rect x="84" y="222" width="301" height="32" rx="8" fill="#FFFFFF" stroke="#E2E7EF" stroke-width="1"/>
-<text x="94" y="243" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#5B6577"># no clone, no npm install</text>
-<text x="88" y="284" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">Registers Claude Code + Codex</text>
-<text x="88" y="312" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">and copies the plugin name.</text>
-<path d="M409 222.0 h16" stroke="#5B6577" stroke-width="2"/>
-<rect x="429" y="104" width="341" height="236" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
-<text x="453" y="162" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#2563EB" font-weight="700">2</text>
-<text x="495" y="156" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="23" fill="#0F172A" font-weight="700">Add in Harness</text>
-<rect x="449" y="180" width="89" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
-<text x="493.5" y="203" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">Plugins</text>
-<path d="M544 191 l6 6 l-6 6" stroke="#5B6577" stroke-width="2" fill="none"/>
-<rect x="558" y="180" width="116" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
-<text x="616.0" y="203" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">Add plugin</text>
-<rect x="449" y="230" width="152" height="34" rx="17" fill="#EAF1FE" stroke="#2563EB" stroke-width="1"/>
-<text x="525.0" y="253" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#2563EB" text-anchor="middle">dsh-baton-host</text>
-<path d="M607 241 l6 6 l-6 6" stroke="#5B6577" stroke-width="2" fill="none"/>
-<rect x="621" y="230" width="89" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
-<text x="665.5" y="253" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">Install</text>
-<rect x="449" y="280" width="116" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
-<text x="507.0" y="303" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">Enable now</text>
-<path d="M774 222.0 h16" stroke="#5B6577" stroke-width="2"/>
-<rect x="794" y="104" width="341" height="236" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
-<text x="818" y="162" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#2563EB" font-weight="700">3</text>
-<text x="860" y="156" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="23" fill="#0F172A" font-weight="700">Check</text>
-<text x="818" y="204" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">Open a new chat and ask for</text>
-<rect x="814" y="210" width="301" height="32" rx="8" fill="#FFFFFF" stroke="#E2E7EF" stroke-width="1"/>
-<text x="824" y="231" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#2563EB">dsh_list_workspaces</text>
-<text x="818" y="272" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">It lists your Harness workspaces.</text>
+<text x="130" y="156" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="23" fill="#0F172A" font-weight="700">Add in Harness</text>
+<rect x="84" y="180" width="89" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
+<text x="128.5" y="203" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">Plugins</text>
+<path d="M179 191 l6 6 l-6 6" stroke="#5B6577" stroke-width="2" fill="none"/>
+<rect x="193" y="180" width="116" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
+<text x="251.0" y="203" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">Add plugin</text>
+<path d="M315 191 l6 6 l-6 6" stroke="#5B6577" stroke-width="2" fill="none"/>
+<rect x="329" y="180" width="152" height="34" rx="17" fill="#EAF1FE" stroke="#2563EB" stroke-width="1"/>
+<text x="405.0" y="203" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#2563EB" text-anchor="middle">dsh-baton-host</text>
+<rect x="84" y="230" width="89" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
+<text x="128.5" y="253" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">Install</text>
+<path d="M179 241 l6 6 l-6 6" stroke="#5B6577" stroke-width="2" fill="none"/>
+<rect x="193" y="230" width="116" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
+<text x="251.0" y="253" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">Enable now</text>
+<text x="88" y="304" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">It registers Claude Code + Codex for you.</text>
+<path d="M592 222.0 h16" stroke="#5B6577" stroke-width="2"/>
+<rect x="612" y="104" width="524" height="236" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
+<text x="636" y="162" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#2563EB" font-weight="700">2</text>
+<text x="678" y="156" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="23" fill="#0F172A" font-weight="700">Check</text>
+<text x="636" y="204" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">Open a new chat and ask for</text>
+<rect x="632" y="210" width="484" height="32" rx="8" fill="#FFFFFF" stroke="#E2E7EF" stroke-width="1"/>
+<text x="642" y="231" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#2563EB">dsh_list_workspaces</text>
+<text x="636" y="272" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">It lists your Harness workspaces.</text>
 </svg>
