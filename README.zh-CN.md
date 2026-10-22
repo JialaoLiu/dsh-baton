@@ -7,24 +7,44 @@
 </p>
 
 <p align="center">
-  <img src="./assets/readme/zh/features.svg" width="100%" alt="新建工作区和对话、续接指定对话、界面实时可见、完成即唤醒、不用另配 key、零依赖只走本机">
+  macOS · Windows（<a href="WINDOWS.md">说明</a>）· Node.js ≥ 22.15 · 零依赖 · MIT
+</p>
+
+<p align="center">
+  <img src="./assets/readme/zh/features.svg" width="100%" alt="新建工作区和对话、续接指定对话、界面实时可见并标明发送方、完成即唤醒、不用另配 key、macOS 和 Windows 零依赖">
 </p>
 
 <p align="center">
   <img src="./assets/readme/zh/flow.gif" width="100%" alt="典型流程：新建工作区、派发任务、后台等待、在同一个对话里续接追问">
 </p>
 
+## 实际演示
+
+一个 Codex 对话里完成新建、排队、插队和等待：
+
+<p align="center">
+  <img src="./assets/demos/s3-queue-zh.gif" width="100%" alt="左边 Codex 给 DeepSeek 派任务，再排队一条追问、插队修改正在跑的任务并等待；右边 DeepSeek Harness 实时执行">
+</p>
+
+Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是谁发的：
+
+<p align="center">
+  <img src="./assets/demos/s8-relay-zh-zoom.gif" width="100%" alt="Harness 对话里 Codex 和 Claude 的消息交替出现，每条都带“由 ChatGPT / Claude 从另一个聊天发送”的标签">
+</p>
+
+<p align="center"><a href="docs/demos.zh-CN.md">更多演示 →</a></p>
+
 ## 快速上手
 
 <p align="center">
-  <img src="./assets/readme/zh/install.svg" width="100%" alt="第一步：Harness → 插件 → 添加插件 → 粘贴 dsh-bridge/host 文件夹的路径 → 安装 → 立即应用。第二步：在 Claude Code 和 Codex 里全局注册一次 src/server.mjs">
+  <img src="./assets/readme/zh/install.svg" width="100%" alt="第一步：克隆仓库并运行 node dsh-bridge/src/cli.mjs setup。第二步：Harness → 插件 → 添加插件 → 粘贴 → 安装 → 立即启用。第三步：新开对话，让它调用 dsh_list_workspaces">
 </p>
 
 需要：DeepSeek Harness ≥ 0.2.1-rc.2 并已登录；Node.js ≥ 22.15；git。Windows 见 [WINDOWS.md](WINDOWS.md)。
 
 > npm 包 `dsh-bridge-host` 和 `dsh-bridge-mcp` 还没发布，目前请按下面的方法从仓库源码安装。不需要 `npm install`：dsh-bridge 没有任何依赖。
 
-终端里两条命令，再在 Harness 里粘贴一次：
+**1. 运行 setup**，在终端里：
 
 ```bash
 git clone https://github.com/JialaoLiu/dsh-bridge.git
@@ -33,15 +53,15 @@ node dsh-bridge/src/cli.mjs setup
 
 `setup` 会在用户级别给 Claude Code 和 Codex 注册一次 MCP 服务器：之后在任何文件夹新开的对话都有 `dsh_*` 工具。它直接写 `~/.claude.json` 和 `~/.codex/config.toml`（各留一份 `*.bak-dsh-bridge` 备份），所以只装了桌面应用、`claude` / `codex` 不在 `PATH` 里也能用。重复运行也没问题。
 
-然后在 Harness 里完成最后一步。`setup` 已经把插件文件夹路径复制到剪贴板：
+**2. 在 Harness 里粘贴。**`setup` 已经把插件文件夹路径复制到剪贴板：
 
 **插件** → **添加插件** → 粘贴 → **安装** → **立即启用**
 
-检查：在 Claude Code 或 Codex 里**新开**一个对话，让它调用 `dsh_list_workspaces`，应该会列出你的 Harness 工作区。
+**3. 检查。**在 Claude Code 或 Codex 里**新开**一个对话，让它调用 `dsh_list_workspaces`，应该会列出你的 Harness 工作区。
 
 **也可以让 Claude Code 或 Codex 帮你装：** 发给它 *"运行 `git clone https://github.com/JialaoLiu/dsh-bridge.git ~/dsh-bridge && node ~/dsh-bridge/src/cli.mjs setup`，然后告诉我它提示的 Harness 那一步。"*
 
-不需要别的配置：
+**各客户端怎么等待**（不需要配置）：
 - **Claude Code** 在后台等待任务（`dsh_send` 返回的 `wait_command`），任务结束时只被唤醒一次。
 - **Codex** 在 `dsh_wait` 里等待，每次最多 270 秒，刚好低于它 300 秒的工具超时。没做完时只返回状态，Codex 会直接再调用，不会去总结进度。Codex 不会收到 `wait_command`：它的终端无法在命令结束时唤醒它，只能轮询。
 - Codex 调用 MCP 工具时会请你批准，批准 `dsh-bridge` 的工具即可；无人值守的 `codex exec` 加上 `--approve-for-me`。
@@ -87,7 +107,7 @@ codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs
 </p>
 
 <p align="center">
-  <img src="./assets/readme/zh/states.svg" width="100%" alt="运行状态：queued、running、waiting、completed、failed、cancelled。对话正忙时，followup 进排队栏，steer 在下一步插话">
+  <img src="./assets/readme/zh/states.svg" width="100%" alt="运行状态：queued、running、waiting、completed、failed、cancelled，Harness 中途重启则为 interrupted。对话正忙时，followup 进排队栏，steer 在下一步插话">
 </p>
 
 <details>
@@ -97,12 +117,12 @@ codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs
 |---|---|
 | `dsh_list_workspaces` | 列出 Harness 侧边栏里的工作区 |
 | `dsh_create_workspace` | 把一个文件夹登记为工作区（文件夹不存在会先创建）；已登记的直接返回原来那个 |
-| `dsh_list_sessions` | 列出对话（最新在前），带标题、目录、是否在跑；可按目录或关键字过滤 |
-| `dsh_read_session` | 读某个对话最近的消息和回复（含用到的工具名） |
-| `dsh_send` | 发消息。带 `session_id` 续接那个对话；带 `cwd` 或 `workspace_id` 新开对话（`cwd` 还不是工作区时会先登记）。立即返回 `run_id`。Harness 里这条消息会标注「由 Claude / ChatGPT 从另一个聊天发送」 |
+| `dsh_list_sessions` | 列出对话（最新在前），带标题、目录、是否在跑；可按目录或关键字过滤。已归档的对话不会列出 |
+| `dsh_read_session` | 读某个对话最近的消息和回复（含用到的工具名）；已归档的对话会带 `archived: true` |
+| `dsh_send` | 发消息。带 `session_id` 续接那个对话；带 `cwd` 或 `workspace_id` 新开对话（`cwd` 还不是工作区时会先登记）。立即返回 `run_id`。Harness 里这条消息会标注「由 Claude / ChatGPT 从另一个聊天发送」。已归档的对话会被拒绝：先在 Harness 里取消归档，或新开对话 |
 | `dsh_status` | 查看运行进度：状态、最近的文字和工具调用、最终回复；回合结束但子智能体/后台任务还在跑时给出 `waiting_on`；中途有人在 Harness 界面里发消息时给出 `human_interjections`；被 Harness 重启打断的任务状态为 `interrupted` |
 | `dsh_wait` | 等运行结束：Codex 每次最多等 270 秒，其他客户端 50 秒。没做完会带 `timed_out`，只返回状态，再调用一次即可。能在后台等待的客户端改用 `dsh_send` 返回的 `wait_command`。`dsh_status` 只用来看一眼，不用来等待 |
-| `dsh_session_activity` | 对话此刻在做什么：正在跑的回合、子智能体（任意层级）、后台任务 |
+| `dsh_session_activity` | 对话此刻在做什么：正在跑的回合、子智能体（任意层级）、后台任务；已归档的对话会带 `archived: true` |
 | `dsh_cancel` | 按 `run_id` 或 `session_id` 停掉整个对话的工作：当前回合、子智能体、后台任务（排队中的消息不会被删） |
 | `dsh_rename_session` | 给对话改名 |
 | `dsh_rename_workspace` | 给工作区改名（只改侧边栏标题，不动文件夹） |
@@ -152,7 +172,7 @@ dsh-bridge rename-workspace ~/code/new-app 新名字
 ## 安全与限制
 
 <p align="center">
-  <img src="./assets/readme/zh/security.svg" width="100%" alt="目录 0700、套接字 0600，只有当前用户能连；不开网络端口；任务按 Harness 的沙箱和审批设置执行">
+  <img src="./assets/readme/zh/security.svg" width="100%" alt="仅当前用户可连（macOS/Linux 用 0600 套接字，Windows 用按用户的命名管道），不开网络端口，沿用 Harness 的沙箱和审批">
 </p>
 
 <p align="center">
@@ -160,6 +180,8 @@ dsh-bridge rename-workspace ~/code/new-app 新名字
 </p>
 
 任何能以你的身份运行程序的进程都能通过这个套接字驱动 Harness，这和直接运行 `dsh` 的权限一样。本项目依赖 Harness 0.2.1 系列的内部服务接口，Harness 大版本更新后可能需要跟进。
+
+<p align="center"><a href="docs/demos.zh-CN.md">更多演示 →</a></p>
 
 ## 许可证
 

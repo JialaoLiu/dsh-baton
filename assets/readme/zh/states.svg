@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
   <title id="title">dsh-bridge run states</title>
-  <desc id="desc">A run moves from queued to running and ends completed, failed or cancelled. Running can pause in waiting when Harness needs a person. When a session is busy, followup queues the message and steer interjects at the next step.</desc>
+  <desc id="desc">A run moves from queued to running and ends completed, failed or cancelled, or interrupted if Harness restarts mid-run. Running can pause in waiting when Harness needs a person. When a session is busy, followup queues the message and steer interjects at the next step.</desc>
   <rect width="1200" height="520" rx="24" fill="#FFFFFF"/>
 <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#5B6577"/></marker></defs>
 <text x="64" y="76" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="30" fill="#0F172A" font-weight="700">每条消息都有自己的 run</text>
@@ -21,6 +21,10 @@
 <text x="310" y="398" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">审批，或回答提问。</text>
 <text x="556" y="340" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">completed = 回合结束，</text>
 <text x="556" y="366" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">子智能体和后台任务也结束。</text>
+<rect x="64" y="290" width="190" height="52" rx="26" fill="#F4F6FA" stroke="#5B6577" stroke-width="2"/><text x="159.0" y="323" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="20" fill="#5B6577" font-weight="700" text-anchor="middle">interrupted</text>
+<path d="M318 202 C 300 260, 290 316, 258 316" stroke="#5B6577" stroke-width="2" fill="none" stroke-dasharray="4 5" marker-end="url(#ah)"/>
+<text x="64" y="372" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">Harness 中途</text>
+<text x="64" y="398" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">重启了。</text>
 </g>
 <rect x="820" y="160" width="316" height="320" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <text x="846" y="202" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="18" fill="#2563EB" letter-spacing="2">对话正忙？</text>

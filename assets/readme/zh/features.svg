@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="528" viewBox="0 0 1200 528" role="img" aria-labelledby="title desc">
   <title id="title">What dsh-bridge does</title>
-  <desc id="desc">Six capabilities: create workspaces and sessions, continue a specific session, run live in the Harness UI, get woken when a run ends, no extra API key, zero dependencies and local only.</desc>
+  <desc id="desc">Six capabilities: create workspaces and sessions, continue a specific session, run live in the Harness UI labelled with the sender, get woken when a run ends, no extra API key, macOS and Windows with zero dependencies.</desc>
   <rect width="1200" height="528" rx="24" fill="#FFFFFF"/>
 <rect x="64" y="56" width="341" height="196" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <g transform="translate(90 80)" stroke="#2563EB" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10 h12 l4 5 h20 v21 h-36 z"/><path d="M20 21 v10 M15 26 h10"/></g>
@@ -15,8 +15,8 @@
 <rect x="794" y="56" width="341" height="196" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <g transform="translate(820 80)" stroke="#2563EB" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="36" height="28" rx="4"/><path d="M2 14 h36"/><circle cx="20" cy="24" r="4" fill="#2563EB"/></g>
 <text x="820" y="160" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="24" fill="#0F172A" font-weight="700">界面实时可见</text>
-<text x="820" y="198" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">和你在 Harness 里</text>
-<text x="820" y="226" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">亲手打字一样。</text>
+<text x="820" y="198" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">和在 Harness 里亲手打字一样，</text>
+<text x="820" y="226" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">还标明是谁发来的。</text>
 <rect x="64" y="276" width="341" height="196" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <g transform="translate(90 300)" stroke="#2563EB" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M10 28 v-10 a10 10 0 0 1 20 0 v10 l3 4 h-26 z"/><path d="M17 36 h6"/></g>
 <text x="90" y="380" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="24" fill="#0F172A" font-weight="700">完成即唤醒</text>
@@ -29,7 +29,7 @@
 <text x="455" y="446" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">预设和配置。</text>
 <rect x="794" y="276" width="341" height="196" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <g transform="translate(820 300)" stroke="#2563EB" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="18" width="26" height="18" rx="3"/><path d="M13 18 v-6 a7 7 0 0 1 14 0 v6"/></g>
-<text x="820" y="380" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="24" fill="#0F172A" font-weight="700">零依赖，只走本机</text>
-<text x="820" y="418" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">只用 Node 标准库，</text>
-<text x="820" y="446" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">不开端口、不经第三方。</text>
+<text x="820" y="380" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="24" fill="#0F172A" font-weight="700">macOS 和 Windows</text>
+<text x="820" y="418" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">零依赖；仅当前用户可连的</text>
+<text x="820" y="446" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">套接字或管道，不开端口。</text>
 </svg>

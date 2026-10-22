@@ -7,24 +7,44 @@
 </p>
 
 <p align="center">
-  <img src="./assets/readme/features.svg" width="100%" alt="Create workspaces and sessions, continue a session, run live in the Harness UI, get woken when it is done, no extra API key, zero dependencies and local only">
+  macOS · Windows (<a href="WINDOWS.md">guide</a>) · Node.js ≥ 22.15 · zero dependencies · MIT
+</p>
+
+<p align="center">
+  <img src="./assets/readme/features.svg" width="100%" alt="Create workspaces and sessions, continue a session, run live in the Harness UI labelled with the sender, get woken when it is done, no extra API key, macOS and Windows with zero dependencies">
 </p>
 
 <p align="center">
   <img src="./assets/readme/flow.gif" width="100%" alt="Typical flow: create a workspace, send the task, wait in the background, follow up in the same session">
 </p>
 
+## See it run
+
+One Codex chat starts a task, queues a follow-up, steers the running turn, and waits for all three:
+
+<p align="center">
+  <img src="./assets/demos/s3-queue-en.gif" width="100%" alt="Codex on the left starts a DeepSeek task, queues a follow-up, steers the running turn and waits; DeepSeek Harness on the right runs each one live">
+</p>
+
+Codex and Claude take turns in the same Harness session, and every message is labelled with who sent it:
+
+<p align="center">
+  <img src="./assets/demos/s8-relay-en-zoom.gif" width="100%" alt="Harness chat where messages alternate between Codex and Claude, each labelled Sent by ChatGPT or Sent by Claude from another chat">
+</p>
+
+<p align="center"><a href="docs/demos.md">More demos →</a></p>
+
 ## Quick start
 
 <p align="center">
-  <img src="./assets/readme/install.svg" width="100%" alt="Step 1: in Harness open Plugins, Add plugin, paste the path of the dsh-bridge/host folder, Install, Enable now. Step 2: register src/server.mjs once, user-wide, in Claude Code and Codex">
+  <img src="./assets/readme/install.svg" width="100%" alt="Step 1: clone the repo and run node dsh-bridge/src/cli.mjs setup. Step 2: in Harness open Plugins, Add plugin, paste, Install, Enable now. Step 3: in a new chat, ask for dsh_list_workspaces">
 </p>
 
 Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in), Node.js ≥ 22.15 and git. On Windows, see [WINDOWS.md](WINDOWS.md).
 
 > The npm packages `dsh-bridge-host` and `dsh-bridge-mcp` are not published yet, so install from a clone of this repo as below. There is nothing to `npm install`: dsh-bridge has no dependencies.
 
-Two commands in a terminal, then one paste in Harness:
+**1. Run setup** in a terminal:
 
 ```bash
 git clone https://github.com/JialaoLiu/dsh-bridge.git
@@ -33,15 +53,15 @@ node dsh-bridge/src/cli.mjs setup
 
 `setup` registers the MCP server once, user-wide, for Claude Code and Codex: every new conversation, in any folder, has the `dsh_*` tools. It writes `~/.claude.json` and `~/.codex/config.toml` directly (a backup of each is kept as `*.bak-dsh-bridge`), so it also works when only the desktop apps are installed and `claude` / `codex` are not on your `PATH`. Running it again is safe.
 
-Then finish in Harness. `setup` copies the plugin folder path to your clipboard:
+**2. Paste in Harness.** `setup` copies the plugin folder path to your clipboard:
 
 **Plugins** (插件) → **Add plugin** (添加插件) → paste → **Install** (安装) → **Enable now** (立即启用)
 
-Check: start a **new** conversation in Claude Code or Codex and ask it to call `dsh_list_workspaces`. It lists your Harness workspaces.
+**3. Check.** Start a **new** conversation in Claude Code or Codex and ask it to call `dsh_list_workspaces`. It lists your Harness workspaces.
 
 **Or let Claude Code or Codex do it:** paste *"Run `git clone https://github.com/JialaoLiu/dsh-bridge.git ~/dsh-bridge && node ~/dsh-bridge/src/cli.mjs setup`, then tell me the Harness step it prints."*
 
-Nothing else to configure:
+**How each client waits** (nothing to configure):
 - **Claude Code** waits for a run in the background (the `wait_command` that `dsh_send` returns) and is woken once, when the run ends.
 - **Codex** waits inside `dsh_wait`, up to 270 s per call, just under its 300 s tool timeout. An unfinished wait returns only the state, so Codex calls again without summarising. Codex gets no `wait_command`: its terminal cannot wake it, so it would poll.
 - Codex asks you to approve MCP tool calls: approve the `dsh-bridge` tools. For unattended `codex exec` runs, add `--approve-for-me`.
@@ -87,7 +107,7 @@ codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs
 </p>
 
 <p align="center">
-  <img src="./assets/readme/states.svg" width="100%" alt="Run states: queued, running, waiting, completed, failed, cancelled. A busy session takes followup (queued) or steer (interjects) messages">
+  <img src="./assets/readme/states.svg" width="100%" alt="Run states: queued, running, waiting, completed, failed, cancelled, and interrupted when Harness restarts mid-run. A busy session takes followup (queued) or steer (interjects) messages">
 </p>
 
 <details>
@@ -97,12 +117,12 @@ codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs
 |---|---|
 | `dsh_list_workspaces` | Workspaces in the Harness sidebar |
 | `dsh_create_workspace` | Register a folder as a workspace (creates the folder if missing); returns the existing one if already registered |
-| `dsh_list_sessions` | Sessions newest first, with title, folder and running state; filter by folder or text |
-| `dsh_read_session` | Recent prompts and replies of one session (with tool names) |
-| `dsh_send` | Send a message: `session_id` continues that session; `cwd` or `workspace_id` starts a new one (a `cwd` that is not a workspace yet is registered first). Returns a `run_id` at once. In Harness the message is marked "Sent by Claude / ChatGPT from another chat" |
+| `dsh_list_sessions` | Sessions newest first, with title, folder and running state; filter by folder or text. Archived sessions are left out |
+| `dsh_read_session` | Recent prompts and replies of one session (with tool names); `archived: true` for an archived session |
+| `dsh_send` | Send a message: `session_id` continues that session; `cwd` or `workspace_id` starts a new one (a `cwd` that is not a workspace yet is registered first). Returns a `run_id` at once. In Harness the message is marked "Sent by Claude / ChatGPT from another chat". An archived session is refused: unarchive it in Harness, or start a new session |
 | `dsh_status` | Run progress: state, recent text and tool calls, final reply; `waiting_on` when the turn is over but sub-agents or jobs still run; `human_interjections` when someone typed in the Harness UI mid-run; state `interrupted` for a run cut short by a Harness restart |
 | `dsh_wait` | Wait for the run to end: up to 270 s per call for Codex, 50 s for other clients. Still going: returns `timed_out` with just the state; call it again. Clients that can wait in the background use `dsh_send`'s `wait_command` instead. `dsh_status` is a one-off look, not a way to wait |
-| `dsh_session_activity` | What a session is doing now: running turn, sub-agents (any depth), background jobs |
+| `dsh_session_activity` | What a session is doing now: running turn, sub-agents (any depth), background jobs; `archived: true` for an archived session |
 | `dsh_cancel` | Stop everything a session is doing, by `run_id` or `session_id`: turn, sub-agents, jobs (queued messages stay) |
 | `dsh_rename_session` | Rename a session |
 | `dsh_rename_workspace` | Rename a workspace (sidebar title only; the folder is not moved) |
@@ -150,7 +170,7 @@ When the plugin is unreachable, the MCP server falls back to Harness's `dsh head
 ## Security and limits
 
 <p align="center">
-  <img src="./assets/readme/security.svg" width="100%" alt="Owner-only socket (folder 0700, socket 0600), no network port, Harness sandbox and approvals apply">
+  <img src="./assets/readme/security.svg" width="100%" alt="Owner-only channel (socket 0600 on macOS and Linux, per-user named pipe on Windows), no network port, Harness sandbox and approvals apply">
 </p>
 
 <p align="center">
@@ -158,6 +178,8 @@ When the plugin is unreachable, the MCP server falls back to Harness's `dsh head
 </p>
 
 Any process running as your OS user can drive Harness through the socket, the same as running `dsh` directly. dsh-bridge relies on Harness 0.2.1-series internal service APIs, so a major Harness update may need a follow-up release.
+
+<p align="center"><a href="docs/demos.md">More demos →</a></p>
 
 ## License
 

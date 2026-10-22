@@ -58,7 +58,7 @@
   <path d="M608 244 L 716 244" fill="none" stroke="#2563EB" stroke-width="2.5" stroke-dasharray="7 6" marker-end="url(#arrow-accent)"/>
   <circle cx="662" cy="244" r="7" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
   <text x="662" y="210" text-anchor="middle" class="mono" font-size="18" fill="#2563EB">host.sock</text>
-  <text x="662" y="286" text-anchor="middle" class="mono" font-size="18" fill="#5B6577">0600</text>
+  <text x="662" y="286" text-anchor="middle" class="mono" font-size="18" fill="#5B6577">owner-only</text>
 
   <!-- column 3: DeepSeek Harness -->
   <g id="harness" transform="translate(724 100)">

@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title desc">
   <title id="title">Security</title>
-  <desc id="desc">The socket folder is 0700 and the socket 0600 so only your OS user can connect; the plugin opens no network port and contacts no external service; runs follow Harness sandbox and approval settings.</desc>
+  <desc id="desc">The socket is 0600 on macOS and Linux and a per-user named pipe on Windows, so only your OS user can drive it; the plugin opens no network port and contacts no external service; runs follow Harness sandbox and approval settings.</desc>
   <rect width="1200" height="320" rx="24" fill="#FFFFFF"/>
 <text x="64" y="76" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="30" fill="#0F172A" font-weight="700">安全</text>
 <rect x="64" y="104" width="341" height="180" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <rect x="64" y="130" width="4" height="30" fill="#2563EB"/>
 <text x="90" y="154" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#0F172A" font-weight="700">仅当前用户可连</text>
-<text x="90" y="196" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">目录 0700、套接字 0600，</text>
-<text x="90" y="224" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">只有你的系统用户能连。</text>
+<text x="90" y="196" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">macOS/Linux 用 0600 套接字，</text>
+<text x="90" y="224" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">Windows 用按用户的命名管道。</text>
 <rect x="429" y="104" width="341" height="180" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <rect x="429" y="130" width="4" height="30" fill="#2563EB"/>
 <text x="455" y="154" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#0F172A" font-weight="700">不开网络端口</text>
