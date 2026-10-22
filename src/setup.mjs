@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { ROOT, config, hostAvailable, hostVersionSeen as versionOfHost, versionWarning } from './core.mjs'
+import { ROOT, VERSION, config, hostAvailable, hostVersionSeen as versionOfHost, versionWarning } from './core.mjs'
 import { appDir, installApp, rewrite, stableNodePath, claudeConfigPath, codexConfigPath, editClaudeConfig, editCodexConfig } from './register.mjs'
 
 export { appDir, installApp, stableNodePath, claudeConfigPath, codexConfigPath, editClaudeConfig, editCodexConfig }
@@ -94,11 +94,21 @@ const pluginFrom = (source, hostDir) => source === `link:${hostDir}` || source =
 // time. setup then copies it to a stable folder and registers that copy instead.
 export const inNpxCache = (root = ROOT) => root.split(/[\\/]/).includes('_npx')
 
+export function sameVersionAt(dir, version = VERSION) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).version === version && fs.existsSync(path.join(dir, 'src', 'server.mjs'))
+  } catch {
+    return false
+  }
+}
+
 export async function setup({ remove = false } = {}) {
-  const root = !remove && inNpxCache() ? installApp(ROOT) : ROOT
+  // The same version is already in place (the Harness plugin copied it, say): leave it.
+  const copy = !remove && inNpxCache() && !sameVersionAt(appDir())
+  const root = !remove && inNpxCache() ? (copy ? installApp(ROOT) : appDir()) : ROOT
   const entry = remove ? null : { command: stableNodePath(), args: [path.join(root, 'src', 'server.mjs')] }
   const lines = []
-  if (root !== ROOT) lines.push(`Installed dsh-baton to ${root}`)
+  if (root !== ROOT) lines.push(copy ? `Installed dsh-baton to ${root}` : `dsh-baton ${VERSION} is already in ${root}`)
   const register = (label, file, present, edit) => {
     if (!remove && !present) return lines.push(`- ${label}: not installed, skipped`)
     try {
