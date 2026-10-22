@@ -10,6 +10,10 @@
   macOS · Windows (<a href="WINDOWS.md">guide</a>) · Node.js ≥ 22.15 · zero dependencies · MIT
 </p>
 
+Claude Code and Codex each hand a task to DeepSeek Harness, and its subagents build this rainy-night street in 1 h 41 min (40 s, sound on):
+
+https://github.com/user-attachments/assets/72e2fdff-275e-48bc-8e5a-39ffb025a0a8
+
 <p align="center">
   <img src="./assets/readme/features.svg" width="100%" alt="Create workspaces and sessions, continue a session, run live in the Harness UI labelled with the sender, get woken when it is done, no extra API key, macOS and Windows with zero dependencies">
 </p>
