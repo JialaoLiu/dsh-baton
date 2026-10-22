@@ -52,7 +52,9 @@ dsh-baton 没有任何依赖。`setup` 会把自己复制到 `~/.dsh-baton/app` 
 
 **2. 在 Harness 里按包名添加插件**（`setup` 已经把包名复制到剪贴板）：
 
-**插件** → **添加插件** → 来源选 **Official npm registry** → 输入 `dsh-baton-host` → **安装** → **立即启用**
+**插件** → **添加插件** → 输入 `dsh-baton-host` → **安装** → **立即启用**
+
+输入包名后，安装源会自动切到「npm 官方源」（英文界面是 "Official npm registry"），不用另外选择，也不用重启 Harness。
 
 **3. 检查。**在 Claude Code 或 Codex 里**新开**一个对话，让它调用 `dsh_list_workspaces`，应该会列出你的 Harness 工作区。
 

@@ -52,7 +52,9 @@ dsh-baton has no dependencies. `setup` copies itself to `~/.dsh-baton/app`, a fo
 
 **2. Add the plugin in Harness**, by its npm package name (`setup` copies it to your clipboard):
 
-**Plugins** (插件) → **Add plugin** (添加插件) → registry **Official npm registry** → `dsh-baton-host` → **Install** (安装) → **Enable now** (立即启用)
+**Plugins** (插件) → **Add plugin** (添加插件) → type `dsh-baton-host` → **Install** (安装) → **Enable now** (立即启用)
+
+The source switches to the npm registry ("Official npm registry", 「npm 官方源」) by itself once you type a package name. No restart is needed.
 
 **3. Check.** Start a **new** conversation in Claude Code or Codex and ask it to call `dsh_list_workspaces`. It lists your Harness workspaces.
 
