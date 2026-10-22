@@ -92,7 +92,7 @@ Publishing by hand still works: `npm login`, then `npm publish --access public` 
 
 ## MCP Registry
 
-`server.json` lists `dsh-baton-mcp` in the official MCP Registry as `io.github.jialaoliu/dsh-baton`; the registry checks that the npm package's `mcpName` matches. After a release is on npm:
+`server.json` lists `dsh-baton-mcp` in the official MCP Registry as `io.github.JialaoLiu/dsh-baton`; the registry checks that the npm package's `mcpName` matches. After a release is on npm:
 
 ```bash
 brew install mcp-publisher
@@ -100,4 +100,4 @@ mcp-publisher login github
 mcp-publisher publish
 ```
 
-`login github` signs in as the GitHub account that owns the repo, which proves the `io.github.jialaoliu/` namespace. Publish again for each new version.
+`login github` signs in as the GitHub account that owns the repo, which proves the `io.github.JialaoLiu/` namespace (case-sensitive). Publish again for each new version.
