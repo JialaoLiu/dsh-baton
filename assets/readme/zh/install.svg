@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-labelledby="title desc">
   <title id="title">Set up dsh-baton in three steps</title>
-  <desc id="desc">Step 1: run npx -y dsh-baton-mcp setup, which registers Claude Code and Codex and copies the plugin path. Step 2: in Harness open Plugins, Add plugin, paste, Install, Enable now. Step 3: in a new chat, ask for dsh_list_workspaces; it lists your Harness workspaces.</desc>
+  <desc id="desc">第一步：运行 npx -y dsh-baton-mcp setup，给 Claude Code 和 Codex 注册并复制插件包名。第二步：Harness → 插件 → 添加插件 → 从 npm 输入 dsh-baton-host → 安装 → 立即启用。第三步：新开对话，让它调用 dsh_list_workspaces，会列出你的 Harness 工作区。</desc>
   <rect width="1200" height="380" rx="24" fill="#FFFFFF"/>
 <text x="64" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="18" fill="#5B6577" letter-spacing="2">三步装好</text>
 <rect x="64" y="104" width="341" height="236" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
@@ -11,24 +11,23 @@
 <rect x="84" y="222" width="301" height="32" rx="8" fill="#FFFFFF" stroke="#E2E7EF" stroke-width="1"/>
 <text x="94" y="243" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="15" fill="#5B6577"># 不用克隆，不用 npm install</text>
 <text x="88" y="284" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">给 Claude Code 和 Codex 注册，</text>
-<text x="88" y="312" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">并复制插件路径。</text>
+<text x="88" y="312" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">并复制插件包名。</text>
 <path d="M409 222.0 h16" stroke="#5B6577" stroke-width="2"/>
 <rect x="429" y="104" width="341" height="236" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <text x="453" y="162" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#2563EB" font-weight="700">2</text>
-<text x="495" y="156" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="23" fill="#0F172A" font-weight="700">在 Harness 里粘贴</text>
+<text x="495" y="156" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="23" fill="#0F172A" font-weight="700">在 Harness 里添加</text>
 <rect x="449" y="180" width="60" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
 <text x="479.0" y="203" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">插件</text>
 <path d="M515 191 l6 6 l-6 6" stroke="#5B6577" stroke-width="2" fill="none"/>
 <rect x="529" y="180" width="94" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
 <text x="576.0" y="203" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">添加插件</text>
-<path d="M629 191 l6 6 l-6 6" stroke="#5B6577" stroke-width="2" fill="none"/>
-<rect x="643" y="180" width="60" height="34" rx="17" fill="#EAF1FE" stroke="#2563EB" stroke-width="1"/>
-<text x="673.0" y="203" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#2563EB" text-anchor="middle">粘贴</text>
-<rect x="449" y="230" width="60" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
-<text x="479.0" y="253" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">安装</text>
-<path d="M515 241 l6 6 l-6 6" stroke="#5B6577" stroke-width="2" fill="none"/>
-<rect x="529" y="230" width="94" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
-<text x="576.0" y="253" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">立即启用</text>
+<rect x="449" y="230" width="150" height="34" rx="17" fill="#EAF1FE" stroke="#2563EB" stroke-width="1"/>
+<text x="524.0" y="253" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#2563EB" text-anchor="middle">dsh-baton-host</text>
+<path d="M605 241 l6 6 l-6 6" stroke="#5B6577" stroke-width="2" fill="none"/>
+<rect x="619" y="230" width="60" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
+<text x="649.0" y="253" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">安装</text>
+<rect x="449" y="280" width="94" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
+<text x="496.0" y="303" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">立即启用</text>
 <path d="M774 222.0 h16" stroke="#5B6577" stroke-width="2"/>
 <rect x="794" y="104" width="341" height="236" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <text x="818" y="162" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#2563EB" font-weight="700">3</text>

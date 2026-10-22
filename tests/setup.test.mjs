@@ -110,3 +110,20 @@ test('a plugin link the profile no longer lists is removed, never its target or 
   assert.ok(fs.lstatSync(path.join(dir, 'node_modules', 'dsh-bridge-host')).isSymbolicLink())
   fs.rmSync(dir, { recursive: true, force: true })
 })
+
+test('setup points to the plugin by npm package name, and flags local-path or old installs', async () => {
+  const { pluginSteps } = await import('../src/setup.mjs')
+  const { VERSION } = await import('../src/core.mjs')
+  const host = '/x/app/host'
+  const say = (plugins, running, fromSource = false) => pluginSteps(plugins, running, host, fromSource).join('\n')
+  assert.match(say({ current: null, old: null }, null), /Official npm registry → package: dsh-baton-host/)
+  assert.doesNotMatch(say({ current: null, old: null }, null), /\/x\/app\/host/)
+  assert.match(say({ current: `link:${host}`, old: null }, VERSION), /from a local folder \(\/x\/app\/host\): first .* Uninstall[\s\S]*package: dsh-baton-host/)
+  assert.match(say({ current: '0.4.0', old: 'link:/old/host' }, VERSION), /old name: first .* dsh-bridge-host/)
+  assert.equal(say({ current: '^0.4.0', old: null }, VERSION), `Harness plugin: running (${VERSION}).`)
+  assert.match(say({ current: '0.3.1', old: null }, '0.3.1'), /out of step[\s\S]*dsh-baton-host is 0\.3\.1/)
+  assert.match(say({ current: '0.4.0', old: null }, null), /not answering/)
+  // A git checkout links its own host folder instead.
+  assert.match(say({ current: null, old: null }, null, true), /paste .*\/x\/app\/host/)
+  assert.equal(say({ current: `link:${host}`, old: null }, VERSION, true), `Harness plugin: running (${VERSION}).`)
+})

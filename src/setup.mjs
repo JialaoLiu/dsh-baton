@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { ROOT, config, hostAvailable } from './core.mjs'
+import { ROOT, config, hostAvailable, hostVersionSeen as versionOfHost, versionWarning } from './core.mjs'
 
 const NAME = 'dsh-baton'
 // The name before the rename: setup removes its entries so the tools are not listed twice.
@@ -110,6 +110,38 @@ export function cleanStalePluginLinks(profile = path.join(config.dshHome, 'profi
   return { removed, failed }
 }
 
+// What setup says about the Harness plugin. The plugin is installed in Harness by its npm
+// package name; a checkout of this repo (setup run from a git clone) is the exception and
+// links its own host folder, so plugin changes can be tried before they are published.
+export function pluginSteps({ current, old }, running, hostDir, fromSource = fs.existsSync(path.join(ROOT, '.git'))) {
+  const isLink = (spec) => /^(link|file):/.test(spec ?? '')
+  const ok = fromSource ? pluginFrom(current, hostDir) : current && !isLink(current)
+  if (ok && !old && running) {
+    const warning = versionWarning(running)
+    return warning ? ['Harness plugin: running, but out of step.', `  ${warning}`] : [`Harness plugin: running (${running}).`]
+  }
+  const steps = ['Last step, in DeepSeek Harness:']
+  // The plugin was renamed: Harness cannot load the old entry once its folder holds the new name.
+  if (old) steps.push('  The plugin is installed under its old name: first Plugins (插件) → dsh-bridge-host → Uninstall (卸载).')
+  if (current && !ok) {
+    steps.push(isLink(current)
+      ? `  The plugin installed now comes from a local folder (${current.replace(/^(link|file):/, '')}): first Plugins (插件) → dsh-baton-host → Uninstall (卸载).`
+      : '  The plugin installed now comes from npm, not this checkout: first Plugins (插件) → dsh-baton-host → Uninstall (卸载).')
+  }
+  if (ok && !old) return ['Harness plugin: installed but not answering. Open Harness and check that dsh-baton-host is switched on in Plugins (插件).']
+  if (fromSource) {
+    const copied = copyToClipboard(hostDir)
+    steps.push(`  Plugins (插件) → Add plugin (添加插件) → paste ${copied ? 'the path (already copied)' : 'this path'}: ${hostDir}`)
+  } else {
+    const copied = copyToClipboard(PLUGIN)
+    steps.push(`  Plugins (插件) → Add plugin (添加插件) → registry: Official npm registry → package: ${PLUGIN}${copied ? ' (already copied)' : ''}`)
+  }
+  steps.push('  → Install (安装) → Enable now (立即启用)')
+  return steps
+}
+
+const PLUGIN = 'dsh-baton-host'
+
 const pluginFrom = (source, hostDir) => source === `link:${hostDir}` || source === `link:${hostDir.split(path.sep).join('/')}`
 
 // The node to register: the one on PATH when it is this same binary, since that path
@@ -190,21 +222,6 @@ export async function setup({ remove = false } = {}) {
   }
   lines.push('', 'MCP server registered user-wide: new conversations in Claude Code and Codex have the dsh_* tools.')
 
-  const hostDir = path.join(root, 'host')
-  const { current: source, old } = installedPlugins()
-  const fromHere = pluginFrom(source, hostDir)
-  const running = await hostAvailable()
-  if (running && !old && (fromHere || !source)) {
-    lines.push('', 'Harness plugin: running.')
-  } else {
-    const copied = copyToClipboard(hostDir)
-    lines.push('', 'Last step, in DeepSeek Harness:')
-    // The plugin was renamed: Harness cannot load the old entry once its folder holds the new name.
-    if (old) lines.push('  The plugin is installed under its old name: first Plugins (插件) → dsh-bridge-host → Uninstall (卸载).')
-    if (source && !fromHere) lines.push(`  The plugin installed now comes from another folder (${source}): first Plugins (插件) → dsh-baton-host → Uninstall (卸载).`)
-    lines.push(
-      `  Plugins (插件) → Add plugin (添加插件) → paste ${copied ? 'the path (already copied)' : 'this path'}: ${hostDir}`,
-      '  → Install (安装) → Enable now (立即启用)')
-  }
+  lines.push('', ...pluginSteps(installedPlugins(), await hostAvailable() ? versionOfHost() : null, path.join(root, 'host')))
   return lines.join('\n')
 }

@@ -150,13 +150,28 @@ function hostCallAt(endpoint, method, params = {}, { timeoutMs = 15000 } = {}) {
   })
 }
 
+export const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version
+
+// The plugin version from the last successful ping.
+let hostVersion = null
+
 export async function hostAvailable() {
   try {
-    await hostCall('ping', {}, { timeoutMs: 2000 })
+    hostVersion = (await hostCall('ping', {}, { timeoutMs: 2000 }))?.version ?? null
     return true
   } catch {
     return false
   }
+}
+
+export const hostVersionSeen = () => hostVersion
+
+// The plugin and the MCP server update separately (Harness and npx), so they can drift.
+// A different major.minor gets a note asking to update the older side; patch releases mix.
+const minorOf = (v) => String(v).split('.').slice(0, 2).join('.')
+export function versionWarning(plugin = hostVersion, server = VERSION) {
+  if (!plugin || minorOf(plugin) === minorOf(server)) return null
+  return `The Harness plugin dsh-baton-host is ${plugin} but this MCP server is ${server}. Update the older one: the server with \`npx -y dsh-baton-mcp@latest setup\`, the plugin in Harness (Plugins → dsh-baton-host → Uninstall, then Add plugin → dsh-baton-host).`
 }
 
 // Who a relayed message is from, shown on it in the Harness chat: DSH_BATON_SENDER if set,

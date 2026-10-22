@@ -1,6 +1,8 @@
-# Publishing dsh-baton-mcp to npm
+# Publishing dsh-baton to npm
 
-One package, `dsh-baton-mcp`, carries both halves: the MCP server and CLI (`src/`) and the Harness plugin (`host/`). `npx -y dsh-baton-mcp setup` copies them to `~/.dsh-baton/app`, registers the server from there and puts `~/.dsh-baton/app/host` on the clipboard for Harness → Plugins → Add plugin. `dsh-baton-host` is not published on its own: Harness installs plugins from a local folder, so a separate package would add nothing.
+Two packages, released together with one version:
+- `dsh-baton-mcp` (repo root): the MCP server and CLI. It also carries `host/lib`, whose socket code the server shares. `npx -y dsh-baton-mcp setup` copies it to `~/.dsh-baton/app` and registers the server from there.
+- `dsh-baton-host` (`host/`): the Harness plugin. Users add it in Harness → Plugins → Add plugin → Official npm registry → `dsh-baton-host`.
 
 The npm name `dsh-bridge` belongs to an unrelated project. `dsh-baton`, `dsh-baton-host` and `dsh-baton-mcp` are reserved as 0.0.1 placeholders; `dsh-baton-mcp` is published from 0.3.0 on.
 
@@ -13,7 +15,7 @@ The npm name `dsh-bridge` belongs to an unrelated project. `dsh-baton`, `dsh-bat
    npm test
    ```
 
-2. Version: `package.json`, `host/package.json`, `host/lib/index.js` (`VERSION`) and `src/server.mjs` (`SERVER.version`) all carry the same version.
+2. Version: set both packages at once with `node scripts/version.mjs <version>`. The server and the plugin read their version from their own `package.json`; `prepublishOnly` refuses to publish when the two differ.
 
 3. Check the contents:
 
@@ -33,6 +35,8 @@ The npm name `dsh-bridge` belongs to an unrelated project. `dsh-baton`, `dsh-bat
 
    No `tests/`, `assets/`, `docs/` or `demo/`.
 
+   And `(cd host && npm pack --dry-run)`: 7 files (`lib/client.js`, `lib/index.js`, `lib/socket.js`, `cordis.patch.yml`, `package.json`, `README.md`, `LICENSE`).
+
 4. Optional dry run of the real flow from the tarball, in a throwaway config:
 
    ```bash
@@ -47,13 +51,22 @@ The npm name `dsh-bridge` belongs to an unrelated project. `dsh-baton`, `dsh-bat
 
    ```bash
    npm login
-   npm publish --access public
+   (cd host && npm publish --access public --tag next)
+   npm publish --access public --tag next
+   ```
+
+   `next` keeps users on the previous `latest` while you test: `npx -y dsh-baton-mcp@next setup`, and in Harness add `dsh-baton-host@next` (or the exact version) if the dialog accepts it. When it works, move both:
+
+   ```bash
+   npm dist-tag add dsh-baton-host@<version> latest
+   npm dist-tag add dsh-baton-mcp@<version> latest
    ```
 
 6. Check from a clean shell:
 
    ```bash
-   npm view dsh-baton-mcp version
+   npm view dsh-baton-mcp dist-tags
+   npm view dsh-baton-host dist-tags
    npx -y dsh-baton-mcp setup
    ```
 

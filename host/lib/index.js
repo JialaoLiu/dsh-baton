@@ -15,7 +15,7 @@ import { socketEndpoint, batonHome, socketPath as socketPathSetting } from './so
 export const name = 'dsh-baton-host'
 export const inject = ['sessionController', 'workspaceRegistry']
 
-const VERSION = '0.3.1'
+const VERSION = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
 const MAX_EVENTS = 200
 const MAX_RUNS = 100
 const QUIET_CONFIRM_MS = 2000

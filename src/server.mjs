@@ -5,7 +5,7 @@ import path from 'node:path'
 import * as core from './core.mjs'
 import { stableNodePath } from './setup.mjs'
 
-const SERVER = { name: 'dsh-baton', version: '0.3.1' }
+const SERVER = { name: 'dsh-baton', version: core.VERSION }
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
 
 const str = (description) => ({ type: 'string', description })
@@ -154,6 +154,7 @@ const TOOLS = [
 ]
 
 let clientName = null
+let versionWarned = false
 
 function send(msg) {
   process.stdout.write(JSON.stringify(msg) + '\n')
@@ -184,7 +185,11 @@ async function handle(req) {
         const progress = token === undefined ? undefined : (done, message) =>
           send({ jsonrpc: '2.0', method: 'notifications/progress', params: { progressToken: token, progress: done, message } })
         const result = await tool.run(req.params.arguments || {}, { progress })
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+        const content = [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        // Said once per server process, the first time a call finds the versions apart.
+        const warning = !versionWarned && core.versionWarning()
+        if (warning) { versionWarned = true; content.push({ type: 'text', text: `Note for the user: ${warning}` }) }
+        return { content }
       } catch (e) {
         return { content: [{ type: 'text', text: e.message }], isError: true }
       }

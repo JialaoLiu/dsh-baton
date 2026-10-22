@@ -148,3 +148,10 @@ test('senderOf maps MCP client names to a short sender', () => {
   assert.equal(core.senderOf(''), undefined)
   assert.equal(core.senderOf(null), undefined)
 })
+
+test('a plugin on another major.minor than the MCP server gets a warning; a patch difference does not', async () => {
+  const core = await import('../src/core.mjs')
+  assert.equal(core.versionWarning('0.4.1', '0.4.0'), null)
+  assert.equal(core.versionWarning(null, '0.4.0'), null)
+  assert.match(core.versionWarning('0.3.1', '0.4.0'), /dsh-baton-host is 0\.3\.1 but this MCP server is 0\.4\.0/)
+})
