@@ -34,6 +34,8 @@ Nothing else to configure: Claude Code waits for a run in the background (Git Ba
 
 Remove: `npx -y dsh-baton-mcp setup --remove`, then Harness → Plugins → dsh-baton-host → Uninstall, then `setup --remove` once more to delete the app folder.
 
+Upgrading from dsh-bridge: `setup` replaces the old MCP entries and reuses an existing `%USERPROFILE%\.dsh-bridge` (the app then goes to `.dsh-bridge\app`). Uninstall `dsh-bridge-host` in Harness, then add the path `setup` copied. With the hoisted profile layout, uninstalling may leave a `node_modules\dsh-bridge-host` link behind in `%USERPROFILE%\.dsh\profiles\desktop`; it is no longer in the profile's dependencies, so delete it with Harness quit.
+
 From source instead: `git clone https://github.com/JialaoLiu/dsh-baton.git C:\dev\dsh-baton` and `node C:\dev\dsh-baton\src\cli.mjs setup`; the plugin path is then `C:\dev\dsh-baton\host`.
 
 ### If the Plugins page cannot uninstall or install it
@@ -54,6 +56,8 @@ From source instead: `git clone https://github.com/JialaoLiu/dsh-baton.git C:\de
    $pnpm = "$app\resources\runtime\primary-runtime\dependencies\pnpm\bin\pnpm.mjs"
    & "$app\DeepSeek Harness.exe" $pnpm install --frozen-lockfile
    ```
+
+   Pass no `--store-dir` or `--config.node-linker`. If you do not rename `node_modules` first, pnpm wants exactly the `storeDir` and `nodeLinker` recorded in `node_modules\.modules.yaml` and aborts on any other value (`ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`). Recent profiles use `nodeLinker: hoisted` with the store under `%LOCALAPPDATA%\pnpm\store`.
 
 4. Start Harness. Plugins → dsh-baton-host → Uninstall now works; then Add plugin as above. A failed uninstall earlier may have left the plugin switched off: switch it on if so.
 
