@@ -55,7 +55,7 @@ The npm name `dsh-bridge` belongs to an unrelated project. `dsh-baton`, `dsh-bat
    git push && git push origin v<version>
    ```
 
-   A plain version (`v0.4.1`) goes to `latest`. A pre-release (`v0.5.0-next.0`) goes to `next`, for trying a release before users get it: `npx -y dsh-baton-mcp@next setup`, and `dsh-baton-host@next` in Harness. Then release the plain version; Trusted Publishing can publish but not move tags, so moving an existing version to `latest` stays a manual `npm dist-tag add <package>@<version> latest` (with your one-time password).
+   A plain version (`v0.4.1`) goes to `latest`. A pre-release (`v0.5.0-next.0`) goes to `next`, for trying a release before users get it: `npx -y dsh-baton-mcp@next setup`, and `dsh-baton-host@next` in Harness. To hand a version already tried under `next` to everyone, push its plain tag (`v0.4.0` for 0.4.0): the workflow sees it is published and moves `latest` to it instead of publishing again. This needs the Trusted Publisher to allow managing dist-tags (Allowed actions).
 
    Watch the run under the repo's **Actions** tab.
 
@@ -72,7 +72,7 @@ The npm name `dsh-bridge` belongs to an unrelated project. `dsh-baton`, `dsh-bat
 npm accepts the workflow's publishes once each package trusts it. On npmjs.com, signed in, for **both** `dsh-baton-mcp` and `dsh-baton-host`:
 
 1. Package page → **Settings** → **Trusted Publisher** → **GitHub Actions**.
-2. Organization or user: `JialaoLiu`. Repository: `dsh-baton`. Workflow filename: `release.yml`. Environment: leave empty.
+2. Organization or user: `JialaoLiu`. Repository: `dsh-baton`. Workflow filename: `release.yml`. Environment: leave empty. Allowed actions: publish directly and manage dist-tags.
 3. Save.
 
 Optional, once the workflow has published successfully: in the same Settings, under **Publishing access**, choose "Require two-factor authentication and disallow tokens". Trusted Publishing keeps working, and nothing else can publish without your one-time password.

@@ -3,6 +3,8 @@
 # so it needs no token and no one-time password. See docs/RELEASE.md.
 #   v0.4.1        -> both packages under `latest`
 #   v0.5.0-next.0 -> both packages under `next`
+# A version that is already on npm (say, tried under `next` first) is not published
+# again: pushing its plain tag moves `latest` to it.
 name: Release
 
 on:
@@ -38,9 +40,17 @@ jobs:
 
       - run: npm test
 
-      - name: Publish
+      - name: Publish, or move the tag of an already published version
         run: |
           version=$(node -p "require('./package.json').version")
           case "$version" in *-*) tag=next ;; *) tag=latest ;; esac
-          (cd host && npm publish --access public --tag "$tag")
-          npm publish --access public --tag "$tag"
+          for dir in host .; do
+            name=$(node -p "require('./$dir/package.json').name")
+            # npm view prints nothing (and still exits 0) for a version that does not exist.
+            if [ "$(npm view "$name@$version" version 2>/dev/null)" = "$version" ]; then
+              echo "$name@$version is already on npm: tagging it $tag"
+              npm dist-tag add "$name@$version" "$tag"
+            else
+              (cd "$dir" && npm publish --access public --tag "$tag")
+            fi
+          done
