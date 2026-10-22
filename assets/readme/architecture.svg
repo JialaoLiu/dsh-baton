@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg"
      width="1200" height="600" viewBox="0 0 1200 600"
      role="img" aria-labelledby="title desc">
-  <title id="title">How dsh-bridge is wired</title>
-  <desc id="desc">MCP clients such as Claude Code and Codex call dsh-bridge-mcp over stdio. dsh-bridge-mcp talks to the dsh-bridge-host plugin inside DeepSeek Harness through an owner-only local socket at ~/.dsh-bridge/host.sock. The plugin drives Harness's own session controller, so workspaces and sessions appear live in the Harness UI. When the plugin is unreachable, dsh-bridge-mcp falls back to dsh headless. Everything stays on your machine with no network port.</desc>
+  <title id="title">How dsh-baton is wired</title>
+  <desc id="desc">MCP clients such as Claude Code and Codex call dsh-baton-mcp over stdio. dsh-baton-mcp talks to the dsh-baton-host plugin inside DeepSeek Harness through an owner-only local socket at ~/.dsh-baton/host.sock. The plugin drives Harness's own session controller, so workspaces and sessions appear live in the Harness UI. When the plugin is unreachable, dsh-baton-mcp falls back to dsh headless. Everything stays on your machine with no network port.</desc>
 
   <style>
     .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; }
@@ -46,10 +46,10 @@
   <path d="M336 244 L 352 244" fill="none" stroke="#0F172A" stroke-width="2" marker-end="url(#arrow)"/>
   <text x="318" y="148" text-anchor="middle" class="mono" font-size="18" fill="#5B6577">stdio</text>
 
-  <!-- column 2: dsh-bridge-mcp -->
+  <!-- column 2: dsh-baton-mcp -->
   <g id="mcp" transform="translate(356 172)">
     <rect x="0" y="0" width="252" height="144" rx="14" fill="#F4F6FA" stroke="#0F172A" stroke-width="2"/>
-    <text x="24" y="44" class="sans" font-size="24" font-weight="700" fill="#0F172A">dsh-bridge-mcp</text>
+    <text x="24" y="44" class="sans" font-size="24" font-weight="700" fill="#0F172A">dsh-baton-mcp</text>
     <text x="24" y="76" class="mono" font-size="18" fill="#5B6577">src/ · npx</text>
     <text x="24" y="114" class="mono" font-size="20" fill="#2563EB">dsh_* tools + CLI</text>
   </g>
@@ -66,7 +66,7 @@
     <text x="24" y="40" class="mono" font-size="18" letter-spacing="2" fill="#5B6577">DEEPSEEK HARNESS</text>
 
     <rect x="24" y="64" width="364" height="88" rx="12" fill="#F4F6FA" stroke="#0F172A" stroke-width="2"/>
-    <text x="44" y="102" class="sans" font-size="24" font-weight="700" fill="#0F172A">dsh-bridge-host</text>
+    <text x="44" y="102" class="sans" font-size="24" font-weight="700" fill="#0F172A">dsh-baton-host</text>
     <text x="44" y="132" class="mono" font-size="18" fill="#5B6577">plugin · host/</text>
 
     <path d="M206 152 L 206 176" stroke="#0F172A" stroke-width="2" marker-end="url(#arrow)"/>

@@ -8,6 +8,7 @@ import crypto from 'node:crypto'
 import net from 'node:net'
 import { spawn, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { setting, batonHome, socketEndpoint, hostEndpoints } from '../host/lib/socket.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 export const ROOT = path.resolve(HERE, '..')
@@ -16,11 +17,11 @@ const MAC_DSH = '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/c
 
 export const config = {
   dshHome: process.env.DSH_HOME || path.join(os.homedir(), '.dsh'),
-  bridgeHome: process.env.DSH_BRIDGE_HOME || path.join(os.homedir(), '.dsh-bridge'),
+  batonHome: batonHome(),
   // Extra --patch overlays, separated by the platform path delimiter.
-  extraPatches: (process.env.DSH_BRIDGE_PATCHES || '').split(path.delimiter).filter(Boolean),
-  // Set DSH_BRIDGE_ACCOUNT=0 to use the API-key route instead of the desktop account sign-in.
-  useAccount: process.env.DSH_BRIDGE_ACCOUNT !== '0',
+  extraPatches: (setting('PATCHES') || '').split(path.delimiter).filter(Boolean),
+  // Set DSH_BATON_ACCOUNT=0 to use the API-key route instead of the desktop account sign-in.
+  useAccount: setting('ACCOUNT') !== '0',
 }
 
 const IS_WIN = process.platform === 'win32'
@@ -99,25 +100,30 @@ function patchArgs() {
 }
 
 // ---------------------------------------------------------------------------
-// Host plugin (dsh-bridge-host) running inside the Harness desktop app / `dsh web`.
+// Host plugin (dsh-baton-host) running inside the Harness desktop app / `dsh web`.
 // Preferred backend: prompts go through the host's own session controller, so
 // they work on any session and show up live in the Harness UI.
 
-// A Unix socket file on macOS / Linux. Node cannot use socket files on Windows,
-// so there the same path maps to a per-user named pipe; DSH_BRIDGE_SOCKET may
-// be a path or a \\.\pipe\ name. Must match socketEndpoint() in host/lib/socket.js.
-const PIPE_PREFIX = /^\\\\[.?]\\pipe\\/i
-export function socketEndpoint(p, platform = process.platform) {
-  if (platform !== 'win32' || PIPE_PREFIX.test(p)) return p
-  const key = path.win32.resolve(p).toLowerCase()
-  return `\\\\.\\pipe\\dsh-bridge-${crypto.createHash('sha256').update(key).digest('hex').slice(0, 16)}`
+// The socket helpers are shared with the host plugin, so the two always agree.
+export { socketEndpoint, setting }
+export const hostSocket = () => hostEndpoints()[0]
+
+// Tries each endpoint in turn: a host plugin from before the rename listens on the old
+// pipe name on Windows until Harness restarts.
+export async function hostCall(method, params, options) {
+  const endpoints = hostEndpoints()
+  for (let i = 0; ; i++) {
+    try {
+      return await hostCallAt(endpoints[i], method, params, options)
+    } catch (e) {
+      if (!e.hostDown || i === endpoints.length - 1) throw e
+    }
+  }
 }
 
-export const hostSocket = () => socketEndpoint(process.env.DSH_BRIDGE_SOCKET || path.join(config.bridgeHome, 'host.sock'))
-
-export function hostCall(method, params = {}, { timeoutMs = 15000 } = {}) {
+function hostCallAt(endpoint, method, params = {}, { timeoutMs = 15000 } = {}) {
   return new Promise((resolve, reject) => {
-    const conn = net.connect(hostSocket())
+    const conn = net.connect(endpoint)
     let buf = ''
     let settled = false
     const finish = (error, value) => {
@@ -127,7 +133,7 @@ export function hostCall(method, params = {}, { timeoutMs = 15000 } = {}) {
       conn.destroy()
       error ? reject(error) : resolve(value)
     }
-    const timer = timeoutMs ? setTimeout(() => finish(new Error(`dsh-bridge-host did not answer ${method} in time`)), timeoutMs) : null
+    const timer = timeoutMs ? setTimeout(() => finish(new Error(`dsh-baton-host did not answer ${method} in time`)), timeoutMs) : null
     conn.setEncoding('utf8')
     conn.on('connect', () => conn.write(JSON.stringify({ id: 1, method, params }) + '\n'))
     conn.on('data', (chunk) => {
@@ -136,11 +142,11 @@ export function hostCall(method, params = {}, { timeoutMs = 15000 } = {}) {
       if (nl === -1) return
       let msg
       try { msg = JSON.parse(buf.slice(0, nl)) } catch { msg = null }
-      if (msg === null || typeof msg !== 'object' || Array.isArray(msg)) return finish(new Error(`dsh-bridge-host sent an unreadable reply to ${method}`))
+      if (msg === null || typeof msg !== 'object' || Array.isArray(msg)) return finish(new Error(`dsh-baton-host sent an unreadable reply to ${method}`))
       msg.error ? finish(new Error(String(msg.error))) : finish(null, msg.result)
     })
     conn.on('error', (e) => finish(Object.assign(e, { hostDown: true })))
-    conn.on('close', () => finish(new Error(`dsh-bridge-host closed the connection before answering ${method}`)))
+    conn.on('close', () => finish(new Error(`dsh-baton-host closed the connection before answering ${method}`)))
   })
 }
 
@@ -153,9 +159,9 @@ export async function hostAvailable() {
   }
 }
 
-// Who a bridge message is from, shown on it in the Harness chat: DSH_BRIDGE_SENDER if set,
+// Who a relayed message is from, shown on it in the Harness chat: DSH_BATON_SENDER if set,
 // else the MCP client's name (claude-code, claude-ai → claude; codex-mcp-client → codex).
-export function senderOf(clientName = process.env.DSH_BRIDGE_SENDER) {
+export function senderOf(clientName = setting('SENDER')) {
   const n = String(clientName ?? '').toLowerCase()
   if (n.includes('claude')) return 'claude'
   if (n.includes('codex')) return 'codex'
@@ -278,10 +284,10 @@ export function readSession({ session_id, last = 10 }) {
 
 // ---------------------------------------------------------------------------
 // Runs: one headless turn per run, executed by a detached runner process so it
-// survives the MCP server restarting. Each run lives in <bridgeHome>/runs/<id>/.
+// survives the MCP server restarting. Each run lives in <batonHome>/runs/<id>/.
 
 function runsDir() {
-  return path.join(config.bridgeHome, 'runs')
+  return path.join(config.batonHome, 'runs')
 }
 
 // Run records hold full prompts and replies: keep them private to this user.
@@ -341,7 +347,7 @@ export function startRun({ message, session_id, cwd }) {
 
   const runId = `run-${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}-${crypto.randomBytes(3).toString('hex')}`
   const dir = runDir(runId)
-  ensurePrivateDir(config.bridgeHome)
+  ensurePrivateDir(config.batonHome)
   ensurePrivateDir(runsDir())
   ensurePrivateDir(dir)
   fs.writeFileSync(path.join(dir, 'message.txt'), message, { mode: 0o600 })
@@ -492,14 +498,14 @@ export function listRuns({ limit = 10 } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Backend routing. DSH_BRIDGE_BACKEND = auto (default) | host | headless.
+// Backend routing. DSH_BATON_BACKEND = auto (default) | host | headless.
 // auto uses the host plugin when its socket answers, else falls back to headless.
 
 async function useHost() {
-  const mode = process.env.DSH_BRIDGE_BACKEND || 'auto'
+  const mode = setting('BACKEND') || 'auto'
   if (mode === 'headless') return false
   const up = await hostAvailable()
-  if (!up && mode === 'host') throw new Error(`dsh-bridge-host is not reachable at ${hostSocket()}. Is DeepSeek Harness running with the dsh-bridge-host plugin enabled?`)
+  if (!up && mode === 'host') throw new Error(`dsh-baton-host is not reachable at ${hostSocket()}. Is DeepSeek Harness running with the dsh-baton-host plugin enabled?`)
   return up
 }
 
@@ -507,11 +513,11 @@ const tag = (backend, value) => (Array.isArray(value) ? value.map((v) => ({ ...v
 
 export const api = {
   async workspaces() {
-    if (!(await useHost())) throw new Error('Listing workspaces needs the dsh-bridge-host plugin running inside DeepSeek Harness.')
+    if (!(await useHost())) throw new Error('Listing workspaces needs the dsh-baton-host plugin running inside DeepSeek Harness.')
     return hostCall('workspaces')
   },
   async create_workspace(a) {
-    if (!(await useHost())) throw new Error('Creating workspaces needs the dsh-bridge-host plugin running inside DeepSeek Harness.')
+    if (!(await useHost())) throw new Error('Creating workspaces needs the dsh-baton-host plugin running inside DeepSeek Harness.')
     return hostCall('create_workspace', a)
   },
   async list_sessions(a = {}) {
@@ -536,15 +542,15 @@ export const api = {
     return tag('host', await hostCall('cancel', { run_id, session_id }, { timeoutMs: 40000 }))
   },
   async rename_session(a) {
-    if (!(await useHost())) throw new Error('Renaming needs the dsh-bridge-host plugin running inside DeepSeek Harness.')
+    if (!(await useHost())) throw new Error('Renaming needs the dsh-baton-host plugin running inside DeepSeek Harness.')
     return hostCall('rename_session', a)
   },
   async rename_workspace(a) {
-    if (!(await useHost())) throw new Error('Renaming needs the dsh-bridge-host plugin running inside DeepSeek Harness.')
+    if (!(await useHost())) throw new Error('Renaming needs the dsh-baton-host plugin running inside DeepSeek Harness.')
     return hostCall('rename_workspace', a)
   },
   async activity({ session_id }) {
-    if (!(await useHost())) throw new Error('Session activity needs the dsh-bridge-host plugin running inside DeepSeek Harness.')
+    if (!(await useHost())) throw new Error('Session activity needs the dsh-baton-host plugin running inside DeepSeek Harness.')
     return hostCall('activity', { session_id })
   },
   async list_runs({ limit = 10 } = {}) {

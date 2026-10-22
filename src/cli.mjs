@@ -5,7 +5,7 @@ import path from 'node:path'
 import * as core from './core.mjs'
 import { setup } from './setup.mjs'
 
-const USAGE = `Usage: dsh-bridge <command> [args]
+const USAGE = `Usage: dsh-baton <command> [args]
 
   setup [--remove]                                        register the MCP server for Claude Code and Codex (user-wide)
   workspaces                                              list Harness sidebar workspaces (host plugin)
@@ -83,4 +83,4 @@ async function main() {
   }
 }
 
-main().catch((e) => { console.error(`dsh-bridge: ${e.message}`); process.exitCode = 1 })
+main().catch((e) => { console.error(`dsh-baton: ${e.message}`); process.exitCode = 1 })

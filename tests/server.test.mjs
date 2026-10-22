@@ -12,7 +12,7 @@ const SERVER = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'sr
 function rpc(messages) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [SERVER], {
-      env: { ...process.env, DSH_BRIDGE_BACKEND: 'host', DSH_BRIDGE_SOCKET: path.join(os.tmpdir(), 'dshb-missing.sock') },
+      env: { ...process.env, DSH_BATON_BACKEND: 'host', DSH_BATON_SOCKET: path.join(os.tmpdir(), 'dshb-missing.sock') },
     })
     let out = ''
     child.stdout.on('data', (d) => { out += d })
@@ -32,7 +32,7 @@ test('initialize, tools/list and an unreachable-host tool call', async () => {
     { id: 4, method: 'nope' },
   ])
   const byId = Object.fromEntries(replies.map((r) => [r.id, r]))
-  assert.equal(byId[1].result.serverInfo.name, 'dsh-bridge')
+  assert.equal(byId[1].result.serverInfo.name, 'dsh-baton')
   assert.equal(byId[1].result.protocolVersion, '2025-06-18')
   const names = byId[2].result.tools.map((t) => t.name)
   for (const n of ['dsh_send', 'dsh_wait', 'dsh_cancel', 'dsh_session_activity', 'dsh_rename_session', 'dsh_create_workspace']) assert.ok(names.includes(n), n)
@@ -44,7 +44,7 @@ test('initialize, tools/list and an unreachable-host tool call', async () => {
 
 test('a null or malformed request gets an error reply and the server keeps working', async () => {
   const raw = await new Promise((resolve) => {
-    const child = spawn(process.execPath, [SERVER], { env: { ...process.env, DSH_BRIDGE_BACKEND: 'host', DSH_BRIDGE_SOCKET: path.join(os.tmpdir(), 'dshb-missing.sock') } })
+    const child = spawn(process.execPath, [SERVER], { env: { ...process.env, DSH_BATON_BACKEND: 'host', DSH_BATON_SOCKET: path.join(os.tmpdir(), 'dshb-missing.sock') } })
     let out = ''
     child.stdout.on('data', (d) => { out += d })
     child.on('close', (code) => resolve({ code, lines: out.trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) }))
@@ -71,7 +71,7 @@ test('dsh_wait waits in short chunks, reports progress, and returns before the c
     setTimeout(() => c.end(JSON.stringify({ id: req.id, result: { run_id: req.params.run_id, state: 'running', timed_out: true } }) + '\n'), 50)
   }))
   await new Promise((r) => server.listen(socketEndpoint(sock), r))
-  const child = spawn(process.execPath, [SERVER], { env: { ...process.env, DSH_BRIDGE_BACKEND: 'host', DSH_BRIDGE_SOCKET: sock, DSH_BRIDGE_WAIT_S: '2' } })
+  const child = spawn(process.execPath, [SERVER], { env: { ...process.env, DSH_BATON_BACKEND: 'host', DSH_BATON_SOCKET: sock, DSH_BATON_WAIT_S: '2' } })
   let out = ''
   child.stdout.on('data', (d) => { out += d })
   const t0 = Date.now()
@@ -109,8 +109,8 @@ async function sendAs(clientName) {
     c.end(JSON.stringify({ id: req.id, result: { run_id: 'hrun-1', state: 'queued' } }) + '\n')
   }))
   await new Promise((r) => server.listen(socketEndpoint(sock), r))
-  const { DSH_BRIDGE_SENDER, ...env } = process.env
-  const child = spawn(process.execPath, [SERVER], { env: { ...env, DSH_BRIDGE_BACKEND: 'host', DSH_BRIDGE_SOCKET: sock } })
+  const { DSH_BATON_SENDER, ...env } = process.env
+  const child = spawn(process.execPath, [SERVER], { env: { ...env, DSH_BATON_BACKEND: 'host', DSH_BATON_SOCKET: sock } })
   let out = ''
   child.stdout.on('data', (d) => { out += d })
   for (const m of [
@@ -144,8 +144,8 @@ test('Claude Code gets a background wait_command; Codex, which cannot be woken b
   assert.doesNotMatch(codex.instructions, /wait_command/)
 })
 
-test('dsh_wait length is chosen per client, and DSH_BRIDGE_WAIT_S overrides it', async () => {
-  const { DSH_BRIDGE_WAIT_S, ...base } = process.env
+test('dsh_wait length is chosen per client, and DSH_BATON_WAIT_S overrides it', async () => {
+  const { DSH_BATON_WAIT_S, ...base } = process.env
   const run = (env, clientName) => new Promise((resolve) => {
     const child = spawn(process.execPath, [SERVER], { env: { ...base, ...env } })
     let out = ''
@@ -164,6 +164,6 @@ test('dsh_wait length is chosen per client, and DSH_BRIDGE_WAIT_S overrides it',
   assert.match(claude, /up to 50 s/)
   assert.match(claude, /wait_command/)
   assert.doesNotMatch(claude, /yield_time_ms/)
-  assert.match(await run({ DSH_BRIDGE_WAIT_S: '1740' }, 'codex-mcp-client'), /up to 1740 s/)
-  assert.match(await run({ DSH_BRIDGE_WAIT_S: 'nope' }, 'codex-mcp-client'), /up to 270 s/)
+  assert.match(await run({ DSH_BATON_WAIT_S: '1740' }, 'codex-mcp-client'), /up to 1740 s/)
+  assert.match(await run({ DSH_BATON_WAIT_S: 'nope' }, 'codex-mcp-client'), /up to 270 s/)
 })

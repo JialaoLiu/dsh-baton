@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="528" viewBox="0 0 1200 528" role="img" aria-labelledby="title desc">
-  <title id="title">What dsh-bridge does</title>
+  <title id="title">What dsh-baton does</title>
   <desc id="desc">Six capabilities: create workspaces and sessions, continue a specific session, run live in the Harness UI labelled with the sender, get woken when a run ends, no extra API key, macOS and Windows with zero dependencies.</desc>
   <rect width="1200" height="528" rx="24" fill="#FFFFFF"/>
 <rect x="64" y="56" width="341" height="196" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>

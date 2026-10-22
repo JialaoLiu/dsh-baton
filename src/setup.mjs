@@ -1,4 +1,4 @@
-// One-step setup: register the dsh-bridge MCP server for Claude Code and Codex, user-wide,
+// One-step setup: register the dsh-baton MCP server for Claude Code and Codex, user-wide,
 // by writing their config files directly. This needs no `claude` or `codex` on PATH
 // (desktop-only installs have neither) and no hand-editing of TOML.
 import fs from 'node:fs'
@@ -7,7 +7,9 @@ import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { ROOT, config, hostAvailable } from './core.mjs'
 
-const NAME = 'dsh-bridge'
+const NAME = 'dsh-baton'
+// The name before the rename: setup removes its entries so the tools are not listed twice.
+const OLD_NAME = 'dsh-bridge'
 
 export const claudeConfigPath = (env = process.env, home = os.homedir()) =>
   path.join(env.CLAUDE_CONFIG_DIR || home, '.claude.json')
@@ -18,17 +20,19 @@ export const codexConfigPath = (env = process.env, home = os.homedir()) =>
 export function editClaudeConfig(text, entry) {
   const cfg = text.trim() ? JSON.parse(text) : {}
   const servers = { ...(cfg.mcpServers ?? {}) }
+  delete servers[OLD_NAME]
   if (entry) servers[NAME] = { type: 'stdio', command: entry.command, args: entry.args, env: {} }
   else delete servers[NAME]
   return JSON.stringify({ ...cfg, mcpServers: servers }, null, 2) + '\n'
 }
 
 const tomlString = (s) => (/['\n\r]/.test(s) ? JSON.stringify(s) : `'${s}'`)
-// Our own table and its sub-tables ([mcp_servers.dsh-bridge], [mcp_servers.dsh-bridge.env], …).
-const OWN_TABLE = /^\s*\[\s*mcp_servers\s*\.\s*(?:dsh-bridge|"dsh-bridge"|'dsh-bridge')\s*(?:\.[^\]]*)?\]\s*(?:#.*)?$/
+// Our own table and its sub-tables ([mcp_servers.dsh-baton], [mcp_servers.dsh-baton.env], …),
+// under the current name or the one before the rename.
+const OWN_TABLE = /^\s*\[\s*mcp_servers\s*\.\s*(["']?)dsh-(?:baton|bridge)\1\s*(?:\.[^\]]*)?\]\s*(?:#.*)?$/
 const ANY_TABLE = /^\s*\[/
 
-// ~/.codex/config.toml: replace any earlier dsh-bridge tables with one fresh table at the
+// ~/.codex/config.toml: replace any earlier dsh-baton tables with one fresh table at the
 // end. Codex stops a tool call after 300 s; the server keeps each wait under that, so no
 // tool_timeout_sec is needed.
 export function editCodexConfig(text, entry) {
@@ -51,7 +55,7 @@ function rewrite(file, edit) {
   const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
   const after = edit(before)
   if (after === before) return 'unchanged'
-  if (before) fs.copyFileSync(file, `${file}.bak-dsh-bridge`)
+  if (before) fs.copyFileSync(file, `${file}.bak-dsh-baton`)
   fs.mkdirSync(path.dirname(file), { recursive: true })
   const tmp = `${file}.tmp-${process.pid}`
   fs.writeFileSync(tmp, after, { mode: before ? fs.statSync(file).mode : 0o600 })
@@ -70,15 +74,18 @@ function copyToClipboard(text) {
   }
 }
 
-// Where the Harness desktop profile links dsh-bridge-host from, if anywhere.
-function installedPluginSource() {
+// Where the Harness desktop profile links the plugin from, under its current name and
+// under the name before the rename (dsh-bridge-host), if anywhere.
+function installedPlugins() {
   try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(config.dshHome, 'profiles', 'desktop', 'package.json'), 'utf8'))
-    return pkg.dependencies?.['dsh-bridge-host'] ?? null
+    const deps = JSON.parse(fs.readFileSync(path.join(config.dshHome, 'profiles', 'desktop', 'package.json'), 'utf8')).dependencies ?? {}
+    return { current: deps['dsh-baton-host'] ?? null, old: deps['dsh-bridge-host'] ?? null }
   } catch {
-    return null
+    return { current: null, old: null }
   }
 }
+
+const pluginFrom = (source, hostDir) => source === `link:${hostDir}` || source === `link:${hostDir.split(path.sep).join('/')}`
 
 // The node to register: the one on PATH when it is this same binary, since that path
 // survives upgrades (Homebrew's /opt/homebrew/bin/node, not the versioned Cellar path
@@ -96,9 +103,29 @@ export function stableNodePath(env = process.env, execPath = process.execPath) {
   return execPath
 }
 
+// Run through npx, the package sits in npm's cache, which npm may clear or replace at any
+// time. setup then copies it to a stable folder and registers that copy instead.
+export const appDir = () => path.join(config.batonHome, 'app')
+export const inNpxCache = (root = ROOT) => root.split(/[\\/]/).includes('_npx')
+const APP_PARTS = ['src', 'host', 'patches', 'package.json', 'LICENSE']
+
+export function installApp(from = ROOT, to = appDir()) {
+  fs.mkdirSync(to, { recursive: true })
+  for (const part of APP_PARTS) {
+    const src = path.join(from, part)
+    if (!fs.existsSync(src)) continue
+    // Replace each part whole, so files dropped in a newer version do not linger.
+    fs.rmSync(path.join(to, part), { recursive: true, force: true })
+    fs.cpSync(src, path.join(to, part), { recursive: true })
+  }
+  return to
+}
+
 export async function setup({ remove = false } = {}) {
-  const entry = remove ? null : { command: stableNodePath(), args: [path.join(ROOT, 'src', 'server.mjs')] }
+  const root = !remove && inNpxCache() ? installApp() : ROOT
+  const entry = remove ? null : { command: stableNodePath(), args: [path.join(root, 'src', 'server.mjs')] }
   const lines = []
+  if (root !== ROOT) lines.push(`Installed dsh-baton to ${root}`)
   const register = (label, file, present, edit) => {
     if (!remove && !present) return lines.push(`- ${label}: not installed, skipped`)
     try {
@@ -115,21 +142,30 @@ export async function setup({ remove = false } = {}) {
   register('Codex', codexFile, fs.existsSync(path.dirname(codexFile)), editCodexConfig)
 
   if (remove) {
-    lines.push('', 'To remove the Harness plugin: Harness → Plugins → dsh-bridge-host → Uninstall.')
+    const plugins = installedPlugins()
+    lines.push('', `To remove the Harness plugin: Harness → Plugins → ${plugins.old && !plugins.current ? 'dsh-bridge-host' : 'dsh-baton-host'} → Uninstall.`)
+    const app = appDir()
+    if (fs.existsSync(app)) {
+      // Harness loads the plugin from this folder: delete it only once the plugin is gone.
+      if (pluginFrom(plugins.current, path.join(app, 'host'))) lines.push(`Then run this again to delete ${app}.`)
+      else { fs.rmSync(app, { recursive: true, force: true }); lines.push(`Deleted ${app}.`) }
+    }
     return lines.join('\n')
   }
   lines.push('', 'MCP server registered user-wide: new conversations in Claude Code and Codex have the dsh_* tools.')
 
-  const hostDir = path.join(ROOT, 'host')
-  const source = installedPluginSource()
-  const fromHere = source === `link:${hostDir}` || source === `link:${hostDir.split(path.sep).join('/')}`
+  const hostDir = path.join(root, 'host')
+  const { current: source, old } = installedPlugins()
+  const fromHere = pluginFrom(source, hostDir)
   const running = await hostAvailable()
-  if (running && (fromHere || !source)) {
+  if (running && !old && (fromHere || !source)) {
     lines.push('', 'Harness plugin: running.')
   } else {
     const copied = copyToClipboard(hostDir)
     lines.push('', 'Last step, in DeepSeek Harness:')
-    if (source && !fromHere) lines.push(`  The plugin installed now comes from another folder (${source}): first Plugins (插件) → dsh-bridge-host → Uninstall (卸载).`)
+    // The plugin was renamed: Harness cannot load the old entry once its folder holds the new name.
+    if (old) lines.push('  The plugin is installed under its old name: first Plugins (插件) → dsh-bridge-host → Uninstall (卸载).')
+    if (source && !fromHere) lines.push(`  The plugin installed now comes from another folder (${source}): first Plugins (插件) → dsh-baton-host → Uninstall (卸载).`)
     lines.push(
       `  Plugins (插件) → Add plugin (添加插件) → paste ${copied ? 'the path (already copied)' : 'this path'}: ${hostDir}`,
       '  → Install (安装) → Enable now (立即启用)')

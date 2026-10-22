@@ -1,15 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-labelledby="title desc">
-  <title id="title">Set up dsh-bridge in three steps</title>
-  <desc id="desc">Step 1: clone the repo and run node dsh-bridge/src/cli.mjs setup, which registers Claude Code and Codex and copies the plugin path. Step 2: in Harness open Plugins, Add plugin, paste, Install, Enable now. Step 3: in a new chat, ask for dsh_list_workspaces; it lists your Harness workspaces.</desc>
+  <title id="title">Set up dsh-baton in three steps</title>
+  <desc id="desc">Step 1: run npx -y dsh-baton-mcp setup, which registers Claude Code and Codex and copies the plugin path. Step 2: in Harness open Plugins, Add plugin, paste, Install, Enable now. Step 3: in a new chat, ask for dsh_list_workspaces; it lists your Harness workspaces.</desc>
   <rect width="1200" height="380" rx="24" fill="#FFFFFF"/>
 <text x="64" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="18" fill="#5B6577" letter-spacing="2">三步装好</text>
 <rect x="64" y="104" width="341" height="236" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <text x="88" y="162" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#2563EB" font-weight="700">1</text>
 <text x="130" y="156" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="23" fill="#0F172A" font-weight="700">运行 setup</text>
 <rect x="84" y="182" width="301" height="32" rx="8" fill="#FFFFFF" stroke="#E2E7EF" stroke-width="1"/>
-<text x="94" y="203" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="15" fill="#2563EB">git clone …/dsh-bridge.git</text>
+<text x="94" y="203" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="15" fill="#2563EB">npx -y dsh-baton-mcp setup</text>
 <rect x="84" y="222" width="301" height="32" rx="8" fill="#FFFFFF" stroke="#E2E7EF" stroke-width="1"/>
-<text x="94" y="243" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="15" fill="#2563EB">node dsh-bridge/src/cli.mjs setup</text>
+<text x="94" y="243" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="15" fill="#5B6577"># 不用克隆，不用 npm install</text>
 <text x="88" y="284" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">给 Claude Code 和 Codex 注册，</text>
 <text x="88" y="312" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">并复制插件路径。</text>
 <path d="M409 222.0 h16" stroke="#5B6577" stroke-width="2"/>

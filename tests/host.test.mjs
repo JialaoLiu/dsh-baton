@@ -1,4 +1,4 @@
-// Simulation tests for the dsh-bridge-host plugin: a fake Harness host context
+// Simulation tests for the dsh-baton-host plugin: a fake Harness host context
 // drives the plugin through the same events Harness emits, and the tests talk
 // to it over its real local socket. No Harness installation is needed.
 import { test } from 'node:test'
@@ -14,8 +14,8 @@ const IS_WIN = process.platform === 'win32'
 
 function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-'))
-  // Run records go to the bridge home: keep them out of the real ~/.dsh-bridge.
-  process.env.DSH_BRIDGE_HOME = home ?? path.join(dir, 'bridge')
+  // Run records go to the bridge home: keep them out of the real ~/.dsh-baton.
+  process.env.DSH_BATON_HOME = home ?? path.join(dir, 'bridge')
   const sock = sockPath ?? path.join(dir, 'h.sock')
   const endpoint = socketEndpoint(sock) // where the host listens: the path itself, or a named pipe on Windows
   const logs = []
@@ -49,7 +49,7 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
       rename: async (r) => { calls.rename.push(r); return { title: r.title } },
     },
   }
-  process.env.DSH_BRIDGE_SOCKET = sock
+  process.env.DSH_BATON_SOCKET = sock
   apply(ctx)
   const emit = (ev, ...args) => (handlers[ev] ?? []).forEach((fn) => fn(...args))
   const call = (method, params = {}) => new Promise((resolve, reject) => {
@@ -84,7 +84,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 test('ping reports the plugin version', async (t) => {
   const h = startHost(); t.after(h.close); await h.ready
   const r = await h.call('ping')
-  assert.equal(r.name, 'dsh-bridge-host')
+  assert.equal(r.name, 'dsh-baton-host')
   assert.match(r.version, /^\d+\.\d+\.\d+$/)
 })
 
@@ -251,7 +251,7 @@ test('a second host does not take over a live socket', async (t) => {
   const a = startHost(); t.after(a.close); await a.ready
   const b = startHost({ sock: a.sock }); t.after(b.close); await b.ready
   assert.match(b.logs.join('\n'), /already serves/)
-  assert.equal((await a.call('ping')).name, 'dsh-bridge-host')
+  assert.equal((await a.call('ping')).name, 'dsh-baton-host')
 })
 
 test('inherited object keys are not callable methods', async (t) => {
@@ -393,7 +393,7 @@ test('a sender is carried in the request id and reported on the run', async (t) 
   const s = S('s1')
   const run = await h.call('send', { session_id: 's1', message: 'go', sender: 'claude' })
   assert.equal(run.sender, 'claude')
-  assert.match(h.calls.prompt[0].requestId, /^dsh-bridge\.claude\.[0-9a-f-]{36}$/)
+  assert.match(h.calls.prompt[0].requestId, /^dsh-baton\.claude\.[0-9a-f-]{36}$/)
   h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.emit(...s.status('running'))
   h.emit(...s.text('done')); h.emit(...s.turnEnd()); h.emit(...s.status('idle'))
   const w = await h.call('wait', { run_id: run.run_id, timeout_s: 5 })

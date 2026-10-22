@@ -5,7 +5,7 @@ import path from 'node:path'
 import * as core from './core.mjs'
 import { stableNodePath } from './setup.mjs'
 
-const SERVER = { name: 'dsh-bridge', version: '0.2.0' }
+const SERVER = { name: 'dsh-baton', version: '0.3.0' }
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
 
 const str = (description) => ({ type: 'string', description })
@@ -13,11 +13,11 @@ const int = (description, d) => ({ type: 'integer', description, default: d })
 
 // How long one dsh_wait call waits, chosen by the server so it always ends before the
 // client gives up on the tool call: Codex stops a call after 300 s, so it gets 270 s;
-// other clients get 50 s (Claude Code waits with wait_command instead). DSH_BRIDGE_WAIT_S
+// other clients get 50 s (Claude Code waits with wait_command instead). DSH_BATON_WAIT_S
 // overrides it for a client whose timeout was raised. A timeout_s from the model is
 // ignored, so a model cannot pick a short wait and poll.
 const MAX_WAIT_S = 24 * 3600
-const envWait = Math.floor(Number(process.env.DSH_BRIDGE_WAIT_S))
+const envWait = Math.floor(Number(core.setting('WAIT_S')))
 const isCodex = () => core.senderOf(clientName) === 'codex'
 const waitSeconds = () => {
   if (envWait >= 1) return Math.min(envWait, MAX_WAIT_S)
@@ -71,13 +71,13 @@ async function waitInChunks({ run_id }, progress) {
 const TOOLS = [
   {
     name: 'dsh_list_workspaces',
-    description: 'List the workspaces (project folders) shown in the DeepSeek Harness sidebar. Needs the dsh-bridge-host plugin.',
+    description: 'List the workspaces (project folders) shown in the DeepSeek Harness sidebar. Needs the dsh-baton-host plugin.',
     inputSchema: { type: 'object', properties: {} },
     run: () => core.api.workspaces(),
   },
   {
     name: 'dsh_create_workspace',
-    description: 'Register a folder as a workspace in the DeepSeek Harness sidebar (creates the folder unless create_dir is false). Idempotent: an already registered folder returns its existing workspace. Needs the dsh-bridge-host plugin.',
+    description: 'Register a folder as a workspace in the DeepSeek Harness sidebar (creates the folder unless create_dir is false). Idempotent: an already registered folder returns its existing workspace. Needs the dsh-baton-host plugin.',
     inputSchema: { type: 'object', required: ['path'], properties: { path: str('Absolute folder path (~ allowed)'), title: str('Sidebar title; defaults to the folder name'), create_dir: { type: 'boolean', description: 'Create the folder if missing', default: true } } },
     run: (a) => core.api.create_workspace(a),
   },
@@ -98,7 +98,7 @@ const TOOLS = [
     description: 'Send a message to DeepSeek Harness. With session_id it continues that existing session (same context, no new session); with cwd or workspace_id it starts a new session there (a cwd that is not a workspace yet is registered in the sidebar first). Returns immediately with a run_id; the turn runs in the background. If the session is already working, mode followup (default) queues the message after the current turn and steer adds it to the running turn; each message gets its own run_id. The message is delivered verbatim as a user message, with no prefix or label added: write it in the language the user works in, self-contained (Harness does not see this conversation), and say who is asking only if it matters. Then wait for the reply with dsh_wait (or the wait_command it returns, where offered).',
     inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: 'followup queues after the current turn (default); steer injects into a running turn', default: 'followup' } } },
     run: async (a) => {
-      const st = await core.api.send({ ...a, sender: core.senderOf(process.env.DSH_BRIDGE_SENDER || clientName) })
+      const st = await core.api.send({ ...a, sender: core.senderOf(core.setting('SENDER') || clientName) })
       // Codex has no wake-on-exit for shell commands: offered wait_command, it runs it in a
       // terminal and polls that, so it gets dsh_wait only.
       if (isCodex()) return { ...st, hint: `Run started. Call dsh_wait with this run_id; it returns when the run ends. ${NO_POLL} ${codeModeYield()}` }
@@ -135,19 +135,19 @@ const TOOLS = [
   },
   {
     name: 'dsh_session_activity',
-    description: 'What a session is doing right now: its running turn, sub-agents (any depth), background jobs and reminders, plus bridge runs. Check this before sending to a session that might be busy.',
+    description: 'What a session is doing right now: its running turn, sub-agents (any depth), background jobs and reminders, plus runs handed over through dsh-baton. Check this before sending to a session that might be busy.',
     inputSchema: { type: 'object', required: ['session_id'], properties: { session_id: str('Session id') } },
     run: (a) => core.api.activity(a),
   },
   {
     name: 'dsh_cancel',
     description: 'Stop everything a session is doing (running turn, sub-agents, background jobs), by run_id or session_id. Messages still waiting in the queue are not removed.',
-    inputSchema: { type: 'object', properties: { run_id: str('Run id'), session_id: str('Session id (to stop work the bridge did not start)') } },
+    inputSchema: { type: 'object', properties: { run_id: str('Run id'), session_id: str('Session id (to stop work dsh-baton did not start)') } },
     run: (a) => core.api.cancel(a),
   },
   {
     name: 'dsh_list_runs',
-    description: 'List recent runs started through this bridge, newest first.',
+    description: 'List recent runs handed over through dsh-baton, newest first.',
     inputSchema: { type: 'object', properties: { limit: int('Max runs', 10) } },
     run: (a) => core.api.list_runs(a),
   },
@@ -168,7 +168,7 @@ async function handle(req) {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: {} },
         serverInfo: SERVER,
-        instructions: `Bridge to a local DeepSeek Harness. Find a session with dsh_list_sessions, continue it with dsh_send {session_id, message}, then wait for the reply: ${isCodex() ? 'call dsh_wait with the run_id until it returns the final state (not dsh_status)' : 'run the wait_command it returns as a background shell command if your client wakes you when one exits, otherwise call dsh_wait'}. A run in state "waiting" needs a person to answer in the Harness UI. ${ARCHIVED}`,
+        instructions: `Hands tasks to a local DeepSeek Harness and passes the results back. Find a session with dsh_list_sessions, continue it with dsh_send {session_id, message}, then wait for the reply: ${isCodex() ? 'call dsh_wait with the run_id until it returns the final state (not dsh_status)' : 'run the wait_command it returns as a background shell command if your client wakes you when one exits, otherwise call dsh_wait'}. A run in state "waiting" needs a person to answer in the Harness UI. ${ARCHIVED}`,
       }
     }
     case 'ping':

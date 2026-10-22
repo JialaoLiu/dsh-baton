@@ -10,9 +10,9 @@ import zlib from 'node:zlib'
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-core-'))
 process.env.DSH_HOME = path.join(home, 'dsh')
-process.env.DSH_BRIDGE_SOCKET = path.join(home, 's.sock')
-process.env.DSH_BRIDGE_HOME = path.join(home, 'bridge')
-process.env.DSH_BRIDGE_ACCOUNT = '0'
+process.env.DSH_BATON_SOCKET = path.join(home, 's.sock')
+process.env.DSH_BATON_HOME = path.join(home, 'bridge')
+process.env.DSH_BATON_ACCOUNT = '0'
 // A fake `dsh` that announces a session, then works for a while.
 const fakeScript = path.join(home, 'fake-dsh')
 fs.writeFileSync(fakeScript, `#!${process.execPath}
@@ -33,8 +33,8 @@ test.after(() => fs.rmSync(home, { recursive: true, force: true }))
 // last connection handle is gone, so reusing one name races the previous test.
 let servers = 0
 function fakeServer(onLine) {
-  process.env.DSH_BRIDGE_SOCKET = path.join(home, `s${++servers}.sock`)
-  fs.rmSync(process.env.DSH_BRIDGE_SOCKET, { force: true })
+  process.env.DSH_BATON_SOCKET = path.join(home, `s${++servers}.sock`)
+  fs.rmSync(process.env.DSH_BATON_SOCKET, { force: true })
   const server = net.createServer((c) => c.on('data', () => onLine(c)))
   return new Promise((r) => server.listen(core.hostSocket(), () => r(server)))
 }
@@ -99,14 +99,14 @@ test('headless: a cancel before the child starts stops the run and records cance
   core.cancelRun(runId)
   const st = await core.waitRun(runId, { timeout_s: 15, poll_ms: 100 })
   assert.equal(st.state, 'cancelled')
-  const exit = JSON.parse(fs.readFileSync(path.join(process.env.DSH_BRIDGE_HOME, 'runs', runId, 'exit.json'), 'utf8'))
+  const exit = JSON.parse(fs.readFileSync(path.join(process.env.DSH_BATON_HOME, 'runs', runId, 'exit.json'), 'utf8'))
   assert.equal(exit.state, 'cancelled')
 })
 
 test('headless: cancelling a running child keeps the runner to record cancelled', async () => {
   const cwd = fs.mkdtempSync(path.join(home, 'w-'))
   const runId = core.startRun({ cwd, message: 'x' })
-  const dir = path.join(process.env.DSH_BRIDGE_HOME, 'runs', runId)
+  const dir = path.join(process.env.DSH_BATON_HOME, 'runs', runId)
   assert.ok(await waitFor(() => fs.existsSync(path.join(dir, 'pid.json'))), 'runner never started')
   core.cancelRun(runId)
   const st = await core.waitRun(runId, { timeout_s: 15, poll_ms: 100 })
@@ -129,10 +129,10 @@ test('headless: a dsh that cannot start fails the run with a reason', async () =
 test('headless: run records are private to the user', { skip: IS_WIN && 'POSIX file modes' }, async () => {
   const cwd = fs.mkdtempSync(path.join(home, 'w-'))
   const runId = core.startRun({ cwd, message: 'secret task' })
-  const dir = path.join(process.env.DSH_BRIDGE_HOME, 'runs', runId)
+  const dir = path.join(process.env.DSH_BATON_HOME, 'runs', runId)
   const mode = (p) => fs.statSync(p).mode & 0o777
-  assert.equal(mode(process.env.DSH_BRIDGE_HOME), 0o700)
-  assert.equal(mode(path.join(process.env.DSH_BRIDGE_HOME, 'runs')), 0o700)
+  assert.equal(mode(process.env.DSH_BATON_HOME), 0o700)
+  assert.equal(mode(path.join(process.env.DSH_BATON_HOME, 'runs')), 0o700)
   assert.equal(mode(dir), 0o700)
   assert.equal(mode(path.join(dir, 'message.txt')), 0o600)
   assert.equal(mode(path.join(dir, 'meta.json')), 0o600)

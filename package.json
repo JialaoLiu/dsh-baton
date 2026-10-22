@@ -1,17 +1,23 @@
 {
-  "name": "dsh-bridge-mcp",
-  "version": "0.2.0",
-  "description": "MCP server that lets Claude Code, Codex and other MCP clients hand tasks to a local DeepSeek Harness: create workspaces and sessions, continue a specific session, and wait for results.",
+  "name": "dsh-baton-mcp",
+  "version": "0.3.0",
+  "description": "Pass the baton from Claude Code, Codex or any MCP client to a local DeepSeek Harness: an MCP server that hands off tasks, continues a specific session, shows the run live in Harness and hands the result back when it is done.",
   "type": "module",
   "bin": {
-    "dsh-bridge": "src/cli.mjs",
-    "dsh-bridge-mcp": "src/server.mjs"
+    "dsh-baton": "src/cli.mjs",
+    "dsh-baton-mcp": "src/bin.mjs"
   },
   "files": [
     "src",
+    "host/lib",
+    "host/package.json",
+    "host/cordis.patch.yml",
+    "host/README.md",
+    "host/LICENSE",
     "patches",
     "README.md",
     "README.zh-CN.md",
+    "WINDOWS.md",
     "LICENSE"
   ],
   "engines": {
@@ -33,10 +39,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/JialaoLiu/dsh-bridge.git"
+    "url": "git+https://github.com/JialaoLiu/dsh-baton.git"
   },
-  "homepage": "https://github.com/JialaoLiu/dsh-bridge#readme",
+  "homepage": "https://github.com/JialaoLiu/dsh-baton#readme",
   "bugs": {
-    "url": "https://github.com/JialaoLiu/dsh-bridge/issues"
+    "url": "https://github.com/JialaoLiu/dsh-baton/issues"
   }
 }

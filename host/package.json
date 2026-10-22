@@ -1,7 +1,7 @@
 {
-  "name": "dsh-bridge-host",
-  "version": "0.2.0",
-  "description": "DeepSeek Harness plugin that serves a local, owner-only control socket so dsh-bridge (an MCP server) can list sessions, continue a specific session, and wait for its turn to finish, all through the host's own session controller.",
+  "name": "dsh-baton-host",
+  "version": "0.3.0",
+  "description": "DeepSeek Harness plugin for dsh-baton: takes the baton from Claude Code or Codex over a local, owner-only control socket, runs it in a specific session through the host's own session controller, and hands the result back when the turn is done.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -42,15 +42,16 @@
     "dsh",
     "dsh-plugin",
     "mcp",
-    "bridge"
+    "relay",
+    "baton"
   ],
   "engines": {
     "node": ">=22.15"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/JialaoLiu/dsh-bridge.git",
+    "url": "git+https://github.com/JialaoLiu/dsh-baton.git",
     "directory": "host"
   },
-  "homepage": "https://github.com/JialaoLiu/dsh-bridge#readme"
+  "homepage": "https://github.com/JialaoLiu/dsh-baton#readme"
 }

@@ -1,4 +1,4 @@
-// dsh-bridge-host: a DeepSeek Harness plugin that runs inside the Harness host
+// dsh-baton-host: a DeepSeek Harness plugin that runs inside the Harness host
 // (desktop app or `dsh web`) and serves a local control socket, so an outside
 // orchestrator can list sessions, continue a specific session, and learn when
 // its turn finishes. Everything goes through the host's own session controller,
@@ -10,12 +10,12 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { socketEndpoint } from './socket.js'
+import { socketEndpoint, batonHome, socketPath as socketPathSetting } from './socket.js'
 
-export const name = 'dsh-bridge-host'
+export const name = 'dsh-baton-host'
 export const inject = ['sessionController', 'workspaceRegistry']
 
-const VERSION = '0.2.0'
+const VERSION = '0.3.0'
 const MAX_EVENTS = 200
 const MAX_RUNS = 100
 const QUIET_CONFIRM_MS = 2000
@@ -26,20 +26,17 @@ const MAX_REQUEST_BYTES = 4 * 1024 * 1024
 const MAX_WAIT_S = 24 * 3600
 const MAX_HUMAN_INPUTS = 10
 const PERSIST_DELAY_MS = 1000
-// A bridge prompt's request id carries its sender ("dsh-bridge.<sender>.<uuid>"), so the
+// A relayed prompt's request id carries its sender ("dsh-baton.<sender>.<uuid>"), so the
 // client half (lib/client.js) can label the message in the chat without any extra state.
 const SENDER_RE = /^[a-z0-9-]{1,32}$/
-const requestIdFor = (sender) => (sender ? `dsh-bridge.${sender}.${crypto.randomUUID()}` : crypto.randomUUID())
+const requestIdFor = (sender) => (sender ? `dsh-baton.${sender}.${crypto.randomUUID()}` : crypto.randomUUID())
 
-function bridgeHome() {
-  return process.env.DSH_BRIDGE_HOME || path.join(os.homedir(), '.dsh-bridge')
-}
 
 const IS_WIN = process.platform === 'win32'
 
 // A Unix socket file on macOS / Linux, a per-user named pipe on Windows (see socket.js).
 function socketPath() {
-  return socketEndpoint(process.env.DSH_BRIDGE_SOCKET || path.join(bridgeHome(), 'host.sock'))
+  return socketEndpoint(socketPathSetting())
 }
 
 const probe = (sock) => new Promise((resolve) => {
@@ -62,18 +59,18 @@ async function claimSocket(sock) {
   // A named pipe has no file to own, chmod or clean up; it disappears with its
   // server. Only refuse to start when another host already answers on it.
   if (IS_WIN) {
-    if (await probe(sock)) throw new Error(`another dsh-bridge-host already serves ${sock}; set DSH_BRIDGE_SOCKET for a second host`)
+    if (await probe(sock)) throw new Error(`another dsh-baton-host already serves ${sock}; set DSH_BATON_SOCKET for a second host`)
     return
   }
   const dir = path.dirname(sock)
-  const ours = dir === bridgeHome() || !fs.existsSync(dir)
+  const ours = dir === batonHome() || !fs.existsSync(dir)
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
   if (ours) fs.chmodSync(dir, 0o700)
   let st
   try { st = fs.lstatSync(sock) } catch { return }
-  if (!st.isSocket()) throw new Error(`${sock} exists and is not a socket; point DSH_BRIDGE_SOCKET somewhere else`)
+  if (!st.isSocket()) throw new Error(`${sock} exists and is not a socket; point DSH_BATON_SOCKET somewhere else`)
   const live = await probe(sock)
-  if (live) throw new Error(`another dsh-bridge-host already serves ${sock}; set DSH_BRIDGE_SOCKET for a second host`)
+  if (live) throw new Error(`another dsh-baton-host already serves ${sock}; set DSH_BATON_SOCKET for a second host`)
   fs.unlinkSync(sock)
 }
 
@@ -100,7 +97,7 @@ export function apply(ctx) {
     }
   }
   const logError = (label, error) => {
-    try { ctx.logger?.error?.(`dsh-bridge-host ${label}: ${error?.stack ?? error}`) } catch { /* logging must never throw */ }
+    try { ctx.logger?.error?.(`dsh-baton-host ${label}: ${error?.stack ?? error}`) } catch { /* logging must never throw */ }
   }
 
   const controller = ctx.sessionController
@@ -142,7 +139,7 @@ export function apply(ctx) {
     activityErrors.delete(sessionId)
   }
 
-  // Active bridge runs of one session, oldest first. Several can be active at
+  // Active relayed runs of one session, oldest first. Several can be active at
   // once: a followup waits in Harness's queue behind the current turn, and a
   // steer joins the turn that is already running.
   const activeRunsFor = (sessionId) => [...runs.values()].filter((r) => r.sessionId === sessionId && isActive(r))
@@ -160,11 +157,11 @@ export function apply(ctx) {
   }
 
   // --- persistence: run records survive a Harness restart -----------------------
-  // One JSON file per run under <bridge home>/host-runs, written at most once a
+  // One JSON file per run under <baton home>/host-runs, written at most once a
   // second per change burst. Enabled only once this host owns the socket, so a
   // second host never overwrites the first one's records.
 
-  const store = { dir: path.join(bridgeHome(), 'host-runs'), enabled: false, dirty: new Set(), timer: null }
+  const store = { dir: path.join(batonHome(), 'host-runs'), enabled: false, dirty: new Set(), timer: null }
   const RUN_FILE = /^(hrun-[\w-]+)\.json$/
 
   function persist(run) {
@@ -237,7 +234,7 @@ export function apply(ctx) {
     if (event.type === 'user/message') {
       const run = active.find((r) => r.requestId === data.source?.rpcId)
       const opensTurn = !turns.get(session.id)?.hasOutput
-      // A user message no bridge run sent: someone typing in the Harness UI (or
+      // A user message no relayed run sent: someone typing in the Harness UI (or
       // another client). Mid-turn it joins the work of the runs in progress, so
       // they record it: their result then reflects that input too.
       const fromBridge = run || [...runs.values()].some((r) => r.requestId === data.source?.rpcId)
@@ -252,7 +249,7 @@ export function apply(ctx) {
         // A new user-started turn: runs whose own turn already ended keep their
         // result instead of absorbing this turn's output, but still wait for any
         // sub-agents or jobs they started. Turns woken by sub-agent results carry
-        // no user message, and a bridge steer joins the current work, so neither
+        // no user message, and a relayed steer joins the current work, so neither
         // closes earlier runs.
         let closed = false
         for (const prev of active) {
@@ -361,7 +358,7 @@ export function apply(ctx) {
     if (receiversFor(sessionId).length) scheduleQuietCheck(sessionId, 3000)
   }
 
-  ctx.effect(() => () => { for (const t of quietTimers.values()) clearTimeout(t) }, 'dsh-bridge-host quiet timers')
+  ctx.effect(() => () => { for (const t of quietTimers.values()) clearTimeout(t) }, 'dsh-baton-host quiet timers')
 
   ctx.on('agent/status', guard('agent/status', ({ agent, status }) => {
     if (!agent) return
@@ -641,12 +638,12 @@ export function apply(ctx) {
       if (disposed) return
       try { enableStore() } catch (error) { logError('run store', error) }
       server = net.createServer(serve)
-      server.on('error', (error) => ctx.logger?.error?.(`dsh-bridge-host socket error: ${error.message}`))
+      server.on('error', (error) => ctx.logger?.error?.(`dsh-baton-host socket error: ${error.message}`))
       server.listen(sock, () => {
         if (!IS_WIN) try { fs.chmodSync(sock, 0o600) } catch { /* best effort */ }
-        ctx.logger?.info?.(`dsh-bridge-host listening on ${sock}`)
+        ctx.logger?.info?.(`dsh-baton-host listening on ${sock}`)
       })
-    }).catch((error) => ctx.logger?.error?.(`dsh-bridge-host not started: ${error.message}`))
+    }).catch((error) => ctx.logger?.error?.(`dsh-baton-host not started: ${error.message}`))
     return () => {
       disposed = true
       if (store.enabled) { try { flushRuns() } catch (error) { logError('persist runs', error) } }
@@ -660,5 +657,5 @@ export function apply(ctx) {
       server.close()
       if (!IS_WIN) try { if (fs.lstatSync(sock).isSocket()) fs.unlinkSync(sock) } catch { /* gone */ }
     }
-  }, 'dsh-bridge-host socket')
+  }, 'dsh-baton-host socket')
 }

@@ -1,4 +1,4 @@
-# dsh-bridge demos
+# dsh-baton demos
 
 English | [中文](demos.zh-CN.md) · [Back to README](../README.md)
 

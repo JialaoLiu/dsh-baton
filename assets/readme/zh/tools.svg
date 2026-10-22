@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="548" viewBox="0 0 1200 548" role="img" aria-labelledby="title desc">
-  <title id="title">dsh-bridge MCP tools</title>
+  <title id="title">dsh-baton MCP tools</title>
   <desc id="desc">Workspaces: list, create, rename. Sessions: list, read, activity, rename. Runs: send, status, wait, cancel, list runs.</desc>
   <rect width="1200" height="548" rx="24" fill="#FFFFFF"/>
 <text x="64" y="76" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="30" fill="#0F172A" font-weight="700">12 个工具，管三件事</text>

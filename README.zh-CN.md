@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/zh/hero.gif" width="100%" alt="dsh-bridge：让 Claude Code 或 Codex 把任务派给 DeepSeek Harness，界面实时可见，做完那一刻就把你叫醒">
+  <img src="./assets/readme/zh/hero.gif" width="100%" alt="dsh-baton：让 Claude Code 或 Codex 把接力棒交给 DeepSeek Harness，界面实时可见，跑完那一刻就交回给你">
 </p>
 
 <p align="center">
@@ -37,21 +37,18 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 ## 快速上手
 
 <p align="center">
-  <img src="./assets/readme/zh/install.svg" width="100%" alt="第一步：克隆仓库并运行 node dsh-bridge/src/cli.mjs setup。第二步：Harness → 插件 → 添加插件 → 粘贴 → 安装 → 立即启用。第三步：新开对话，让它调用 dsh_list_workspaces">
+  <img src="./assets/readme/zh/install.svg" width="100%" alt="第一步：运行 npx -y dsh-baton-mcp setup。第二步：Harness → 插件 → 添加插件 → 粘贴 → 安装 → 立即启用。第三步：新开对话，让它调用 dsh_list_workspaces">
 </p>
 
-需要：DeepSeek Harness ≥ 0.2.1-rc.2 并已登录；Node.js ≥ 22.15；git。Windows 见 [WINDOWS.md](WINDOWS.md)。
-
-> npm 包 `dsh-bridge-host` 和 `dsh-bridge-mcp` 还没发布，目前请按下面的方法从仓库源码安装。不需要 `npm install`：dsh-bridge 没有任何依赖。
+需要：DeepSeek Harness ≥ 0.2.1-rc.2 并已登录；Node.js ≥ 22.15。Windows 见 [WINDOWS.md](WINDOWS.md)。
 
 **1. 运行 setup**，在终端里：
 
 ```bash
-git clone https://github.com/JialaoLiu/dsh-bridge.git
-node dsh-bridge/src/cli.mjs setup
+npx -y dsh-baton-mcp setup
 ```
 
-`setup` 会在用户级别给 Claude Code 和 Codex 注册一次 MCP 服务器：之后在任何文件夹新开的对话都有 `dsh_*` 工具。它直接写 `~/.claude.json` 和 `~/.codex/config.toml`（各留一份 `*.bak-dsh-bridge` 备份），所以只装了桌面应用、`claude` / `codex` 不在 `PATH` 里也能用。重复运行也没问题。
+dsh-baton 没有任何依赖。`setup` 会把自己复制到 `~/.dsh-baton/app` 这个固定的文件夹（npx 的缓存目录会变），然后在用户级别给 Claude Code 和 Codex 注册一次 MCP 服务器：之后在任何文件夹新开的对话都有 `dsh_*` 工具。它直接写 `~/.claude.json` 和 `~/.codex/config.toml`（各留一份 `*.bak-dsh-baton` 备份），所以只装了桌面应用、`claude` / `codex` 不在 `PATH` 里也能用。重复运行也没问题。
 
 **2. 在 Harness 里粘贴。**`setup` 已经把插件文件夹路径复制到剪贴板：
 
@@ -59,16 +56,20 @@ node dsh-bridge/src/cli.mjs setup
 
 **3. 检查。**在 Claude Code 或 Codex 里**新开**一个对话，让它调用 `dsh_list_workspaces`，应该会列出你的 Harness 工作区。
 
-**也可以让 Claude Code 或 Codex 帮你装：** 发给它 *"运行 `git clone https://github.com/JialaoLiu/dsh-bridge.git ~/dsh-bridge && node ~/dsh-bridge/src/cli.mjs setup`，然后告诉我它提示的 Harness 那一步。"*
+**也可以让 Claude Code 或 Codex 帮你装：** 发给它 *"运行 `npx -y dsh-baton-mcp setup`，然后告诉我它提示的 Harness 那一步。"*
 
 **各客户端怎么等待**（不需要配置）：
 - **Claude Code** 在后台等待任务（`dsh_send` 返回的 `wait_command`），任务结束时只被唤醒一次。
 - **Codex** 在 `dsh_wait` 里等待，每次最多 270 秒，刚好低于它 300 秒的工具超时。没做完时只返回状态，Codex 会直接再调用，不会去总结进度。Codex 不会收到 `wait_command`：它的终端无法在命令结束时唤醒它，只能轮询。
-- Codex 调用 MCP 工具时会请你批准，批准 `dsh-bridge` 的工具即可；无人值守的 `codex exec` 加上 `--approve-for-me`。
+- Codex 调用 MCP 工具时会请你批准，批准 `dsh-baton` 的工具即可；无人值守的 `codex exec` 加上 `--approve-for-me`。
 
-**更新：** 在克隆目录里 `git pull`，然后重启 Harness 以加载插件改动；新开的对话会用上 MCP 服务器的改动。
+**更新：** 再运行一次 `npx -y dsh-baton-mcp@latest setup`，然后重启 Harness 以加载插件改动；新开的对话会用上 MCP 服务器的改动。
 
-**卸载：** `node dsh-bridge/src/cli.mjs setup --remove`，再到 Harness → 插件 → dsh-bridge-host → 卸载。
+**卸载：** `npx -y dsh-baton-mcp setup --remove`，再到 Harness → 插件 → dsh-baton-host → 卸载，最后再运行一次 `setup --remove` 删除 `~/.dsh-baton/app`。
+
+**从 dsh-bridge（旧名）升级：**照上面运行 `setup`。它会替换掉旧的 `dsh-bridge` MCP 注册；在 Harness 里先卸载 `dsh-bridge-host`，再添加新路径。`DSH_BRIDGE_*` 环境变量和已有的 `~/.dsh-bridge` 文件夹暂时继续可用。工具前缀变成 `mcp__dsh-baton__…`，权限白名单里写了旧前缀的要改一下。
+
+**从源码安装**（想跟进 `main` 或改代码）：`git clone https://github.com/JialaoLiu/dsh-baton.git`，再运行 `node dsh-baton/src/cli.mjs setup`。这时 setup 注册的就是克隆目录本身，更新用 `git pull`。
 
 <details>
 <summary>手动注册与 Claude 桌面应用</summary>
@@ -76,8 +77,8 @@ node dsh-bridge/src/cli.mjs setup
 `setup` 写入的内容和下面两条命令等价（用 `node` 的绝对路径，因为桌面应用启动 MCP 服务器时没有你 shell 的 `PATH`）：
 
 ```bash
-claude mcp add dsh-bridge -s user -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs"
-codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs"
+claude mcp add dsh-baton -s user -- "$(command -v node)" "$PWD/dsh-baton/src/server.mjs"
+codex mcp add dsh-baton -- "$(command -v node)" "$PWD/dsh-baton/src/server.mjs"
 ```
 
 `-s user` 很关键：不加的话，Claude Code 只给当前项目文件夹注册。
@@ -85,7 +86,7 @@ codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs
 **Claude 桌面应用（可选）**：聊天应用的连接器（和 Claude Code 是两回事），把下面这段加到 `~/Library/Application Support/Claude/claude_desktop_config.json`，然后重启应用，会显示为 "Local dev" 连接器。
 
 ```json
-{ "mcpServers": { "dsh-bridge": { "command": "/node 的绝对路径", "args": ["/dsh-bridge 的绝对路径/src/server.mjs"] } } }
+{ "mcpServers": { "dsh-baton": { "command": "/node 的绝对路径", "args": ["/dsh-baton 的绝对路径/src/server.mjs"] } } }
 ```
 
 </details>
@@ -93,7 +94,7 @@ codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs
 ## 工作原理
 
 <p align="center">
-  <img src="./assets/readme/zh/architecture.svg" width="100%" alt="MCP 客户端通过 stdio 调用 dsh-bridge-mcp，再经仅当前用户可访问的本地套接字连到 Harness 里的 dsh-bridge-host 插件，插件驱动 Harness 的对话并实时显示；插件不可用时退回 dsh headless">
+  <img src="./assets/readme/zh/architecture.svg" width="100%" alt="MCP 客户端通过 stdio 调用 dsh-baton-mcp，再经仅当前用户可访问的本地套接字连到 Harness 里的 dsh-baton-host 插件，插件驱动 Harness 的对话并实时显示；插件不可用时退回 dsh headless">
 </p>
 
 <p align="center">
@@ -133,18 +134,18 @@ codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs
 ## 命令行
 
 ```bash
-dsh-bridge workspaces
-dsh-bridge new-workspace ~/code/new-app --title "New App"
-dsh-bridge sessions --cwd ~/code/new-app
-dsh-bridge send --cwd ~/code/new-app "搭项目骨架"
-dsh-bridge send --session session-xxxx "继续：补上测试"
-dsh-bridge send --session session-xxxx --mode steer "插话：先别改 API"
-dsh-bridge wait hrun-xxxx              # 阻塞到结束，打印最终回复；成功退出码 0
-dsh-bridge status hrun-xxxx
-dsh-bridge activity session-xxxx       # 正在跑的回合、子智能体、后台任务
-dsh-bridge cancel --session session-xxxx
-dsh-bridge rename session-xxxx 新标题
-dsh-bridge rename-workspace ~/code/new-app 新名字
+dsh-baton workspaces
+dsh-baton new-workspace ~/code/new-app --title "New App"
+dsh-baton sessions --cwd ~/code/new-app
+dsh-baton send --cwd ~/code/new-app "搭项目骨架"
+dsh-baton send --session session-xxxx "继续：补上测试"
+dsh-baton send --session session-xxxx --mode steer "插话：先别改 API"
+dsh-baton wait hrun-xxxx              # 阻塞到结束，打印最终回复；成功退出码 0
+dsh-baton status hrun-xxxx
+dsh-baton activity session-xxxx       # 正在跑的回合、子智能体、后台任务
+dsh-baton cancel --session session-xxxx
+dsh-baton rename session-xxxx 新标题
+dsh-baton rename-workspace ~/code/new-app 新名字
 ```
 
 （从源码运行时用 `node src/cli.mjs …`。）
@@ -153,14 +154,14 @@ dsh-bridge rename-workspace ~/code/new-app 新名字
 
 | 变量 | 默认值 | 作用 |
 |---|---|---|
-| `DSH_BRIDGE_BACKEND` | `auto` | `auto`、`host` 或 `headless` |
-| `DSH_BRIDGE_HOME` | `~/.dsh-bridge` | 套接字和 headless 运行记录的位置 |
-| `DSH_BRIDGE_SOCKET` | `$DSH_BRIDGE_HOME/host.sock` | 插件套接字路径（插件和 MCP 两边要一致）；Windows 上映射为按用户区分的命名管道，见 [WINDOWS.md](WINDOWS.md) |
-| `DSH_BRIDGE_WAIT_S` | Codex 为 `270`，其他为 `50` | 一次 `dsh_wait` 等多久；只有调大了客户端的工具超时才需要设，并且要小于那个超时 |
+| `DSH_BATON_BACKEND` | `auto` | `auto`、`host` 或 `headless` |
+| `DSH_BATON_HOME` | `~/.dsh-baton` | 套接字和 headless 运行记录的位置 |
+| `DSH_BATON_SOCKET` | `$DSH_BATON_HOME/host.sock` | 插件套接字路径（插件和 MCP 两边要一致）；Windows 上映射为按用户区分的命名管道，见 [WINDOWS.md](WINDOWS.md) |
+| `DSH_BATON_WAIT_S` | Codex 为 `270`，其他为 `50` | 一次 `dsh_wait` 等多久；只有调大了客户端的工具超时才需要设，并且要小于那个超时 |
 | `DSH_BIN` | macOS 应用内的 `dsh`，否则查 `PATH` | headless 模式用的 Harness 命令行 |
 | `DSH_HOME` | `~/.dsh` | Harness 数据目录（headless 模式读取对话用） |
-| `DSH_BRIDGE_ACCOUNT` | `1` | headless 模式下设为 `0` 则改用 API key 路线 |
-| `DSH_BRIDGE_PATCHES` | 空 | headless 模式额外的 `--patch` 覆盖文件，用 `:` 分隔 |
+| `DSH_BATON_ACCOUNT` | `1` | headless 模式下设为 `0` 则改用 API key 路线 |
+| `DSH_BATON_PATCHES` | 空 | headless 模式额外的 `--patch` 覆盖文件，用 `:` 分隔 |
 
 <details>
 <summary>headless 后备模式说明</summary>

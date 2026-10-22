@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="470" viewBox="0 0 1200 470" role="img" aria-labelledby="title desc">
-  <title id="title">dsh-bridge plugin compared with dsh headless</title>
+  <title id="title">dsh-baton plugin compared with dsh headless</title>
   <desc id="desc">With the plugin, runs show up live in the Harness UI, can continue sessions created in the desktop app, and use desktop agent presets. dsh headless does none of these. Both reuse the desktop sign-in; headless does it through the account patch.</desc>
   <rect width="1200" height="470" rx="24" fill="#FFFFFF"/>
 <rect x="590" y="40" width="220" height="400" rx="14" fill="#F4F6FA"/>
 <text x="64" y="76" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="30" fill="#0F172A" font-weight="700">Plugin vs headless</text>
-<text x="700" y="76" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#2563EB" font-weight="700" text-anchor="middle">dsh-bridge</text>
+<text x="700" y="76" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#2563EB" font-weight="700" text-anchor="middle">dsh-baton</text>
 <text x="940" y="76" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#5B6577" font-weight="700" text-anchor="middle">dsh headless</text>
 <line x1="64" y1="100" x2="1136" y2="100" stroke="#E2E7EF"/>
 <text x="64" y="158" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#0F172A">Shows up live in the Harness UI</text>

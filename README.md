@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.gif" width="100%" alt="dsh-bridge: hand a task from Claude Code or Codex to DeepSeek Harness, watch it run live, and get woken when it is done">
+  <img src="./assets/readme/hero.gif" width="100%" alt="dsh-baton: pass the baton from Claude Code or Codex to DeepSeek Harness, watch it run live, and get it handed back when it's done">
 </p>
 
 <p align="center">
@@ -37,21 +37,18 @@ Codex and Claude take turns in the same Harness session, and every message is la
 ## Quick start
 
 <p align="center">
-  <img src="./assets/readme/install.svg" width="100%" alt="Step 1: clone the repo and run node dsh-bridge/src/cli.mjs setup. Step 2: in Harness open Plugins, Add plugin, paste, Install, Enable now. Step 3: in a new chat, ask for dsh_list_workspaces">
+  <img src="./assets/readme/install.svg" width="100%" alt="Step 1: run npx -y dsh-baton-mcp setup. Step 2: in Harness open Plugins, Add plugin, paste, Install, Enable now. Step 3: in a new chat, ask for dsh_list_workspaces">
 </p>
 
-Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in), Node.js ≥ 22.15 and git. On Windows, see [WINDOWS.md](WINDOWS.md).
-
-> The npm packages `dsh-bridge-host` and `dsh-bridge-mcp` are not published yet, so install from a clone of this repo as below. There is nothing to `npm install`: dsh-bridge has no dependencies.
+Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in), Node.js ≥ 22.15. On Windows, see [WINDOWS.md](WINDOWS.md).
 
 **1. Run setup** in a terminal:
 
 ```bash
-git clone https://github.com/JialaoLiu/dsh-bridge.git
-node dsh-bridge/src/cli.mjs setup
+npx -y dsh-baton-mcp setup
 ```
 
-`setup` registers the MCP server once, user-wide, for Claude Code and Codex: every new conversation, in any folder, has the `dsh_*` tools. It writes `~/.claude.json` and `~/.codex/config.toml` directly (a backup of each is kept as `*.bak-dsh-bridge`), so it also works when only the desktop apps are installed and `claude` / `codex` are not on your `PATH`. Running it again is safe.
+dsh-baton has no dependencies. `setup` copies itself to `~/.dsh-baton/app`, a folder that stays put (npx's cache does not), and registers the MCP server once, user-wide, for Claude Code and Codex: every new conversation, in any folder, has the `dsh_*` tools. It writes `~/.claude.json` and `~/.codex/config.toml` directly (a backup of each is kept as `*.bak-dsh-baton`), so it also works when only the desktop apps are installed and `claude` / `codex` are not on your `PATH`. Running it again is safe.
 
 **2. Paste in Harness.** `setup` copies the plugin folder path to your clipboard:
 
@@ -59,16 +56,20 @@ node dsh-bridge/src/cli.mjs setup
 
 **3. Check.** Start a **new** conversation in Claude Code or Codex and ask it to call `dsh_list_workspaces`. It lists your Harness workspaces.
 
-**Or let Claude Code or Codex do it:** paste *"Run `git clone https://github.com/JialaoLiu/dsh-bridge.git ~/dsh-bridge && node ~/dsh-bridge/src/cli.mjs setup`, then tell me the Harness step it prints."*
+**Or let Claude Code or Codex do it:** paste *"Run `npx -y dsh-baton-mcp setup`, then tell me the Harness step it prints."*
 
 **How each client waits** (nothing to configure):
 - **Claude Code** waits for a run in the background (the `wait_command` that `dsh_send` returns) and is woken once, when the run ends.
 - **Codex** waits inside `dsh_wait`, up to 270 s per call, just under its 300 s tool timeout. An unfinished wait returns only the state, so Codex calls again without summarising. Codex gets no `wait_command`: its terminal cannot wake it, so it would poll.
-- Codex asks you to approve MCP tool calls: approve the `dsh-bridge` tools. For unattended `codex exec` runs, add `--approve-for-me`.
+- Codex asks you to approve MCP tool calls: approve the `dsh-baton` tools. For unattended `codex exec` runs, add `--approve-for-me`.
 
-**Updating:** `git pull` in the clone, then restart Harness to load plugin changes; new conversations pick up MCP server changes.
+**Updating:** run `npx -y dsh-baton-mcp@latest setup` again, then restart Harness to load plugin changes; new conversations pick up MCP server changes.
 
-**Removing:** `node dsh-bridge/src/cli.mjs setup --remove`, then Harness → Plugins → dsh-bridge-host → Uninstall.
+**Removing:** `npx -y dsh-baton-mcp setup --remove`, then Harness → Plugins → dsh-baton-host → Uninstall, then `setup --remove` once more to delete `~/.dsh-baton/app`.
+
+**Upgrading from dsh-bridge** (the old name): run `setup` as above. It replaces the old `dsh-bridge` MCP entries; in Harness, uninstall `dsh-bridge-host`, then add the new path. `DSH_BRIDGE_*` variables and an existing `~/.dsh-bridge` folder keep working for now. Tools get a new prefix (`mcp__dsh-baton__…`), so update any permission allowlists.
+
+**From source** (to follow `main` or to change the code): `git clone https://github.com/JialaoLiu/dsh-baton.git` and `node dsh-baton/src/cli.mjs setup`. setup then registers the clone itself; update with `git pull`.
 
 <details>
 <summary>Manual registration and the Claude desktop app</summary>
@@ -76,8 +77,8 @@ node dsh-bridge/src/cli.mjs setup
 `setup` writes the same entries these commands would (with the absolute path of `node`, since desktop apps start MCP servers without your shell's `PATH`):
 
 ```bash
-claude mcp add dsh-bridge -s user -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs"
-codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs"
+claude mcp add dsh-baton -s user -- "$(command -v node)" "$PWD/dsh-baton/src/server.mjs"
+codex mcp add dsh-baton -- "$(command -v node)" "$PWD/dsh-baton/src/server.mjs"
 ```
 
 `-s user` matters: without it, Claude Code registers the server for the current project folder only.
@@ -85,7 +86,7 @@ codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs
 **Claude desktop app (optional)**: for the chat app's connectors (separate from Claude Code), add this to `~/Library/Application Support/Claude/claude_desktop_config.json` and restart the app. It shows as a "Local dev" connector.
 
 ```json
-{ "mcpServers": { "dsh-bridge": { "command": "/absolute/path/to/node", "args": ["/absolute/path/to/dsh-bridge/src/server.mjs"] } } }
+{ "mcpServers": { "dsh-baton": { "command": "/absolute/path/to/node", "args": ["/absolute/path/to/dsh-baton/src/server.mjs"] } } }
 ```
 
 </details>
@@ -93,7 +94,7 @@ codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs
 ## How it works
 
 <p align="center">
-  <img src="./assets/readme/architecture.svg" width="100%" alt="MCP clients call dsh-bridge-mcp over stdio; it reaches the dsh-bridge-host plugin inside Harness through an owner-only local socket; the plugin drives Harness sessions live, with dsh headless as fallback">
+  <img src="./assets/readme/architecture.svg" width="100%" alt="MCP clients call dsh-baton-mcp over stdio; it reaches the dsh-baton-host plugin inside Harness through an owner-only local socket; the plugin drives Harness sessions live, with dsh headless as fallback">
 </p>
 
 <p align="center">
@@ -133,32 +134,32 @@ codex mcp add dsh-bridge -- "$(command -v node)" "$PWD/dsh-bridge/src/server.mjs
 ## CLI
 
 ```bash
-dsh-bridge workspaces
-dsh-bridge new-workspace ~/code/new-app --title "New App"
-dsh-bridge sessions --cwd ~/code/new-app
-dsh-bridge send --cwd ~/code/new-app "Scaffold the project"
-dsh-bridge send --session session-xxxx "Next: add tests"
-dsh-bridge send --session session-xxxx --mode steer "Interjection: don't change the API"
-dsh-bridge wait hrun-xxxx              # blocks, prints the final reply; exit 0 on success
-dsh-bridge status hrun-xxxx
-dsh-bridge activity session-xxxx       # running turn, sub-agents, background jobs
-dsh-bridge cancel --session session-xxxx
-dsh-bridge rename session-xxxx "New title"
-dsh-bridge rename-workspace ~/code/new-app "New name"
+dsh-baton workspaces
+dsh-baton new-workspace ~/code/new-app --title "New App"
+dsh-baton sessions --cwd ~/code/new-app
+dsh-baton send --cwd ~/code/new-app "Scaffold the project"
+dsh-baton send --session session-xxxx "Next: add tests"
+dsh-baton send --session session-xxxx --mode steer "Interjection: don't change the API"
+dsh-baton wait hrun-xxxx              # blocks, prints the final reply; exit 0 on success
+dsh-baton status hrun-xxxx
+dsh-baton activity session-xxxx       # running turn, sub-agents, background jobs
+dsh-baton cancel --session session-xxxx
+dsh-baton rename session-xxxx "New title"
+dsh-baton rename-workspace ~/code/new-app "New name"
 ```
 
 ## Configuration
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `DSH_BRIDGE_BACKEND` | `auto` | `auto`, `host` or `headless` |
-| `DSH_BRIDGE_HOME` | `~/.dsh-bridge` | Socket and headless run records |
-| `DSH_BRIDGE_SOCKET` | `$DSH_BRIDGE_HOME/host.sock` | Plugin socket path (must match on both sides); on Windows mapped to a per-user named pipe |
-| `DSH_BRIDGE_WAIT_S` | `270` for Codex, else `50` | How long one `dsh_wait` call waits; set it only if you raised the client's tool timeout, and keep it below that |
+| `DSH_BATON_BACKEND` | `auto` | `auto`, `host` or `headless` |
+| `DSH_BATON_HOME` | `~/.dsh-baton` | Socket and headless run records |
+| `DSH_BATON_SOCKET` | `$DSH_BATON_HOME/host.sock` | Plugin socket path (must match on both sides); on Windows mapped to a per-user named pipe |
+| `DSH_BATON_WAIT_S` | `270` for Codex, else `50` | How long one `dsh_wait` call waits; set it only if you raised the client's tool timeout, and keep it below that |
 | `DSH_BIN` | the `dsh` inside the macOS app, else `PATH` | Harness CLI for headless mode |
 | `DSH_HOME` | `~/.dsh` | Harness data folder (headless session reads) |
-| `DSH_BRIDGE_ACCOUNT` | `1` | `0` uses the API-key route in headless mode |
-| `DSH_BRIDGE_PATCHES` | empty | Extra headless `--patch` overlays, `:`-separated |
+| `DSH_BATON_ACCOUNT` | `1` | `0` uses the API-key route in headless mode |
+| `DSH_BATON_PATCHES` | empty | Extra headless `--patch` overlays, `:`-separated |
 
 <details>
 <summary>Headless fallback details</summary>
@@ -177,7 +178,7 @@ When the plugin is unreachable, the MCP server falls back to Harness's `dsh head
   <img src="./assets/readme/limits.svg" width="100%" alt="Good to know: a message typed in the UI mid-run is flagged on the run as a human interjection, run records survive a Harness restart (cut-short runs show interrupted), Claude Code is woken once when a run ends and Codex waits up to 270 s per call">
 </p>
 
-Any process running as your OS user can drive Harness through the socket, the same as running `dsh` directly. dsh-bridge relies on Harness 0.2.1-series internal service APIs, so a major Harness update may need a follow-up release.
+Any process running as your OS user can drive Harness through the socket, the same as running `dsh` directly. dsh-baton relies on Harness 0.2.1-series internal service APIs, so a major Harness update may need a follow-up release.
 
 <p align="center"><a href="docs/demos.md">More demos →</a></p>
 

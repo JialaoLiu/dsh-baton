@@ -1,6 +1,6 @@
-// dsh-bridge-host, browser half: labels chat messages sent through dsh-bridge with
+// dsh-baton-host, browser half: labels chat messages sent through dsh-baton with
 // their sender ("Sent by Claude from another chat"). The host half puts the sender
-// into the prompt's request id ("dsh-bridge.<sender>.<uuid>"); the chat records it as
+// into the prompt's request id ("dsh-baton.<sender>.<uuid>"); the chat records it as
 // the user message's source.rpcId, so the label survives reloads with no extra state.
 //
 // It wraps the chat's own user-message renderer: the wrapper registers at a lower
@@ -11,7 +11,7 @@
 // Hand-written in the client module format (no build step): the host serves this
 // file as the package's "./client" export.
 window.__ModuleLoader__.load({
-  id: 'dsh-bridge-host',
+  id: 'dsh-baton-host',
   factory: (require) => {
     const module = { exports: {} }
     const { createElement: h } = require('react')
@@ -19,8 +19,9 @@ window.__ModuleLoader__.load({
     const SLOT = 'conversation.chat.node'
     const KEYS = ['user', 'steering']
     const PRIORITY = -100
-    const NS = 'dsh-bridge'
-    const RPC_RE = /^dsh-bridge\.([a-z0-9-]{1,32})\./
+    const NS = 'dsh-baton'
+    // dsh-bridge: messages sent before the project was renamed.
+    const RPC_RE = /^dsh-(?:baton|bridge)\.([a-z0-9-]{1,32})\./
     // Codex shows as ChatGPT, the way the ChatGPT app labels its own cross-chat messages.
     const NAMES = { claude: 'Claude', codex: 'ChatGPT' }
 
@@ -52,7 +53,7 @@ window.__ModuleLoader__.load({
 
     function Label({ sender, text }) {
       return h('div', {
-        'data-dsh-bridge-sender': '',
+        'data-dsh-baton-sender': '',
         style: {
           display: 'flex', alignItems: 'center', gap: 6, alignSelf: 'flex-end',
           color: 'var(--dsw-alias-label-tertiary)',
@@ -70,8 +71,8 @@ window.__ModuleLoader__.load({
     }
 
     function wrapperFor(ctx, key, t) {
-      function DshBridgeUserMessage(props) {
-        const Inner = shipped(ctx, key, DshBridgeUserMessage)
+      function DshBatonUserMessage(props) {
+        const Inner = shipped(ctx, key, DshBatonUserMessage)
         if (!Inner) return null
         const sender = senderOf(props.node)
         if (!sender) return h(Inner, props)
@@ -79,13 +80,13 @@ window.__ModuleLoader__.load({
           h(Label, { sender, text: t('sentFrom', { name: nameOf(sender) }) }),
           h(Inner, props))
       }
-      return DshBridgeUserMessage
+      return DshBatonUserMessage
     }
 
-    module.exports.name = 'dsh-bridge-host'
+    module.exports.name = 'dsh-baton-host'
     module.exports.inject = ['slots', 'locale']
     module.exports.apply = function apply(ctx) {
-      ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-bridge: dictionaries')
+      ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-baton: dictionaries')
       const t = ctx.locale.bind(NS)
       ctx.slots.inject(SLOT, function* () {
         // locale 'chat': the shipped renderer reads its strings through the `t` it is handed.

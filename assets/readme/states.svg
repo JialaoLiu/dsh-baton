@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
-  <title id="title">dsh-bridge run states</title>
+  <title id="title">dsh-baton run states</title>
   <desc id="desc">A run moves from queued to running and ends completed, failed or cancelled, or interrupted if Harness restarts mid-run. Running can pause in waiting when Harness needs a person. When a session is busy, followup queues the message and steer interjects at the next step.</desc>
   <rect width="1200" height="520" rx="24" fill="#FFFFFF"/>
 <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#5B6577"/></marker></defs>

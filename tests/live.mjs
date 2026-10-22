@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Live end-to-end check against a running DeepSeek Harness with the
-// dsh-bridge-host plugin. It only touches the workspace folder you pass and the
+// dsh-baton-host plugin. It only touches the workspace folder you pass and the
 // sessions it creates there.
 //
 //   node tests/live.mjs <workspace-folder>
@@ -16,7 +16,7 @@ if (!dir) {
   console.error('usage: node tests/live.mjs <workspace-folder>')
   process.exit(2)
 }
-process.env.DSH_BRIDGE_BACKEND = 'host'
+process.env.DSH_BATON_BACKEND = 'host'
 const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'host', 'package.json'), 'utf8'))
 const results = []
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -47,7 +47,7 @@ await check('plugin reachable, version matches', async () => {
 })
 
 await check('create workspace (idempotent)', async () => {
-  const a = await api.create_workspace({ path: dir, title: 'dsh-bridge live test' })
+  const a = await api.create_workspace({ path: dir, title: 'dsh-baton live test' })
   const b = await api.create_workspace({ path: dir })
   expect(a.id === b.id && b.created === false, 'second call should return the same workspace')
 })
@@ -108,11 +108,11 @@ await check('cancel stops sub-agents', async () => {
 })
 
 await check('rename session and workspace', async () => {
-  const s = await api.rename_session({ session_id: session, title: 'dsh-bridge live test session' })
-  const w = await api.rename_workspace({ path: dir, title: 'dsh-bridge live test' })
+  const s = await api.rename_session({ session_id: session, title: 'dsh-baton live test session' })
+  const w = await api.rename_workspace({ path: dir, title: 'dsh-baton live test' })
   const listed = await api.list_sessions({ cwd: dir, limit: 50 })
   expect(listed.some((x) => x.session_id === session && x.title === s.title), 'renamed session not listed with its new title')
-  expect(w.title === 'dsh-bridge live test', 'workspace title not updated')
+  expect(w.title === 'dsh-baton live test', 'workspace title not updated')
   expect(!listed.some((x) => x.title?.startsWith('Sub-agent')), 'sub-agent sessions should be hidden')
 })
 

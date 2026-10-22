@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="350" viewBox="0 0 1200 350" role="img" aria-labelledby="title desc">
   <title id="title">Good to know</title>
-  <desc id="desc">A message typed in the Harness UI during a bridge run is recorded on that run as a human interjection; run records survive a Harness restart and a run cut short by one is marked interrupted; Claude Code waits in the background and is woken once; Codex waits up to 270 seconds per call, under its tool timeout.</desc>
+  <desc id="desc">A message typed in the Harness UI during a relayed run is recorded on that run as a human interjection; run records survive a Harness restart and a run cut short by one is marked interrupted; Claude Code waits in the background and is woken once; Codex waits up to 270 seconds per call, under its tool timeout.</desc>
   <rect width="1200" height="350" rx="24" fill="#FFFFFF"/>
 <text x="64" y="76" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="30" fill="#0F172A" font-weight="700">Good to know</text>
 <rect x="64" y="104" width="341" height="210" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>

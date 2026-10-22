@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-labelledby="title desc">
-  <title id="title">Typical dsh-bridge flow</title>
+  <title id="title">Typical dsh-baton flow</title>
   <desc id="desc">Create a workspace, send the task and get a run id, wait without polling (Claude Code is woken once, Codex waits up to 270 s per dsh_wait call), then follow up in the same session.</desc>
   <rect width="1200" height="400" rx="24" fill="#FFFFFF"/>
 <text x="64" y="76" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="30" fill="#0F172A" font-weight="700">典型流程</text>
