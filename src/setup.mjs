@@ -187,7 +187,10 @@ export async function setup({ remove = false } = {}) {
     if (!remove && !present) return lines.push(`- ${label}: not installed, skipped`)
     try {
       const result = rewrite(file, (t) => edit(t, entry))
-      lines.push(`- ${label}: ${remove ? 'removed from' : 'registered in'} ${file}${result === 'unchanged' ? ' (already up to date)' : ''}`)
+      const what = remove
+        ? (result === 'unchanged' ? 'not registered in' : 'removed from')
+        : 'registered in'
+      lines.push(`- ${label}: ${what} ${file}${!remove && result === 'unchanged' ? ' (already up to date)' : ''}`)
     } catch (e) {
       lines.push(`- ${label}: FAILED to edit ${file}: ${e.message}`)
       process.exitCode = 1
