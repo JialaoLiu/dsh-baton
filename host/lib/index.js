@@ -124,6 +124,8 @@ export function apply(ctx) {
 
   const controller = ctx.sessionController
   const registry = ctx.workspaceRegistry
+  // Harness's settings service, when this Harness has one: read for its busy-send setting.
+  let settings = null
   const runs = new Map() // runId -> run
   const waiters = new Map() // runId -> Set<resolve>
 
@@ -253,6 +255,12 @@ export function apply(ctx) {
     const active = activeRunsFor(session.id)
     if (event.type === 'turn/end' && !active.some((r) => r.sawPrompt)) turns.delete(session.id)
     if (!active.length) return
+    // Something left Harness's queue: a queued run may have been removed (session stopped,
+    // or Remove in the Harness UI) rather than started. Checked once the dust settles.
+    if (event.type === 'agent/inbox/spliced' && data.removedCount > 0 && active.some((r) => !r.sawPrompt)) {
+      scheduleQueueCheck(session.id)
+      return
+    }
     if (event.type === 'user/message') {
       const run = active.find((r) => r.requestId === data.source?.rpcId)
       const opensTurn = !turns.get(session.id)?.hasOutput
@@ -399,6 +407,95 @@ export function apply(ctx) {
     for (const run of agent ? outputReceiversFor(agent.id) : []) run.error = String(error?.message ?? error)
   }))
 
+  // --- Harness's queue (inbox) ------------------------------------------------
+  // A followup sent while the session is busy waits in Harness's inbox until the turn
+  // ends. Each pending message carries the request id it was sent with (source.rpcId),
+  // so a run finds its own message there.
+
+  const QUEUE_UNSUPPORTED = 'This DeepSeek Harness version cannot change queued messages: its session controller has no projections/updateQueue.'
+  const queueTimers = new Map() // sessionId -> timeout
+
+  // Messages still pending in a session's inbox, or null when this Harness cannot say.
+  async function pendingMessages(sessionId) {
+    if (typeof controller.projections !== 'function') return null
+    const baseline = await controller.projections({ sessionId }, signal())
+    if (baseline === null) return [] // no such session: nothing is pending
+    const inbox = baseline?.values?.inbox
+    if (!inbox) return null
+    return [...(inbox['next-turn'] ?? []), ...(inbox['next-step'] ?? [])]
+  }
+
+  // Settle the runs whose message left the inbox without reaching the conversation:
+  // Harness drops the queue when a session is stopped, and the Harness UI can remove one.
+  async function reconcileQueue(sessionId) {
+    const waiting = activeRunsFor(sessionId).filter((r) => r.admitted && !r.sawPrompt)
+    if (!waiting.length) return []
+    const pending = await pendingMessages(sessionId)
+    if (pending === null) return []
+    const ids = new Set(pending.map((m) => m?.source?.rpcId))
+    const gone = waiting.filter((r) => !ids.has(r.requestId))
+    if (!gone.length) return []
+    // A message that was taken into the conversation also leaves the inbox; its
+    // user/message event may still be on its way, so the log has the last word.
+    const { events = [] } = (await controller.inspect(sessionId, signal()).catch(() => null)) ?? {}
+    const delivered = new Set(events.filter((e) => e.type === 'user/message').map((e) => e.data?.source?.rpcId))
+    const removed = gone.filter((r) => !delivered.has(r.requestId) && !r.sawPrompt)
+    for (const run of removed) settle(run, 'cancelled', { error: 'Removed from the Harness queue before it ran.' })
+    return removed.map((r) => r.id)
+  }
+
+  function scheduleQueueCheck(sessionId) {
+    clearTimeout(queueTimers.get(sessionId))
+    queueTimers.set(sessionId, setTimeout(guard('queue check', () => { queueTimers.delete(sessionId); return reconcileQueue(sessionId) }), 1500))
+  }
+
+  ctx.effect(() => () => { for (const t of queueTimers.values()) clearTimeout(t) }, 'dsh-baton-host queue timers')
+
+  // Change a relayed message that is still waiting in Harness's queue: edit its text,
+  // remove it, or move it into the running turn as a steer.
+  async function updateQueued({ run_id, action, message }) {
+    if (!['edit', 'remove', 'steer'].includes(action)) throw new Error('action must be edit, remove or steer')
+    if (action === 'edit' && !message?.trim()) throw new Error('edit needs a non-empty message')
+    const run = getRun(run_id)
+    if (!isActive(run)) throw new Error(`Run ${run.id} is ${run.state}; only a queued run can be changed.`)
+    if (run.sawPrompt) throw new Error(`Run ${run.id} has already reached the conversation and can no longer be changed. Send a correction with dsh_send mode steer, or stop the session with dsh_cancel.`)
+    if (typeof controller.updateQueue !== 'function') throw new Error(QUEUE_UNSUPPORTED)
+    const pending = await pendingMessages(run.sessionId)
+    if (pending === null) throw new Error(QUEUE_UNSUPPORTED)
+    const item = pending.find((m) => m?.source?.rpcId === run.requestId)
+    const gone = `Run ${run.id} is no longer in the Harness queue: it has just started, or it was removed.`
+    if (!item) throw new Error(gone)
+    const change = action === 'edit' ? { kind: 'edit', content: [{ type: 'text', text: message }] } : { kind: action }
+    try {
+      await controller.updateQueue({ sessionId: run.sessionId, itemId: item.id, action: change })
+    } catch (error) {
+      if (error?.code === 'session/queue-item-not-found') throw new Error(gone)
+      if (error?.code === 'session/steer-unavailable') throw new Error(`The current turn of ${run.sessionId} no longer takes steering; the message stays queued.`)
+      throw error
+    }
+    if (action === 'edit') {
+      run.preview = message.slice(0, 200)
+      pushEvent(run, { type: 'queue_edit', text: message.slice(0, 500) })
+    } else if (action === 'steer') {
+      run.mode = 'steer'
+      pushEvent(run, { type: 'queue_steer' })
+    } else {
+      pushEvent(run, { type: 'queue_remove' })
+      settle(run, 'cancelled', { error: null })
+    }
+    return { ...publicRun(run, 0), action }
+  }
+
+  // Harness's own "busy send" setting (Settings → sending while busy: queue or steer),
+  // as a dsh-baton mode, or null when this Harness has no such setting to read.
+  function harnessBusyMode() {
+    try {
+      const form = settings?.describe?.()?.find?.((d) => d.ns === 'ui-conversation')
+      const value = form?.value?.busyEnter
+      return value === 'steer' ? 'steer' : value === 'queue' ? 'followup' : null
+    } catch { return null }
+  }
+
   // --- operations -----------------------------------------------------------
 
   const signal = () => new AbortController().signal
@@ -461,8 +558,13 @@ export function apply(ctx) {
     return { session_id, ...(isArchived(session_id) ? { archived: true } : {}), cwd: meta?.cwd ?? null, title, total_messages: messages.length, messages: messages.slice(-last) }
   }
 
-  async function send({ message, session_id, cwd, workspace_id, mode = 'followup', sender }) {
+  async function send({ message, session_id, cwd, workspace_id, mode: asked, sender }) {
     if (!message || !message.trim()) throw new Error('message is required')
+    if (asked != null && asked !== 'followup' && asked !== 'steer') throw new Error('mode must be followup or steer')
+    // Without a mode, a message to a busy session does what Harness's own busy-send setting says.
+    const fromHarness = asked == null ? harnessBusyMode() : null
+    const mode = asked ?? fromHarness ?? 'followup'
+    const modeSource = asked != null ? 'explicit' : fromHarness ? 'harness' : 'default'
     if (sender != null && !SENDER_RE.test(sender)) throw new Error('sender must be 1-32 characters of a-z, 0-9 or -')
     let sessionId = session_id
     let workspace = null
@@ -486,12 +588,14 @@ export function apply(ctx) {
     remember(run)
     try {
       await controller.prompt({ sessionId, requestId: run.requestId, content: [{ type: 'text', text: message }], mode }, signal())
+      run.admitted = true // in Harness's queue (or conversation) now
     } catch (error) {
       settle(run, 'failed', { error: String(error?.message ?? error) })
     }
     return {
       ...publicRun(run),
       mode,
+      mode_source: modeSource,
       ...(ahead.length ? { other_active_runs: ahead } : {}),
       ...(workspace ? { workspace } : {}),
     }
@@ -568,6 +672,8 @@ export function apply(ctx) {
       } while (still.busy && Date.now() < deadline)
       if (!still.busy) break
     }
+    // Stopping a session also empties Harness's queue: the runs waiting there are over.
+    const removed = await reconcileQueue(sessionId).catch((error) => { logError('queue check', error); return [] })
     // The named run never reached the conversation (still queued, or sent to a session
     // that will not run it): settle it too, so nothing waits on it forever.
     if (run && isActive(run) && !run.sawPrompt) settle(run, 'cancelled')
@@ -578,6 +684,7 @@ export function apply(ctx) {
       still_busy: still.busy,
       activity: still.activity,
       queued_runs: activeRunsFor(sessionId).filter((r) => !r.sawPrompt).map((r) => r.id),
+      ...(removed.length ? { removed_from_queue: removed } : {}),
     }
   }
 
@@ -609,6 +716,7 @@ export function apply(ctx) {
     rename_session: renameSession,
     rename_workspace: renameWorkspace,
     list_runs: ({ limit = 10 } = {}) => [...runs.values()].reverse().slice(0, limit).map((r) => publicRun(r, 0)),
+    update_queued: updateQueued,
   }
 
   // --- local socket (owner-only) ---------------------------------------------
@@ -675,6 +783,10 @@ export function apply(ctx) {
     registration = { state: 'off' }
   }
   if (typeof ctx.inject === 'function') {
+    ctx.inject(['settings'], (child) => {
+      settings = child.settings
+      child.effect(() => () => { if (settings === child.settings) settings = null }, 'dsh-baton-host settings')
+    })
     ctx.inject(['webServer'], (web) => {
       web.effect(() => web.webServer.register({
         kind: 'exact',

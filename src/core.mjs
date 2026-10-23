@@ -568,6 +568,15 @@ export const api = {
     if (!(await useHost())) throw new Error('Session activity needs the dsh-baton-host plugin running inside DeepSeek Harness.')
     return hostCall('activity', { session_id })
   },
+  async update_queued(a) {
+    if (!(await useHost())) throw new Error('Changing a queued message needs the dsh-baton-host plugin running inside DeepSeek Harness.')
+    try {
+      return await hostCall('update_queued', a)
+    } catch (error) {
+      if (!/Unknown method: update_queued/.test(error?.message)) throw error
+      throw new Error(`The Harness plugin dsh-baton-host ${hostVersion ?? ''} is too old to change queued messages; this MCP server is ${VERSION}. Update the plugin in Harness: Plugins → dsh-baton-host → Uninstall, then Add plugin → dsh-baton-host@${VERSION}.`.replace('  ', ' '))
+    }
+  },
   async list_runs({ limit = 10 } = {}) {
     const host = (await hostAvailable()) ? tag('host', await hostCall('list_runs', { limit })) : []
     return [...host, ...tag('headless', listRuns({ limit }))].sort((x, y) => String(y.started_at).localeCompare(String(x.started_at))).slice(0, limit)

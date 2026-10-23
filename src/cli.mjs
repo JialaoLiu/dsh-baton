@@ -19,6 +19,7 @@ const USAGE = `Usage: dsh-baton <command> [args]
   rename-workspace <workspace_id|dir> <title>             rename a workspace (sidebar title)
   activity <session_id>                                   what the session is doing now (turn, sub-agents, jobs)
   cancel <run_id> | --session <id>                        stop the session's turn, sub-agents and jobs
+  queued <run_id> edit <message...> | remove | steer      change a message still waiting in Harness's queue
   runs [--limit <n>]                                      list recent runs`
 
 function parse(argv) {
@@ -68,6 +69,8 @@ async function main() {
     }
     case 'cancel':
       return print(await core.api.cancel(rest[0]?.startsWith('session') || flags.session ? { session_id: flags.session ?? rest[0] } : { run_id: rest[0] }))
+    case 'queued':
+      return print(await core.api.update_queued({ run_id: rest[0], action: rest[1], ...(rest[1] === 'edit' ? { message: rest.slice(2).join(' ') } : {}) }))
     case 'rename':
       return print(await core.api.rename_session({ session_id: rest[0], title: rest.slice(1).join(' ') }))
     case 'rename-workspace':

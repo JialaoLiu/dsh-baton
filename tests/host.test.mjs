@@ -15,7 +15,7 @@ const IS_WIN = process.platform === 'win32'
 // here, except in the test that points it at a throwaway home.
 process.env.DSH_BATON_AUTO_REGISTER = '0'
 
-function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web } = {}) {
+function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web, settings, queue = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-'))
   // Run records go to the bridge home: keep them out of the real ~/.dsh-baton.
   process.env.DSH_BATON_HOME = home ?? path.join(dir, 'bridge')
@@ -24,14 +24,22 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
   const logs = []
   const handlers = {}
   const disposers = []
-  const calls = { prompt: [], create: [], cancel: [], stop: [], rename: [] }
+  const calls = { prompt: [], create: [], cancel: [], stop: [], rename: [], updateQueue: [] }
+  // Harness's inbox per session, as its projections report it (queue: true turns it on).
+  const inbox = {}
+  const pending = (id) => (inbox[id] ??= { 'next-turn': [], 'next-step': [] })
   const ws = workspaces.map((w) => ({ sessionIds: [], ...w, setTitle: async function (t) { this.title = t } }))
   const ctx = {
     on: (ev, fn) => (handlers[ev] ??= []).push(fn),
     effect: (fn) => disposers.push(fn()),
     waterfall: async (ev, { sessionId }) => activity(sessionId),
     logger: { info: () => {}, error: (m) => logs.push(m) },
-    ...(web ? { inject: (deps, fn) => fn({ effect: (f) => disposers.push(f()), webServer: web }) } : {}),
+    ...(web || settings ? {
+      inject: (deps, fn) => {
+        const services = { webServer: web, settings }
+        if (deps.every((d) => services[d])) fn({ effect: (f) => disposers.push(f()), ...services })
+      },
+    } : {}),
     workspaceRegistry: {
       list: () => ws,
       get: (id) => ws.find((w) => w.id === id),
@@ -42,13 +50,30 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
         ws.push(w)
         return w
       },
-      stopSessionActivity: async (sessionId) => { calls.stop.push(sessionId) },
+      stopSessionActivity: async (sessionId) => { calls.stop.push(sessionId); if (queue) pending(sessionId)['next-turn'] = [] },
     },
     sessionController: {
       list: async () => ({ items: sessions }),
       inspect: async () => ({ meta: { cwd: '/w' }, events: [] }),
       create: async (r) => { calls.create.push(r); return { sessionId: `new-${calls.create.length}` } },
-      prompt: async (r) => { calls.prompt.push(r); return { accepted: true } },
+      prompt: async (r) => {
+        calls.prompt.push(r)
+        if (queue) pending(r.sessionId)[r.mode === 'steer' ? 'next-step' : 'next-turn'].push({ id: `m${calls.prompt.length}`, content: r.content, source: { kind: 'user', rpcId: r.requestId } })
+        return { accepted: true }
+      },
+      ...(queue ? {
+        projections: async ({ sessionId }) => ({ kind: 'sequenced', asOfSeq: 1, values: { inbox: pending(sessionId) } }),
+        updateQueue: async (r) => {
+          calls.updateQueue.push(r)
+          const box = pending(r.sessionId)
+          const list = box['next-turn']
+          const i = list.findIndex((m) => m.id === r.itemId)
+          if (i < 0) throw Object.assign(new Error('queued item is no longer pending'), { code: 'session/queue-item-not-found' })
+          if (r.action.kind === 'edit') list[i] = { ...list[i], content: r.action.content }
+          else list.splice(i, 1)
+          return { accepted: true }
+        },
+      } : {}),
       cancel: (r) => { calls.cancel.push(r) },
       rename: async (r) => { calls.rename.push(r); return { title: r.title } },
     },
@@ -71,7 +96,7 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
   })
   const ready = new Promise((r) => setTimeout(r, 50))
   const close = () => { disposers.forEach((d) => d?.()); fs.rmSync(dir, { recursive: true, force: true }) }
-  return { ctx, emit, call, calls, ready, close, ws, logs, sock }
+  return { ctx, emit, call, calls, ready, close, ws, logs, sock, inbox: pending }
 }
 
 // Harness event helpers for one session.
@@ -434,4 +459,81 @@ test('a sender is carried in the request id and reported on the run', async (t) 
   await h.call('send', { session_id: 's2', message: 'plain' })
   assert.match(h.calls.prompt[1].requestId, /^[0-9a-f-]{36}$/)
   await assert.rejects(h.call('send', { session_id: 's1', message: 'x', sender: 'Bad Name' }), /sender must be/)
+})
+
+const busySetting = (busyEnter) => ({ describe: () => [{ ns: 'ui-conversation', value: busyEnter ? { busyEnter } : {} }] })
+
+test('without a mode, send follows the Harness busy-send setting; an explicit mode wins', async (t) => {
+  for (const [setting, mode, source] of [['steer', 'steer', 'harness'], ['queue', 'followup', 'harness'], [undefined, 'followup', 'default']]) {
+    const h = startHost({ settings: busySetting(setting) }); t.after(h.close); await h.ready
+    const r = await h.call('send', { session_id: 's1', message: 'x' })
+    assert.deepEqual([r.mode, r.mode_source, h.calls.prompt[0].mode], [mode, source, mode], String(setting))
+    const e = await h.call('send', { session_id: 's1', message: 'y', mode: 'followup' })
+    assert.deepEqual([e.mode, e.mode_source], ['followup', 'explicit'])
+    h.close()
+  }
+  const h = startHost(); t.after(h.close); await h.ready // no settings service at all
+  assert.equal((await h.call('send', { session_id: 's1', message: 'x' })).mode_source, 'default')
+  await assert.rejects(h.call('send', { session_id: 's1', message: 'x', mode: 'later' }), /followup or steer/)
+})
+
+test('update_queued edits, steers and removes a queued message', async (t) => {
+  const h = startHost({ queue: true }); t.after(h.close); await h.ready
+  const s = S('s1')
+  const first = await h.call('send', { session_id: 's1', message: 'long task' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.inbox('s1')['next-turn'].shift()
+  const a = await h.call('send', { session_id: 's1', message: 'wrong' })
+  const b = await h.call('send', { session_id: 's1', message: 'drop me' })
+  const edited = await h.call('update_queued', { run_id: a.run_id, action: 'edit', message: 'right' })
+  assert.equal(edited.message_preview, 'right')
+  assert.deepEqual(h.calls.updateQueue[0], { sessionId: 's1', itemId: 'm2', action: { kind: 'edit', content: [{ type: 'text', text: 'right' }] } })
+  assert.equal(h.inbox('s1')['next-turn'][0].content[0].text, 'right')
+  const removed = await h.call('update_queued', { run_id: b.run_id, action: 'remove' })
+  assert.equal(removed.state, 'cancelled')
+  assert.equal((await h.call('wait', { run_id: b.run_id, timeout_s: 1 })).state, 'cancelled')
+  const steered = await h.call('update_queued', { run_id: a.run_id, action: 'steer' })
+  assert.equal(steered.action, 'steer')
+  // The steer lands in the running turn: it joins the first run instead of closing it.
+  h.emit(...s.userMessage(h.calls.prompt[1].requestId))
+  h.emit(...s.text('done')); h.emit(...s.turnEnd()); h.emit(...s.status('idle'))
+  const [x, y] = await Promise.all([first, a].map((r) => h.call('wait', { run_id: r.run_id, timeout_s: 5 })))
+  assert.deepEqual([x.final_text, y.final_text, x.superseded_by], ['done', 'done', undefined])
+  // A run that already reached the conversation, or that left the queue, cannot be changed.
+  await assert.rejects(h.call('update_queued', { run_id: first.run_id, action: 'remove' }), /completed; only a queued run/)
+  const c = await h.call('send', { session_id: 's1', message: 'later' })
+  h.inbox('s1')['next-turn'].length = 0
+  await assert.rejects(h.call('update_queued', { run_id: c.run_id, action: 'remove' }), /no longer in the Harness queue/)
+  await assert.rejects(h.call('update_queued', { run_id: c.run_id, action: 'edit', message: ' ' }), /non-empty/)
+  await assert.rejects(h.call('update_queued', { run_id: c.run_id, action: 'move' }), /edit, remove or steer/)
+})
+
+test('update_queued says so when this Harness cannot change its queue', async (t) => {
+  const h = startHost(); t.after(h.close); await h.ready
+  const r = await h.call('send', { session_id: 's1', message: 'x' })
+  await assert.rejects(h.call('update_queued', { run_id: r.run_id, action: 'remove' }), /cannot change queued messages/)
+})
+
+test('cancel reports the queued runs Harness dropped as cancelled', async (t) => {
+  const h = startHost({ queue: true }); t.after(h.close); await h.ready
+  const s = S('s1')
+  const run = await h.call('send', { session_id: 's1', message: 'x' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.inbox('s1')['next-turn'].shift()
+  const queued = await h.call('send', { session_id: 's1', message: 'later' })
+  const r = await h.call('cancel', { run_id: run.run_id })
+  assert.deepEqual(r.removed_from_queue, [queued.run_id])
+  assert.deepEqual(r.queued_runs, [])
+  assert.equal((await h.call('wait', { run_id: queued.run_id, timeout_s: 1 })).state, 'cancelled')
+})
+
+test('a queued message removed in the Harness UI ends its run; one that started does not', async (t) => {
+  const h = startHost({ queue: true }); t.after(h.close); await h.ready
+  const s = S('s1')
+  await h.call('send', { session_id: 's1', message: 'x' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.inbox('s1')['next-turn'].shift()
+  const gone = await h.call('send', { session_id: 's1', message: 'removed in the UI' })
+  const kept = await h.call('send', { session_id: 's1', message: 'still queued' })
+  h.inbox('s1')['next-turn'].shift()
+  h.emit('session/event', { id: 's1' }, { type: 'agent/inbox/spliced', data: { target: 'next-turn', start: 0, removedCount: 1, inserted: [] } })
+  assert.equal((await h.call('wait', { run_id: gone.run_id, timeout_s: 4 })).state, 'cancelled')
+  assert.equal((await h.call('status', { run_id: kept.run_id })).state, 'queued')
 })
