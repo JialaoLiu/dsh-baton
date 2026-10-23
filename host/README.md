@@ -1,10 +1,30 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/JialaoLiu/dsh-baton/main/assets/readme/hero.gif" width="100%" alt="dsh-baton: pass the baton from Claude Code or Codex to DeepSeek Harness, watch it run live, and get it handed back when it's done">
+</p>
+
+<p align="center">
+  <a href="https://github.com/JialaoLiu/dsh-baton#readme">dsh-baton</a> · <a href="https://github.com/JialaoLiu/dsh-baton/blob/main/README.zh-CN.md">中文说明</a>
+</p>
+
+<p align="center">
+  macOS · Windows (<a href="https://github.com/JialaoLiu/dsh-baton/blob/main/WINDOWS.md">guide</a>) · no Node.js needed · zero dependencies · MIT
+</p>
+
 # dsh-baton-host
 
-DeepSeek Harness plugin for [dsh-baton](https://github.com/JialaoLiu/dsh-baton#readme). It runs inside the Harness host (desktop app or `dsh web`) and serves a local, owner-only Unix socket (`~/.dsh-baton/host.sock`; a per-user named pipe on Windows, see [WINDOWS.md](https://github.com/JialaoLiu/dsh-baton/blob/main/WINDOWS.md)). Through it, an MCP client can list and create workspaces, create sessions, continue a specific session, and wait for its turn to finish. All of this goes through Harness's own session controller, so the messages show up live in the Harness UI.
+The DeepSeek Harness plugin for [dsh-baton](https://github.com/JialaoLiu/dsh-baton#readme). It runs inside the Harness host (desktop app or `dsh web`) and serves a local, owner-only Unix socket (`~/.dsh-baton/host.sock`; a per-user named pipe on Windows). Through it, an MCP client can list and create workspaces, create sessions, continue a specific session, and wait for its turn to finish. All of this goes through Harness's own session controller, so the messages show up live in the Harness UI.
 
 DeepSeek Harness 插件，配合 [dsh-baton](https://github.com/JialaoLiu/dsh-baton/blob/main/README.zh-CN.md) 使用。它运行在 Harness 内部，只开一个当前用户才能访问的本地套接字，让 MCP 客户端能新建工作区和对话、续接指定对话、等待任务完成。所有操作都走 Harness 官方会话服务，界面实时可见。
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/JialaoLiu/dsh-baton/main/assets/readme/features.svg" width="100%" alt="Create workspaces and sessions, continue a session, run live in the Harness UI labelled with the sender, get woken when it is done, no extra API key, macOS and Windows with zero dependencies">
+</p>
+
 ## Install / 安装
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/JialaoLiu/dsh-baton/main/assets/readme/install.svg" width="100%" alt="Step 1: in Harness open Plugins, Add plugin, enter dsh-baton-host, Install, Enable now; it registers dsh-baton for Claude Code and Codex. Step 2: in a new chat, ask for dsh_list_workspaces">
+</p>
 
 Harness → Plugins / 插件 → Add plugin / 添加插件 → `dsh-baton-host` → Install / 安装 → Enable now / 立即启用
 
@@ -15,6 +35,12 @@ That is the whole install: switched on, the plugin registers the dsh-baton MCP s
 Update / 更新: uninstall, then add it again; the MCP server is updated with it / 先卸载再重新添加，MCP 服务器会一起更新.
 
 Remove / 卸载: uninstall, then `npx -y dsh-baton-mcp setup --remove` / 卸载插件后运行 `npx -y dsh-baton-mcp setup --remove`.
+
+## How it works / 工作原理
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/JialaoLiu/dsh-baton/main/assets/readme/architecture.svg" width="100%" alt="MCP clients call dsh-baton-mcp over stdio; it reaches the dsh-baton-host plugin inside Harness through an owner-only local socket; the plugin drives Harness sessions live, with dsh headless as fallback">
+</p>
 
 ## Socket protocol / 套接字协议
 
