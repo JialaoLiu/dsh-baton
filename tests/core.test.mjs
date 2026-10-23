@@ -76,7 +76,8 @@ test('session reader decodes appended frames and skips false frame starts', () =
 
 test('normalizePath expands ~ and follows symlinks', () => {
   assert.equal(core.normalizePath('~'), fs.realpathSync(os.homedir()))
-  const real = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-n-')))
+  // .native, like normalizePath: it also expands Windows 8.3 short names (RUNNER~1 on CI).
+  const real = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-n-')))
   fs.symlinkSync(real, `${real}-l`, IS_WIN ? 'junction' : undefined) // a junction needs no admin rights on Windows
   assert.equal(core.normalizePath(`${real}-l`), real)
   fs.unlinkSync(`${real}-l`); fs.rmSync(real, { recursive: true })
