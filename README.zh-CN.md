@@ -10,6 +10,10 @@
   macOS · Windows（<a href="WINDOWS.md">说明</a>）· 不用装 Node.js · 零依赖 · MIT
 </p>
 
+Claude Code 和 Codex 各派一个任务给 DeepSeek Harness，它的子代理用 1 小时 41 分搭出了这条雨夜街道（40 秒，建议开声音）：
+
+https://github.com/user-attachments/assets/ed931637-acb3-4c16-8c52-72298ea90485
+
 <p align="center">
   <img src="./assets/readme/zh/features.svg" width="100%" alt="新建工作区和对话、续接指定对话、界面实时可见并标明发送方、完成即唤醒、不用另配 key、macOS 和 Windows 零依赖">
 </p>
