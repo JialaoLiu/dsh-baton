@@ -8,6 +8,7 @@
 # again: pushing its plain tag moves `latest` to it.
 # A plain version is then listed in the official MCP Registry (server.json), signed in
 # as this repo through GitHub's OIDC token; one already listed there is skipped.
+# Last, the tag gets a GitHub Release (a pre-release for -next tags) unless it has one.
 name: Release
 
 on:
@@ -15,7 +16,7 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: read
+  contents: write # creates the GitHub Release for the tag
   id-token: write # lets npm and the MCP Registry verify this workflow instead of a token
 
 jobs:
@@ -83,3 +84,14 @@ jobs:
             sleep 30
           done
           exit 1
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "$GITHUB_REF_NAME already has a release"
+            exit 0
+          fi
+          case "$GITHUB_REF_NAME" in *-*) pre=--prerelease ;; *) pre=--latest ;; esac
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME" $pre
