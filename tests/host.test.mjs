@@ -81,6 +81,9 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
   process.env.DSH_BATON_SOCKET = sock
   apply(ctx)
   const emit = (ev, ...args) => (handlers[ev] ?? []).forEach((fn) => fn(...args))
+  // Harness asking the user: the user-questions/request waterfall, the Harness UI as `next`
+  // (by default a window that never answers).
+  const ask = (sessionId, questions, ui = () => new Promise(() => {})) => handlers['user-questions/request'][0]({ agent: { id: sessionId }, questions }, ui)
   const call = (method, params = {}) => new Promise((resolve, reject) => {
     const conn = net.connect(endpoint)
     let buf = ''
@@ -96,7 +99,7 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
   })
   const ready = new Promise((r) => setTimeout(r, 50))
   const close = () => { disposers.forEach((d) => d?.()); fs.rmSync(dir, { recursive: true, force: true }) }
-  return { ctx, emit, call, calls, ready, close, ws, logs, sock, inbox: pending }
+  return { ctx, emit, ask, call, calls, ready, close, ws, logs, sock, inbox: pending }
 }
 
 // Harness event helpers for one session.
@@ -536,4 +539,76 @@ test('a queued message removed in the Harness UI ends its run; one that started 
   h.emit('session/event', { id: 's1' }, { type: 'agent/inbox/spliced', data: { target: 'next-turn', start: 0, removedCount: 1, inserted: [] } })
   assert.equal((await h.call('wait', { run_id: gone.run_id, timeout_s: 4 })).state, 'cancelled')
   assert.equal((await h.call('status', { run_id: kept.run_id })).state, 'queued')
+})
+
+const QUESTIONS = [
+  { id: 'path', header: 'Route', question: 'Which way?', options: [{ label: 'Retry (Recommended)', description: 'try again' }, { label: 'Rewrite' }, { label: 'Stop' }] },
+  { id: 'notes', question: 'Anything else?', multiSelect: true, options: [{ label: 'Log' }, { label: 'Test' }] },
+]
+
+test('a question ends the wait at once, carries the questions, and dsh_answer replies', async (t) => {
+  const h = startHost(); t.after(h.close); await h.ready
+  const s = S('s1')
+  const run = await h.call('send', { session_id: 's1', message: 'go' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.emit(...s.status('running'))
+  const waiting = h.call('wait', { run_id: run.run_id, timeout_s: 30 })
+  await sleep(20)
+  const reply = h.ask('s1', QUESTIONS)
+  const w = await waiting
+  assert.equal(w.needs_input, 'answer')
+  assert.equal(w.state, 'waiting')
+  assert.equal(w.question.count, 2)
+  assert.deepEqual(w.question.questions[0].options.map((o) => [o.number, o.label, !!o.recommended]), [[1, 'Retry (Recommended)', true], [2, 'Rewrite', false], [3, 'Stop', false]])
+  assert.equal(w.question.questions[1].multi_select, true)
+  // A second wait does not return the same question again: it blocks.
+  assert.equal((await h.call('wait', { run_id: run.run_id, timeout_s: 0.3 })).timed_out, true)
+  // One question at a time: nothing reaches Harness until both have an answer.
+  const first = await h.call('answer', { run_id: run.run_id, answers: [{ id: 'path', choose: [2] }] })
+  assert.deepEqual([first.submitted, first.remaining], [false, ['notes']])
+  await assert.rejects(h.call('answer', { run_id: run.run_id, answers: [{ id: 'notes', choose: ['Nope'] }] }), /no option "Nope"/)
+  const done = await h.call('answer', { run_id: run.run_id, answers: [{ id: 'notes', choose: ['log', 'Test'], text: 'and docs' }] })
+  assert.equal(done.submitted, true)
+  assert.deepEqual(await reply, { answers: [{ id: 'path', selected: ['Rewrite'] }, { id: 'notes', selected: ['Log', 'Test'], custom: 'and docs' }] })
+  await sleep(10)
+  const st = await h.call('status', { run_id: run.run_id })
+  assert.equal(st.question, undefined)
+  assert.ok(st.recent_events.some((e) => e.type === 'question_answered' && e.by === 'dsh-baton'))
+  await assert.rejects(h.call('answer', { run_id: run.run_id, answers: [{ skip: true }] }), /no open question/)
+})
+
+test('free text replaces a single choice, skip works, and the Harness UI can answer first', async (t) => {
+  const h = startHost(); t.after(h.close); await h.ready
+  const s = S('s1')
+  const run = await h.call('send', { session_id: 's1', message: 'go' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId))
+  const reply = h.ask('s1', QUESTIONS)
+  await h.call('answer', { run_id: run.run_id, answers: [{ id: 'path', choose: [1], text: 'my own way' }, { id: 'notes', skip: true }] })
+  assert.deepEqual(await reply, { answers: [{ id: 'path', selected: [], custom: 'my own way' }, { id: 'notes', selected: [] }] })
+  await assert.rejects(h.call('answer', { run_id: run.run_id, answers: [{ id: 'path', choose: [1, 2] }] }), /no open question/)
+  // The user answers in the Harness window: the run follows, dsh_answer then has nothing to answer.
+  const fromUi = { answers: [{ id: 'one', selected: ['A'] }] }
+  const r2 = h.ask('s1', [{ id: 'one', question: 'A or B?', options: [{ label: 'A' }, { label: 'B' }] }], async () => fromUi)
+  assert.deepEqual(await r2, fromUi)
+  await sleep(10)
+  await assert.rejects(h.call('answer', { run_id: run.run_id, answers: [{ choose: [2] }] }), /no open question/)
+  assert.ok((await h.call('status', { run_id: run.run_id })).recent_events.some((e) => e.type === 'question_answered' && e.by === 'harness'))
+})
+
+test('a question in a session with no relayed run is left to Harness', async (t) => {
+  const h = startHost(); t.after(h.close); await h.ready
+  let passed = false
+  await h.ask('other', QUESTIONS, async () => { passed = true; return { answers: [] } })
+  assert.equal(passed, true)
+})
+
+test('an approval wait (no question) also ends the wait once, and dsh_answer says it cannot help', async (t) => {
+  const h = startHost(); t.after(h.close); await h.ready
+  const s = S('s1')
+  const run = await h.call('send', { session_id: 's1', message: 'go' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.emit(...s.status('running'))
+  const waiting = h.call('wait', { run_id: run.run_id, timeout_s: 30 })
+  h.emit(...s.status('waiting'))
+  const w = await waiting
+  assert.deepEqual([w.needs_input, w.state, w.question], ['harness-ui', 'waiting', undefined])
+  await assert.rejects(h.call('answer', { run_id: run.run_id, answers: [{ skip: true }] }), /cannot be answered from here/)
 })

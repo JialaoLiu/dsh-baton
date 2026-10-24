@@ -35,7 +35,7 @@ test('initialize, tools/list and an unreachable-host tool call', async () => {
   assert.equal(byId[1].result.serverInfo.name, 'dsh-baton')
   assert.equal(byId[1].result.protocolVersion, '2025-06-18')
   const names = byId[2].result.tools.map((t) => t.name)
-  for (const n of ['dsh_send', 'dsh_wait', 'dsh_cancel', 'dsh_session_activity', 'dsh_rename_session', 'dsh_create_workspace', 'dsh_update_queued']) assert.ok(names.includes(n), n)
+  for (const n of ['dsh_send', 'dsh_wait', 'dsh_cancel', 'dsh_session_activity', 'dsh_rename_session', 'dsh_create_workspace', 'dsh_update_queued', 'dsh_answer']) assert.ok(names.includes(n), n)
   const ann = Object.fromEntries(byId[2].result.tools.map((t) => [t.name, t.annotations]))
   for (const [n, a] of Object.entries(ann)) assert.ok(a?.title && a.openWorldHint === false, n)
   assert.equal(ann.dsh_list_sessions.readOnlyHint, true)

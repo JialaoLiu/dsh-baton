@@ -122,11 +122,18 @@ export function apply(ctx) {
     try { ctx.logger?.error?.(`dsh-baton-host ${label}: ${error?.stack ?? error}`) } catch { /* logging must never throw */ }
   }
 
+  // A waterfall listener must never break Harness's chain: on any error of its own it
+  // hands the request on untouched.
+  const guardWaterfall = (fn) => function (request, next) {
+    try { return fn(request, next) } catch (error) { logError('waterfall', error); return next() }
+  }
+
   const controller = ctx.sessionController
   const registry = ctx.workspaceRegistry
   // Harness's settings service, when this Harness has one: read for its busy-send setting.
   let settings = null
   const runs = new Map() // runId -> run
+  let stopping = false // set when the plugin unloads: release every wait()
   const waiters = new Map() // runId -> Set<resolve>
 
   // --- run bookkeeping ------------------------------------------------------
@@ -138,11 +145,26 @@ export function apply(ctx) {
     ...(run.waitingOn ? { waiting_on: run.waitingOn } : {}),
     ...(run.supersededBy ? { superseded_by: run.supersededBy } : {}),
     ...(run.humanInputs?.length ? { human_interjections: run.humanInputs } : {}),
+    ...(run.question ? { question: run.question } : {}),
     ...(tail ? { recent_events: run.events.slice(-tail) } : {}),
   })
 
   const ACTIVE = ['queued', 'running', 'waiting']
   const isActive = (run) => ACTIVE.includes(run.state)
+
+  // Release callers blocked in wait() without ending the run (it needs a person now).
+  function wake(run) {
+    for (const resolve of [...(waiters.get(run.id) ?? [])]) resolve()
+  }
+
+  // The run now waits for a person. The next wait() returns at once with what is asked
+  // (once per episode: a second wait() blocks again until the run moves on).
+  function needsPerson(run, delayMs = 0) {
+    Object.assign(run, { state: 'waiting', waitNoticed: false })
+    persist(run)
+    if (delayMs) setTimeout(guard('waiting', () => wake(run)), delayMs)
+    else wake(run)
+  }
 
   function settle(run, state, extra = {}) {
     if (!isActive(run)) return
@@ -396,7 +418,9 @@ export function apply(ctx) {
     if (status === 'running' && receivers.length) lastRunningAt.set(agent.id, Date.now())
     for (const run of outputReceiversFor(agent.id)) {
       if (status === 'running') run.state = 'running'
-      else if (status === 'waiting') run.state = 'waiting' // needs a person in the Harness UI (approval / question)
+      // Needs a person: a question (see user-questions/request) or an approval in the
+      // Harness UI. Waiters wake a moment later, so a question that comes with it is on the run.
+      else if (status === 'waiting') { if (run.state !== 'waiting') needsPerson(run, 500) }
       else if (status === 'error') settle(run, 'failed')
       else if (status === 'idle') run.idleSeen = true
     }
@@ -485,6 +509,102 @@ export function apply(ctx) {
     }
     return { ...publicRun(run, 0), action }
   }
+
+  // --- questions (ask_user_question) ----------------------------------------
+  // Harness asks the user through the user-questions/request waterfall, whose answerer
+  // is the Harness UI. Listening first, the plugin puts the question on the runs of that
+  // turn (so wait() returns with it) and lets either side answer: the Harness UI, or
+  // dsh_answer through answerQuestion(). The first answer wins.
+
+  const questions = new Map() // sessionId -> open question
+  const RECOMMENDED = /\(recommended\)|（推荐）|\(推荐\)|推荐/i
+
+  function publicQuestion(entry) {
+    return {
+      question_id: entry.id,
+      count: entry.items.length,
+      questions: entry.items.map((q) => ({
+        id: q.id,
+        ...(q.header ? { header: q.header } : {}),
+        question: q.question,
+        ...(q.detail ? { detail: q.detail } : {}),
+        multi_select: !!q.multiSelect,
+        options: (q.options ?? []).map((o, i) => ({ number: i + 1, label: o.label, ...(o.description ? { description: o.description } : {}), ...(RECOMMENDED.test(o.label) ? { recommended: true } : {}) })),
+        free_text: true,
+        ...(entry.answers.has(q.id) ? { answered: true } : {}),
+      })),
+    }
+  }
+
+  function onQuestion(request, next) {
+    const sessionId = request?.agent?.id
+    const asked = sessionId && Array.isArray(request.questions) ? outputReceiversFor(sessionId) : []
+    if (!asked.length) return next()
+    const entry = { id: `q-${crypto.randomBytes(4).toString('hex')}`, sessionId, items: request.questions, answers: new Map(), runs: asked }
+    const ours = new Promise((resolve) => { entry.resolve = resolve })
+    questions.set(sessionId, entry)
+    for (const run of asked) {
+      run.question = publicQuestion(entry)
+      pushEvent(run, { type: 'question', question_id: entry.id, count: entry.items.length })
+      needsPerson(run)
+    }
+    // With no Harness window to answer, only dsh_answer can: that is not a failure here.
+    const theirs = Promise.resolve().then(next).catch((error) => (error?.code === 'NO_PROVIDER' ? new Promise(() => {}) : Promise.reject(error)))
+    const aborted = new Promise((_, reject) => request.signal?.addEventListener('abort', () => reject(request.signal.reason), { once: true }))
+    const answered = (by) => (value) => {
+      for (const run of asked) pushEvent(run, { type: 'question_answered', question_id: entry.id, by })
+      return value
+    }
+    return Promise.race([theirs.then(answered('harness')), ours.then(answered('dsh-baton')), aborted]).finally(() => {
+      if (questions.get(sessionId) === entry) questions.delete(sessionId)
+      for (const run of asked) {
+        if (run.question?.question_id !== entry.id) continue
+        delete run.question
+        if (run.state === 'waiting') run.state = 'running'
+        persist(run)
+      }
+    })
+  }
+
+  // Answer the open question of a run's turn. answers: [{ id?, choose?: [number | label],
+  // text?, skip? }]; questions not answered yet stay open until every one has an answer.
+  function answerQuestion({ run_id, answers }) {
+    const run = getRun(run_id)
+    const entry = questions.get(run.sessionId)
+    if (!isActive(run) || !entry || run.question?.question_id !== entry.id) {
+      if (run.state === 'waiting') throw new Error(`Run ${run.id} is waiting for something in the Harness UI (an approval, for example) that cannot be answered from here; tell the user.`)
+      throw new Error(`Run ${run.id} is ${run.state} and has no open question to answer.`)
+    }
+    if (!Array.isArray(answers) || !answers.length) throw new Error('answers must list at least one answer')
+    const staged = new Map()
+    for (const a of answers) {
+      const q = a?.id != null ? entry.items.find((item) => item.id === a.id) : entry.items.length === 1 ? entry.items[0] : undefined
+      if (!q) throw new Error(a?.id != null ? `No question ${a.id}; the questions are ${entry.items.map((i) => i.id).join(', ')}` : 'id is required when there are several questions')
+      const options = q.options ?? []
+      const chosen = (a.choose ?? []).map((c) => {
+        const byNumber = typeof c === 'number' || /^\d+$/.test(String(c)) ? options[Number(c) - 1] : undefined
+        const option = byNumber ?? options.find((o) => o.label === c) ?? options.find((o) => o.label.toLowerCase().replace(RECOMMENDED, '').trim() === String(c).toLowerCase().replace(RECOMMENDED, '').trim())
+        if (!option) throw new Error(`Question ${q.id} has no option ${JSON.stringify(c)}; options: ${options.map((o, i) => `${i + 1}. ${o.label}`).join('; ')}`)
+        return option.label
+      })
+      const text = typeof a.text === 'string' && a.text.trim() ? a.text : undefined
+      if (a.skip && (chosen.length || text)) throw new Error(`Question ${q.id}: skip cannot come with choose or text`)
+      if (!a.skip && !chosen.length && !text) throw new Error(`Question ${q.id}: give choose, text or skip`)
+      if (!q.multiSelect && chosen.length > 1) throw new Error(`Question ${q.id} takes one option`)
+      // Single choice: typed text replaces the option (Harness's own rule).
+      staged.set(q.id, a.skip ? { id: q.id, selected: [] } : !q.multiSelect && text ? { id: q.id, selected: [], custom: text } : { id: q.id, selected: chosen, ...(text ? { custom: text } : {}) })
+    }
+    for (const [id, item] of staged) entry.answers.set(id, item)
+    const remaining = entry.items.filter((q) => !entry.answers.has(q.id)).map((q) => q.id)
+    if (remaining.length) {
+      for (const r of entry.runs) { if (r.question?.question_id === entry.id) { r.question = publicQuestion(entry); persist(r) } }
+      return { ...publicRun(run, 0), submitted: false, remaining }
+    }
+    entry.resolve({ answers: entry.items.map((q) => entry.answers.get(q.id)) })
+    return { ...publicRun(run, 0), submitted: true, answers: entry.items.map((q) => entry.answers.get(q.id)) }
+  }
+
+  ctx.on('user-questions/request', guardWaterfall(onQuestion), { global: true, prepend: true })
 
   // Harness's own "busy send" setting (Settings → sending while busy: queue or steer),
   // as a dsh-baton mode, or null when this Harness has no such setting to read.
@@ -620,7 +740,10 @@ export function apply(ctx) {
   async function wait({ run_id, timeout_s = 300 }) {
     const run = getRun(run_id)
     const seconds = Number.isFinite(Number(timeout_s)) ? Math.min(Math.max(Number(timeout_s), 0), MAX_WAIT_S) : 300
-    if (isActive(run)) {
+    const unseenWait = () => run.state === 'waiting' && !run.waitNoticed
+    const deadline = Date.now() + seconds * 1000
+    // A wake can also come for another reason (the delayed one for a waiting status): wait on.
+    while (isActive(run) && !unseenWait() && !stopping && Date.now() < deadline) {
       await new Promise((resolve) => {
         const set = waiters.get(run.id) ?? new Set()
         waiters.set(run.id, set)
@@ -629,11 +752,15 @@ export function apply(ctx) {
           set.delete(done)
           resolve()
         }
-        const timer = setTimeout(done, seconds * 1000)
+        const timer = setTimeout(done, deadline - Date.now())
         set.add(done)
       })
     }
     const done = !isActive(run)
+    if (!done && unseenWait()) {
+      run.waitNoticed = true
+      return { ...publicRun(run), needs_input: run.question ? 'answer' : 'harness-ui' }
+    }
     return { ...publicRun(run), ...(done ? {} : { timed_out: true }) }
   }
 
@@ -717,6 +844,7 @@ export function apply(ctx) {
     rename_workspace: renameWorkspace,
     list_runs: ({ limit = 10 } = {}) => [...runs.values()].reverse().slice(0, limit).map((r) => publicRun(r, 0)),
     update_queued: updateQueued,
+    answer: answerQuestion,
   }
 
   // --- local socket (owner-only) ---------------------------------------------
@@ -818,6 +946,7 @@ export function apply(ctx) {
       disposed = true
       if (store.enabled) { try { flushRuns() } catch (error) { logError('persist runs', error) } }
       store.enabled = false
+      stopping = true
       // Release callers blocked in wait() and close open connections, so an
       // unloaded or reloaded plugin leaves no timers or sockets behind.
       for (const set of waiters.values()) for (const done of [...set]) done()

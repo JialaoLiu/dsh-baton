@@ -32,6 +32,11 @@ const codeModeYield = () => {
 }
 const NO_POLL = 'While waiting, make no other calls: no dsh_status, dsh_session_activity or dsh_read_session, and do not list or read the target folder or files to check progress. The final dsh_wait result carries the reply of the run; check files only after the run ends, if needed.'
 const ARCHIVED = 'Sessions not in dsh_list_sessions are archived or gone: do not look for them on disk.'
+// What to do when a run stops to ask a person (dsh_wait, wait_command and the instructions say it).
+const ASKED = 'If the user told you to decide such questions yourself, answer with dsh_answer by your own judgment (the recommended option is only a suggestion). Otherwise show the user the questions and options with your recommendation, wait for their decision, then submit it with dsh_answer. Never answer on the user\'s behalf without that permission.'
+const NEEDS_INPUT_HINT = (st) => st.question
+  ? `The run stopped to ask the user ${st.question.count} question(s) (in question). ${ASKED} After answering, wait for the run again.`
+  : 'The run waits for something only a person can do in the Harness UI (an approval, for example). Tell the user, then wait for the run again.'
 
 // A shell command that blocks until a run ends and prints its reply. Run in the
 // background by a client that wakes the model when the command exits (Claude Code),
@@ -54,6 +59,7 @@ async function waitInChunks({ run_id }, progress) {
     const left = Math.ceil((deadline - Date.now()) / 1000)
     const t0 = Date.now()
     const st = await core.api.wait({ run_id, timeout_s: Math.max(1, Math.min(WAIT_CHUNK_S, left)) })
+    if (st.needs_input) return { ...st, hint: NEEDS_INPUT_HINT(st) }
     if (!st.timed_out) return st
     // Never spin: a chunk that came back early still takes a moment before the next one.
     if (Date.now() - t0 < 500) await new Promise((r) => setTimeout(r, 500))
@@ -62,7 +68,7 @@ async function waitInChunks({ run_id }, progress) {
         run_id, state: st.state, timed_out: true,
         ...(st.waiting_on ? { waiting_on: st.waiting_on } : {}),
         hint: st.state === 'waiting'
-          ? 'The run is waiting for a person to answer in the Harness UI. Tell the user, then call dsh_wait again.'
+          ? 'The run is still waiting for a person (see dsh_status for its question). Answer it with dsh_answer if you may, or tell the user; then call dsh_wait again.'
           : `Still ${st.state}. Call dsh_wait again with the same run_id, with no other calls in between and no progress note.`,
       }
     }
@@ -114,11 +120,11 @@ const TOOLS = [
       const st = await core.api.send({ ...a, sender: core.senderOf(core.setting('SENDER') || clientName) })
       // Codex has no wake-on-exit for shell commands: offered wait_command, it runs it in a
       // terminal and polls that, so it gets dsh_wait only.
-      if (isCodex()) return { ...st, hint: `Run started. Call dsh_wait with this run_id; it returns when the run ends. ${NO_POLL} ${codeModeYield()}` }
+      if (isCodex()) return { ...st, hint: `Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${NO_POLL} ${codeModeYield()}` }
       return {
         ...st,
         wait_command: waitCommand(st.run_id),
-        hint: 'Run started. If you can run a shell command in the background and are woken when it exits (Claude Code: Bash with run_in_background), run wait_command that way: it ends when the run ends and prints the reply, with no polling. Otherwise call dsh_wait with this run_id.',
+        hint: 'Run started. If you can run a shell command in the background and are woken when it exits (Claude Code: Bash with run_in_background), run wait_command that way: it ends when the run ends, or stops to ask the user something, and prints the reply or the questions, with no polling. Otherwise call dsh_wait with this run_id.',
       }
     },
   },
@@ -132,9 +138,30 @@ const TOOLS = [
   {
     name: 'dsh_wait',
     annotations: annotations('Wait for run'),
-    description: () => `Wait for a run sent with dsh_send to end and return its final status and reply; dsh_status only looks once.${isCodex() ? '' : ' Prefer the background wait_command from dsh_send when your client can run background shell commands and wake you when they exit: it costs no turns while waiting.'} Each call waits up to ${waitSeconds()} s (set by the server to stay under this client's tool timeout); if the run is still going it returns timed_out: true with just the state: then call dsh_wait again with the same run_id, without summarising progress.${isCodex() ? ` ${NO_POLL} ${codeModeYield()}` : ''} Sends progress notifications while waiting when the client asks for them.`,
+    description: () => `Wait for a run sent with dsh_send to end and return its final status and reply; dsh_status only looks once.${isCodex() ? '' : ' Prefer the background wait_command from dsh_send when your client can run background shell commands and wake you when they exit: it costs no turns while waiting.'} It also returns at once when the run stops to ask a person: needs_input is answer (the questions are in question; reply with dsh_answer) or harness-ui (an approval only a person can give in Harness). Each call waits up to ${waitSeconds()} s (set by the server to stay under this client's tool timeout); if the run is still going it returns timed_out: true with just the state: then call dsh_wait again with the same run_id, without summarising progress.${isCodex() ? ` ${NO_POLL} ${codeModeYield()}` : ''} Sends progress notifications while waiting when the client asks for them.`,
     inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send') } },
     run: (a, { progress }) => waitInChunks(a, progress),
+  },
+  {
+    name: 'dsh_answer',
+    annotations: annotations('Answer question', hints(false, false, false)),
+    description: `Answer the questions a run sent with dsh_send is waiting on (Harness's ask_user_question, shown in dsh_wait / dsh_status as question); dsh_send sends a new message instead, and dsh_update_queued changes one still in the queue. Per question: choose option numbers or labels, text for a free-text answer (with a single choice it replaces the option), or skip. Several questions can be answered in one call or one at a time: the answer reaches Harness once every question has one (submitted: true; until then remaining lists the rest). The run then continues; wait for it again. Whoever answers first wins: if the user answers in the Harness window, this call reports there is no open question. ${ASKED}`,
+    inputSchema: {
+      type: 'object', required: ['run_id', 'answers'], properties: {
+        run_id: str('Run id that is waiting (needs_input: answer)'),
+        answers: {
+          type: 'array', description: 'One entry per question answered now', items: {
+            type: 'object', properties: {
+              id: str('Question id from question.questions[].id; may be left out when there is one question'),
+              choose: { type: 'array', items: { type: ['integer', 'string'] }, description: 'Option numbers (1 = first) or labels; one for a single-choice question' },
+              text: str('Free-text answer'),
+              skip: { type: 'boolean', description: 'Skip this question' },
+            },
+          },
+        },
+      },
+    },
+    run: (a) => core.api.answer(a),
   },
   {
     name: 'dsh_rename_session',
@@ -196,7 +223,7 @@ async function handle(req) {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: {} },
         serverInfo: SERVER,
-        instructions: `Hands tasks to a local DeepSeek Harness and passes the results back. Typical flow: dsh_list_workspaces (or dsh_create_workspace) to pick a folder, dsh_list_sessions to find a session, dsh_send {session_id, message} to continue it (or {cwd, message} to start one), then wait for the reply: ${isCodex() ? 'call dsh_wait with the run_id until it returns the final state (not dsh_status)' : 'run the wait_command it returns as a background shell command if your client wakes you when one exits, otherwise call dsh_wait'}. Then dsh_read_session to read the conversation, dsh_session_activity to see what a session is doing, dsh_update_queued to edit or withdraw a message still waiting in its queue, and dsh_cancel to stop it; dsh_list_runs recovers a lost run_id. A run in state "waiting" needs a person to answer in the Harness UI. ${ARCHIVED}`,
+        instructions: `Hands tasks to a local DeepSeek Harness and passes the results back. Typical flow: dsh_list_workspaces (or dsh_create_workspace) to pick a folder, dsh_list_sessions to find a session, dsh_send {session_id, message} to continue it (or {cwd, message} to start one), then wait for the reply: ${isCodex() ? 'call dsh_wait with the run_id until it returns the final state (not dsh_status)' : 'run the wait_command it returns as a background shell command if your client wakes you when one exits, otherwise call dsh_wait'}. Then dsh_read_session to read the conversation, dsh_session_activity to see what a session is doing, dsh_update_queued to edit or withdraw a message still waiting in its queue, and dsh_cancel to stop it; dsh_list_runs recovers a lost run_id. A run that stops to ask the user something ends the wait at once with needs_input and the questions; answer with dsh_answer. ${ASKED} ${ARCHIVED}`,
       }
     }
     case 'ping':

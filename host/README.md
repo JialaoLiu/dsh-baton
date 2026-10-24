@@ -61,6 +61,7 @@ Newline-delimited JSON: request `{"id", "method", "params"}`, reply `{"id", "res
 | `rename_session` | `session_id`, `title` |
 | `rename_workspace` | `workspace_id` or `path`, `title` |
 | `list_runs` | `limit?` |
+| `answer` | `run_id`, `answers` (`[{ id?, choose?, text?, skip? }]`) |
 | `update_queued` | `run_id`, `action` (`edit` \| `remove` \| `steer`), `message?` (for `edit`) |
 
 `DSH_BATON_SOCKET` / `DSH_BATON_HOME` in the Harness process environment move the socket. `DSH_BATON_AUTO_REGISTER=0` turns off the MCP registration.
