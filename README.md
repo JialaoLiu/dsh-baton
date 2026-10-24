@@ -97,7 +97,7 @@ That is all. If Harness says it could not register, run `npx -y dsh-baton-mcp se
 | `dsh_cancel` | Stop everything a session is doing, by `run_id` or `session_id`: turn, sub-agents, jobs. Harness also drops the messages waiting in its queue; their runs end as `cancelled` |
 | `dsh_rename_session` | Rename a session |
 | `dsh_rename_workspace` | Rename a workspace (sidebar title only; the folder is not moved) |
-| `dsh_list_runs` | Recent runs |
+| `dsh_list_runs` | Recent runs, optionally of one session |
 
 </details>
 

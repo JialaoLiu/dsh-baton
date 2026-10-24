@@ -506,10 +506,12 @@ export function cancelRun(runId) {
   return { ...st, state: 'cancelling' }
 }
 
-export function listRuns({ limit = 10 } = {}) {
+export function listRuns({ limit = 10, session_id } = {}) {
   if (!fs.existsSync(runsDir())) return []
-  return fs.readdirSync(runsDir()).filter((d) => d.startsWith('run-')).sort().reverse().slice(0, limit)
-    .map((id) => { try { return runStatus(id, { tail: 0 }) } catch { return null } }).filter(Boolean)
+  const ids = fs.readdirSync(runsDir()).filter((d) => d.startsWith('run-')).sort().reverse()
+  return (session_id ? ids : ids.slice(0, limit))
+    .map((id) => { try { return runStatus(id, { tail: 0 }) } catch { return null } })
+    .filter((r) => r && (!session_id || r.session_id === session_id)).slice(0, limit)
 }
 
 // ---------------------------------------------------------------------------
@@ -586,8 +588,9 @@ export const api = {
       throw new Error(`The Harness plugin dsh-baton-host ${hostVersion ?? ''} is too old to answer questions; this MCP server is ${VERSION}. Answer in the Harness window, or update the plugin: Plugins → dsh-baton-host → Uninstall, then Add plugin → dsh-baton-host@${VERSION}.`.replace('  ', ' '))
     }
   },
-  async list_runs({ limit = 10 } = {}) {
-    const host = (await hostAvailable()) ? tag('host', await hostCall('list_runs', { limit })) : []
-    return [...host, ...tag('headless', listRuns({ limit }))].sort((x, y) => String(y.started_at).localeCompare(String(x.started_at))).slice(0, limit)
+  async list_runs({ limit = 10, session_id } = {}) {
+    // An older plugin ignores session_id, so the host's runs are filtered here too.
+    const host = (await hostAvailable()) ? tag('host', await hostCall('list_runs', { limit: session_id ? 100 : limit, session_id })).filter((r) => !session_id || r.session_id === session_id) : []
+    return [...host, ...tag('headless', listRuns({ limit, session_id }))].sort((x, y) => String(y.started_at).localeCompare(String(x.started_at))).slice(0, limit)
   },
 }

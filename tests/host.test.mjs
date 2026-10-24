@@ -15,7 +15,7 @@ const IS_WIN = process.platform === 'win32'
 // here, except in the test that points it at a throwaway home.
 process.env.DSH_BATON_AUTO_REGISTER = '0'
 
-function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web, settings, queue = false } = {}) {
+function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web, settings, queue = false, recheckMs = 300 } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-'))
   // Run records go to the bridge home: keep them out of the real ~/.dsh-baton.
   process.env.DSH_BATON_HOME = home ?? path.join(dir, 'bridge')
@@ -79,11 +79,15 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
     },
   }
   process.env.DSH_BATON_SOCKET = sock
+  process.env.DSH_BATON_QUEUE_RECHECK_MS = String(recheckMs)
   apply(ctx)
   const emit = (ev, ...args) => (handlers[ev] ?? []).forEach((fn) => fn(...args))
   // Harness asking the user: the user-questions/request waterfall, the Harness UI as `next`
-  // (by default a window that never answers).
-  const ask = (sessionId, questions, ui = () => new Promise(() => {})) => handlers['user-questions/request'][0]({ agent: { id: sessionId }, questions }, ui)
+  // (by default a window that never answers). The UI sees the request, signal included.
+  const ask = (sessionId, questions, ui = () => new Promise(() => {})) => {
+    const request = { agent: { id: sessionId }, questions }
+    return handlers['user-questions/request'][0](request, () => ui(request))
+  }
   const call = (method, params = {}) => new Promise((resolve, reject) => {
     const conn = net.connect(endpoint)
     let buf = ''
@@ -539,6 +543,39 @@ test('a queued message removed in the Harness UI ends its run; one that started 
   h.emit('session/event', { id: 's1' }, { type: 'agent/inbox/spliced', data: { target: 'next-turn', start: 0, removedCount: 1, inserted: [] } })
   assert.equal((await h.call('wait', { run_id: gone.run_id, timeout_s: 4 })).state, 'cancelled')
   assert.equal((await h.call('status', { run_id: kept.run_id })).state, 'queued')
+  // Should its message reach the conversation after all, the run is taken up again.
+  h.emit(...s.userMessage(h.calls.prompt[1].requestId))
+  assert.equal((await h.call('status', { run_id: gone.run_id })).state, 'running')
+})
+
+test('an edited queued message that starts with its user/message trailing behind keeps its run', async (t) => {
+  const h = startHost({ queue: true, recheckMs: 1500 }); t.after(h.close); await h.ready
+  const s = S('s1')
+  await h.call('send', { session_id: 's1', message: 'x' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.inbox('s1')['next-turn'].shift()
+  const queued = await h.call('send', { session_id: 's1', message: 'X' })
+  await h.call('update_queued', { run_id: queued.run_id, action: 'edit', message: 'RIGHT-X' })
+  // Harness splices the edit in, then the turn ends and the edited message leaves the
+  // inbox for the conversation; its user/message only shows up after the first check.
+  const splice = (removedCount, inserted) => h.emit('session/event', { id: 's1' }, { type: 'agent/inbox/spliced', data: { target: 'next-turn', start: 0, removedCount, inserted } })
+  splice(1, [h.inbox('s1')['next-turn'][0]])
+  h.emit(...s.turnEnd())
+  h.inbox('s1')['next-turn'].shift()
+  splice(1, [])
+  await sleep(2200)
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[1].requestId))
+  await sleep(1200)
+  const st = await h.call('status', { run_id: queued.run_id })
+  assert.equal(st.state, 'running')
+  assert.equal(st.message_preview, 'RIGHT-X')
+})
+
+test('list_runs narrows to one session', async (t) => {
+  const h = startHost(); t.after(h.close); await h.ready
+  const a = await h.call('send', { session_id: 's1', message: 'one' })
+  await h.call('send', { session_id: 's2', message: 'two' })
+  assert.deepEqual((await h.call('list_runs', { session_id: 's1' })).map((r) => r.run_id), [a.run_id])
+  assert.equal((await h.call('list_runs', {})).length, 2)
 })
 
 const QUESTIONS = [
@@ -553,7 +590,8 @@ test('a question ends the wait at once, carries the questions, and dsh_answer re
   h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.emit(...s.status('running'))
   const waiting = h.call('wait', { run_id: run.run_id, timeout_s: 30 })
   await sleep(20)
-  const reply = h.ask('s1', QUESTIONS)
+  let uiRequest
+  const reply = h.ask('s1', QUESTIONS, (request) => { uiRequest = request; return new Promise((_, reject) => request.signal.addEventListener('abort', () => reject(new Error('ASK_ABORTED')))) })
   const w = await waiting
   assert.equal(w.needs_input, 'answer')
   assert.equal(w.state, 'waiting')
@@ -568,6 +606,8 @@ test('a question ends the wait at once, carries the questions, and dsh_answer re
   await assert.rejects(h.call('answer', { run_id: run.run_id, answers: [{ id: 'notes', choose: ['Nope'] }] }), /no option "Nope"/)
   const done = await h.call('answer', { run_id: run.run_id, answers: [{ id: 'notes', choose: ['log', 'Test'], text: 'and docs' }] })
   assert.equal(done.submitted, true)
+  // The Harness window is told to drop its card.
+  assert.equal(uiRequest.signal.aborted, true)
   assert.deepEqual(await reply, { answers: [{ id: 'path', selected: ['Rewrite'] }, { id: 'notes', selected: ['Log', 'Test'], custom: 'and docs' }] })
   await sleep(10)
   const st = await h.call('status', { run_id: run.run_id })

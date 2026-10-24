@@ -60,7 +60,7 @@ Newline-delimited JSON: request `{"id", "method", "params"}`, reply `{"id", "res
 | `cancel` | `run_id` or `session_id` |
 | `rename_session` | `session_id`, `title` |
 | `rename_workspace` | `workspace_id` or `path`, `title` |
-| `list_runs` | `limit?` |
+| `list_runs` | `session_id?`, `limit?` |
 | `answer` | `run_id`, `answers` (`[{ id?, choose?, text?, skip? }]`) |
 | `update_queued` | `run_id`, `action` (`edit` \| `remove` \| `steer`), `message?` (for `edit`) |
 

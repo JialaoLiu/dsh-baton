@@ -97,7 +97,7 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 | `dsh_cancel` | 按 `run_id` 或 `session_id` 停掉整个对话的工作：当前回合、子智能体、后台任务。Harness 会同时清掉队列里等待的消息，这些运行记为 `cancelled` |
 | `dsh_rename_session` | 给对话改名 |
 | `dsh_rename_workspace` | 给工作区改名（只改侧边栏标题，不动文件夹） |
-| `dsh_list_runs` | 列出最近的运行 |
+| `dsh_list_runs` | 列出最近的运行，可按会话筛选 |
 
 </details>
 

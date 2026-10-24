@@ -21,7 +21,7 @@ const USAGE = `Usage: dsh-baton <command> [args]
   cancel <run_id> | --session <id>                        stop the session's turn, sub-agents and jobs
   queued <run_id> edit <message...> | remove | steer      change a message still waiting in Harness's queue
   answer <run_id> '<answers JSON>'                         answer the questions a run is waiting on
-  runs [--limit <n>]                                      list recent runs`
+  runs [--session <id>] [--limit <n>]                     list recent runs`
 
 function parse(argv) {
   const flags = {}, rest = []
@@ -65,7 +65,7 @@ async function main() {
     case 'wait': {
       const st = await core.api.wait({ run_id: rest[0], timeout_s: Number(flags.timeout) || 24 * 3600 })
       print({ run_id: st.run_id, state: st.state, session_id: st.session_id, timed_out: !!st.timed_out, error: st.error, final_text: st.final_text,
-        ...(st.needs_input ? { needs_input: st.needs_input, question: st.question, hint: st.question ? 'The run asks the user something: answer with dsh_answer (or dsh-baton answer), only by your own judgment if the user allowed that, otherwise ask the user first. Then wait again.' : 'The run waits for a person in the Harness UI. Tell the user, then wait again.' } : {}) })
+        ...(st.needs_input ? { needs_input: st.needs_input, question: st.question, hint: st.question ? 'The run asks the user something: answer with dsh_answer (or dsh-baton answer), only by your own judgment if the user allowed that; otherwise show the user the questions with your own recommendation and reason (not just the option marked recommended) and ask first. Then wait again.' : 'The run waits for a person in the Harness UI. Tell the user, then wait again.' } : {}) })
       process.exitCode = st.state === 'completed' ? 0 : st.needs_input ? 3 : 1
       return
     }
@@ -83,7 +83,7 @@ async function main() {
     case 'activity':
       return print(await core.api.activity({ session_id: rest[0] }))
     case 'runs':
-      return print(await core.api.list_runs({ limit: Number(flags.limit) || 10 }))
+      return print(await core.api.list_runs({ limit: Number(flags.limit) || 10, session_id: flags.session }))
     default:
       console.error(USAGE)
       process.exitCode = cmd ? 2 : 0

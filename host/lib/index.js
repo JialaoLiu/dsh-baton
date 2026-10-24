@@ -274,6 +274,15 @@ export function apply(ctx) {
     // Turn state is kept only for a turn in progress and dropped at its end.
     if (event.type === 'turn/start') turns.set(session.id, { hasOutput: false })
     else if (event.type === 'assistant/message' && turns.has(session.id)) turns.get(session.id).hasOutput = true
+    // A run settled as removed from the queue whose message reaches the conversation
+    // after all (the removal check guessed wrong) is taken up again.
+    if (event.type === 'user/message') {
+      const lost = [...runs.values()].find((r) => r.removedFromQueue && r.state === 'cancelled' && r.sessionId === session.id && r.requestId === data.source?.rpcId)
+      if (lost) {
+        Object.assign(lost, { state: 'queued', removedFromQueue: false, error: null, endedAt: null })
+        pushEvent(lost, { type: 'queue_delivered' })
+      }
+    }
     const active = activeRunsFor(session.id)
     if (event.type === 'turn/end' && !active.some((r) => r.sawPrompt)) turns.delete(session.id)
     if (!active.length) return
@@ -438,6 +447,7 @@ export function apply(ctx) {
 
   const QUEUE_UNSUPPORTED = 'This DeepSeek Harness version cannot change queued messages: its session controller has no projections/updateQueue.'
   const queueTimers = new Map() // sessionId -> timeout
+  const QUEUE_RECHECK_MS = Number(process.env.DSH_BATON_QUEUE_RECHECK_MS) || 2000
 
   // Messages still pending in a session's inbox, or null when this Harness cannot say.
   async function pendingMessages(sessionId) {
@@ -451,21 +461,31 @@ export function apply(ctx) {
 
   // Settle the runs whose message left the inbox without reaching the conversation:
   // Harness drops the queue when a session is stopped, and the Harness UI can remove one.
+  // A message taken into the conversation also leaves the inbox, and its user/message
+  // event can trail behind (edited messages, a busy disk), so a run counts as removed
+  // only when it is still missing from both the inbox and the log a moment later.
   async function reconcileQueue(sessionId) {
-    const waiting = activeRunsFor(sessionId).filter((r) => r.admitted && !r.sawPrompt)
+    let gone = await missingFromQueue(sessionId, activeRunsFor(sessionId).filter((r) => r.admitted && !r.sawPrompt))
+    if (!gone.length) return []
+    await new Promise((resolve) => setTimeout(resolve, QUEUE_RECHECK_MS))
+    gone = await missingFromQueue(sessionId, gone.filter((r) => isActive(r) && !r.sawPrompt))
+    for (const run of gone) settle(run, 'cancelled', { error: 'Removed from the Harness queue before it ran.', removedFromQueue: true })
+    return gone.map((r) => r.id)
+  }
+
+  // Of these runs, the ones whose message is neither pending in the inbox nor in the
+  // session log. Nothing is missing when either cannot be read.
+  async function missingFromQueue(sessionId, waiting) {
     if (!waiting.length) return []
     const pending = await pendingMessages(sessionId)
     if (pending === null) return []
     const ids = new Set(pending.map((m) => m?.source?.rpcId))
     const gone = waiting.filter((r) => !ids.has(r.requestId))
     if (!gone.length) return []
-    // A message that was taken into the conversation also leaves the inbox; its
-    // user/message event may still be on its way, so the log has the last word.
-    const { events = [] } = (await controller.inspect(sessionId, signal()).catch(() => null)) ?? {}
-    const delivered = new Set(events.filter((e) => e.type === 'user/message').map((e) => e.data?.source?.rpcId))
-    const removed = gone.filter((r) => !delivered.has(r.requestId) && !r.sawPrompt)
-    for (const run of removed) settle(run, 'cancelled', { error: 'Removed from the Harness queue before it ran.' })
-    return removed.map((r) => r.id)
+    const log = await controller.inspect(sessionId, signal()).catch(() => null)
+    if (!Array.isArray(log?.events)) return []
+    const delivered = new Set(log.events.filter((e) => e.type === 'user/message').map((e) => e.data?.source?.rpcId))
+    return gone.filter((r) => !delivered.has(r.requestId) && !r.sawPrompt)
   }
 
   function scheduleQueueCheck(sessionId) {
@@ -548,14 +568,20 @@ export function apply(ctx) {
       pushEvent(run, { type: 'question', question_id: entry.id, count: entry.items.length })
       needsPerson(run)
     }
+    // The Harness UI (next) gets its own signal: once dsh_answer wins, aborting it tells
+    // the window to drop its question card, which it otherwise keeps open.
+    const ui = new AbortController()
+    const harnessSignal = request.signal
+    request.signal = harnessSignal ? AbortSignal.any([harnessSignal, ui.signal]) : ui.signal
     // With no Harness window to answer, only dsh_answer can: that is not a failure here.
-    const theirs = Promise.resolve().then(next).catch((error) => (error?.code === 'NO_PROVIDER' ? new Promise(() => {}) : Promise.reject(error)))
-    const aborted = new Promise((_, reject) => request.signal?.addEventListener('abort', () => reject(request.signal.reason), { once: true }))
+    const theirs = Promise.resolve().then(next).catch((error) => (error?.code === 'NO_PROVIDER' || ui.signal.aborted ? new Promise(() => {}) : Promise.reject(error)))
+    const aborted = new Promise((_, reject) => harnessSignal?.addEventListener('abort', () => reject(harnessSignal.reason), { once: true }))
     const answered = (by) => (value) => {
       for (const run of asked) pushEvent(run, { type: 'question_answered', question_id: entry.id, by })
       return value
     }
-    return Promise.race([theirs.then(answered('harness')), ours.then(answered('dsh-baton')), aborted]).finally(() => {
+    const fromBaton = ours.then((value) => { ui.abort(new Error('answered through dsh-baton')); return value })
+    return Promise.race([theirs.then(answered('harness')), fromBaton.then(answered('dsh-baton')), aborted]).finally(() => {
       if (questions.get(sessionId) === entry) questions.delete(sessionId)
       for (const run of asked) {
         if (run.question?.question_id !== entry.id) continue
@@ -842,7 +868,7 @@ export function apply(ctx) {
     activity,
     rename_session: renameSession,
     rename_workspace: renameWorkspace,
-    list_runs: ({ limit = 10 } = {}) => [...runs.values()].reverse().slice(0, limit).map((r) => publicRun(r, 0)),
+    list_runs: ({ limit = 10, session_id } = {}) => [...runs.values()].reverse().filter((r) => !session_id || r.sessionId === session_id).slice(0, limit).map((r) => publicRun(r, 0)),
     update_queued: updateQueued,
     answer: answerQuestion,
   }
