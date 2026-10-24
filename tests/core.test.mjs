@@ -156,3 +156,58 @@ test('a plugin on another major.minor than the MCP server gets a warning; a patc
   assert.equal(core.versionWarning(null, '0.4.0'), null)
   assert.match(core.versionWarning('0.3.1', '0.4.0'), /dsh-baton-host is 0\.3\.1 but this MCP server is 0\.4\.0/)
 })
+
+test('a relayed question keeps the asker\'s pick apart from the option labels', () => {
+  const q = core.shapeQuestion({
+    question_id: 'q-1', count: 1, questions: [{
+      id: 'name', question: 'Which name?', multi_select: false, free_text: true, options: [
+        { number: 1, label: '（推荐）一步待办', description: 'short', recommended: true },
+        { number: 2, label: 'listy' },
+        { number: 3, label: 'csvmd (Recommended)' },
+      ],
+    }, { id: 'plain', question: 'Go on?', options: [{ number: 1, label: 'Yes' }, { number: 2, label: 'No' }] }],
+  })
+  assert.deepEqual(q.questions[0].options.map((o) => o.label), ['一步待办', 'listy', 'csvmd'])
+  assert.ok(q.questions[0].options.every((o) => !('recommended' in o)))
+  assert.deepEqual(q.questions[0].harness_suggested, { number: 1, label: '一步待办' })
+  assert.equal(q.questions[1].harness_suggested, undefined)
+  assert.equal(core.shapeQuestion(undefined), undefined)
+})
+
+test('answer keeps reason for the client and sends Harness only the answers', async () => {
+  let sent = null
+  process.env.DSH_BATON_SOCKET = path.join(home, `s${++servers}.sock`)
+  fs.rmSync(process.env.DSH_BATON_SOCKET, { force: true })
+  const server = net.createServer((c) => c.on('data', (d) => {
+    for (const line of String(d).split('\n').filter(Boolean)) {
+      const req = JSON.parse(line)
+      if (req.method === 'answer') sent = req.params
+      const result = req.method === 'answer'
+        ? { run_id: 'hrun-1', state: 'waiting', submitted: true, answers: [{ id: 'name', selected: ['csvmd (Recommended)'] }] }
+        : req.method === 'wait' ? { run_id: req.params.run_id, state: 'completed', final_text: 'GOT: csvmd' }
+          : { version: core.VERSION }
+      c.write(JSON.stringify({ id: req.id, result }) + '\n')
+    }
+  }))
+  await new Promise((r) => server.listen(core.hostSocket(), r))
+  try {
+    const st = await core.api.answer({ run_id: 'hrun-1', answers: [{ choose: [1] }], reason: '  short and says what it does ' })
+    assert.deepEqual(sent, { run_id: 'hrun-1', answers: [{ choose: [1] }] })
+    assert.equal(st.reason, 'short and says what it does')
+    assert.deepEqual(st.answers[0].selected, ['csvmd'])
+    // The final wait carries the choice and reason, so the client tells the user then.
+    const done = await core.api.wait({ run_id: 'hrun-1', timeout_s: 5 })
+    assert.deepEqual(done.decided_for_user, { answers: [{ id: 'name', selected: ['csvmd'] }], reason: 'short and says what it does' })
+    const bare = await core.api.answer({ run_id: 'hrun-2', answers: [{ choose: [1] }] })
+    assert.equal(bare.reason, undefined)
+    assert.equal((await core.api.wait({ run_id: 'hrun-2', timeout_s: 5 })).decided_for_user, undefined)
+  } finally {
+    server.close()
+  }
+})
+
+test('relay lays the question out with the first line left for the client\'s own pick', () => {
+  const text = core.relayText(core.shapeQuestion({ questions: [{ id: 'n', question: 'Which name?', options: [{ number: 1, label: 'csvmd (Recommended)', description: 'short' }, { number: 2, label: 'tabula' }] }] }))
+  assert.equal(text, 'My recommendation: <your pick>, because <your own reason>\n\nWhich name?\n  1. csvmd - short\n  2. tabula\n  (The model in Harness that asked would pick: csvmd)')
+  assert.equal(core.relayText(undefined), undefined)
+})

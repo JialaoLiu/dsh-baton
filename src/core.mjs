@@ -526,6 +526,66 @@ async function useHost() {
   return up
 }
 
+// The asking model marks its favourite option in the label ("(Recommended)", "（推荐）").
+// Clients relaying the question tended to repeat that mark as their own advice, so the
+// label is cleaned and the mark moves to harness_suggested: what the asker suggests, kept
+// apart from the recommendation the client has to form itself. Harness still matches a
+// cleaned label when it is chosen by label.
+const MARK = /\s*(?:\((?:recommended|推荐)\)|（(?:recommended|推荐)）)\s*/gi
+const cleanLabel = (label) => String(label).replace(MARK, ' ').trim()
+export function shapeQuestion(question) {
+  if (!Array.isArray(question?.questions)) return question
+  return {
+    ...question,
+    questions: question.questions.map((q) => {
+      let suggested = null
+      const options = (q.options ?? []).map(({ recommended, ...o }) => {
+        const label = cleanLabel(o.label)
+        if (!suggested && (recommended || label !== o.label)) suggested = { number: o.number, label }
+        return { ...o, label }
+      })
+      return { ...q, options, ...(suggested ? { harness_suggested: suggested } : {}) }
+    }),
+  }
+}
+// The question laid out for the user, ready to show: the first line is left for the
+// client's own recommendation, the asker's pick comes last and only as information.
+// Weaker models fill in a template more reliably than they follow a paragraph of rules.
+export function relayText(question) {
+  if (!Array.isArray(question?.questions)) return undefined
+  const blocks = question.questions.map((q, i) => {
+    const head = `${question.questions.length > 1 ? `${i + 1}. ` : ''}${q.question}${q.multi_select ? ' (several can be chosen)' : ''}`
+    const options = (q.options ?? []).map((o) => `  ${o.number}. ${o.label}${o.description ? ` - ${o.description}` : ''}`)
+    const asker = q.harness_suggested ? [`  (The model in Harness that asked would pick: ${q.harness_suggested.label})`] : []
+    return [head, ...options, ...asker].join('\n')
+  })
+  return ['My recommendation: <your pick>, because <your own reason>', '', ...blocks].join('\n')
+}
+
+// When the client chose for the user (dsh_answer with reason), the choice and reason are
+// kept until the run ends: the final wait result carries them, so the client tells the
+// user then, instead of only passing on the reply. A file, because the client may wait
+// from another process (wait_command).
+const reasonsFile = () => path.join(config.batonHome, 'answer-reasons.json')
+const readReasons = () => { try { return JSON.parse(fs.readFileSync(reasonsFile(), 'utf8')) } catch { return {} } }
+function rememberReason(runId, answers, reason) {
+  try {
+    const all = readReasons()
+    all[runId] = { answers: (answers ?? []).map((a) => ({ id: a.id, selected: (a.selected ?? []).map(cleanLabel), ...(a.custom ? { text: a.custom } : {}) })), reason, at: Date.now() }
+    const kept = Object.entries(all).sort((x, y) => y[1].at - x[1].at).slice(0, 50)
+    ensurePrivateDir(config.batonHome)
+    fs.writeFileSync(reasonsFile(), JSON.stringify(Object.fromEntries(kept)), { mode: 0o600 })
+  } catch { /* the reason is a courtesy; answering never fails over it */ }
+}
+const ENDED = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
+const shaped = (st) => {
+  if (!st || typeof st !== 'object') return st
+  let out = st.question ? { ...st, question: shapeQuestion(st.question) } : st
+  const decided = ENDED.has(st.state) && st.run_id ? readReasons()[st.run_id] : null
+  if (decided) out = { ...out, decided_for_user: { answers: decided.answers, reason: decided.reason } }
+  return Array.isArray(st.answers) ? { ...out, answers: st.answers.map((a) => (Array.isArray(a?.selected) ? { ...a, selected: a.selected.map(cleanLabel) } : a)) } : out
+}
+
 const tag = (backend, value) => (Array.isArray(value) ? value.map((v) => ({ ...v, backend })) : { ...value, backend })
 
 export const api = {
@@ -548,10 +608,10 @@ export const api = {
     return tag('headless', await waitForSessionId(startRun(a)))
   },
   async status({ run_id, tail = 20 }) {
-    return isHostRun(run_id) ? tag('host', await hostCall('status', { run_id, tail })) : tag('headless', runStatus(run_id, { tail }))
+    return shaped(isHostRun(run_id) ? tag('host', await hostCall('status', { run_id, tail })) : tag('headless', runStatus(run_id, { tail })))
   },
   async wait({ run_id, timeout_s = 300 }) {
-    if (isHostRun(run_id)) return tag('host', await hostCall('wait', { run_id, timeout_s }, { timeoutMs: (timeout_s + 15) * 1000 }))
+    if (isHostRun(run_id)) return shaped(tag('host', await hostCall('wait', { run_id, timeout_s }, { timeoutMs: (timeout_s + 15) * 1000 })))
     return tag('headless', await waitRun(run_id, { timeout_s }))
   },
   async cancel({ run_id, session_id }) {
@@ -579,10 +639,15 @@ export const api = {
       throw new Error(`The Harness plugin dsh-baton-host ${hostVersion ?? ''} is too old to change queued messages; this MCP server is ${VERSION}. Update the plugin in Harness: Plugins → dsh-baton-host → Uninstall, then Add plugin → dsh-baton-host@${VERSION}.`.replace('  ', ' '))
     }
   },
-  async answer(a) {
+  // reason (why the client chose, when the user let it decide) stays here: it is for the
+  // user, not for Harness.
+  async answer({ reason, ...a }) {
     if (!(await useHost())) throw new Error('Answering a question needs the dsh-baton-host plugin running inside DeepSeek Harness.')
     try {
-      return await hostCall('answer', a)
+      const result = shaped(await hostCall('answer', a))
+      if (!(typeof reason === 'string' && reason.trim())) return result
+      if (result.submitted) rememberReason(a.run_id, result.answers, reason.trim())
+      return { ...result, reason: reason.trim() }
     } catch (error) {
       if (!/Unknown method: answer/.test(error?.message)) throw error
       throw new Error(`The Harness plugin dsh-baton-host ${hostVersion ?? ''} is too old to answer questions; this MCP server is ${VERSION}. Answer in the Harness window, or update the plugin: Plugins → dsh-baton-host → Uninstall, then Add plugin → dsh-baton-host@${VERSION}.`.replace('  ', ' '))
@@ -591,6 +656,6 @@ export const api = {
   async list_runs({ limit = 10, session_id } = {}) {
     // An older plugin ignores session_id, so the host's runs are filtered here too.
     const host = (await hostAvailable()) ? tag('host', await hostCall('list_runs', { limit: session_id ? 100 : limit, session_id })).filter((r) => !session_id || r.session_id === session_id) : []
-    return [...host, ...tag('headless', listRuns({ limit, session_id }))].sort((x, y) => String(y.started_at).localeCompare(String(x.started_at))).slice(0, limit)
+    return [...host, ...tag('headless', listRuns({ limit, session_id }))].sort((x, y) => String(y.started_at).localeCompare(String(x.started_at))).slice(0, limit).map(shaped)
   },
 }
