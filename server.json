@@ -7,12 +7,12 @@
     "url": "https://github.com/JialaoLiu/dsh-baton",
     "source": "github"
   },
-  "version": "0.5.7",
+  "version": "0.5.8",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "dsh-baton-mcp",
-      "version": "0.5.7",
+      "version": "0.5.8",
       "transport": {
         "type": "stdio"
       }
