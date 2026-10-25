@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url'
 import { within } from '../src/folder.mjs'
 
 const SERVER = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'server.mjs')
+const rm = (p) => fs.rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 
 test('within: same folder or below it, not beside it', () => {
   assert.equal(within('/a/b', '/a/b'), true)
@@ -40,9 +41,13 @@ async function sendFrom({ clientName, cwd, args, meta, env = {} }) {
     { id: 2, method: 'tools/call', params: { name: 'dsh_send', arguments: args, ...(meta ? { _meta: meta } : {}) } },
   ]) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n')
   await new Promise((resolve) => { const tick = setInterval(() => { if (out.includes('"id":2')) { clearInterval(tick); resolve() } }, 50) })
+  // Windows will not delete a folder that a live process uses as its working directory, so
+  // wait for the server to exit (it does when stdin closes) before the caller removes it.
+  const exited = new Promise((r) => child.on('close', r))
   child.stdin.end(); server.close()
+  await exited
   const reply = JSON.parse(out.split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((m) => m.id === 2).result.content[0].text)
-  fs.rmSync(dir, { recursive: true, force: true })
+  rm(dir)
   return { host: sends[0], reply }
 }
 
@@ -58,7 +63,7 @@ test('Claude Code: no cwd means the project folder the server runs in', async ()
   assert.equal(inside.reply.folder_note, undefined)
   const cont = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'hi', session_id: 's1' } })
   assert.equal(cont.host.cwd, undefined, 'continuing a session adds no folder')
-  fs.rmSync(project, { recursive: true, force: true })
+  rm(project)
 })
 
 test('Codex: no cwd means the thread cwd from its rollout, not the server folder', async () => {
@@ -73,7 +78,7 @@ test('Codex: no cwd means the thread cwd from its rollout, not the server folder
   // Unknown thread, server started inside CODEX_HOME: no folder is guessed.
   const none = await sendFrom({ clientName: 'codex-mcp-client', cwd: codexHome, args: { message: 'hi' }, meta: { 'x-codex-turn-metadata': { thread_id: 'nope' } }, env: { CODEX_HOME: codexHome } })
   assert.equal(none.host.cwd, undefined)
-  fs.rmSync(codexHome, { recursive: true, force: true })
+  rm(codexHome)
 })
 
 test('a hand-over with checks asks for a sub-agent review table; a plain message is sent verbatim', async () => {
@@ -82,5 +87,5 @@ test('a hand-over with checks asks for a sub-agent review table; a plain message
   assert.match(handover.host.message, /^build it\n\n---\nWhen the work is done, start a read-only sub-agent/)
   const plain = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'what changed?', session_id: 's1' } })
   assert.equal(plain.host.message, 'what changed?')
-  fs.rmSync(project, { recursive: true, force: true })
+  rm(project)
 })
