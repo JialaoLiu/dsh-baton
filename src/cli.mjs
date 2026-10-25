@@ -68,6 +68,7 @@ async function main() {
         ...(st.decided_for_user ? { hint: 'Required in your reply: you chose an answer for the user during this run, so start your reply by telling the user, in their language, what you chose and why (decided_for_user: answers and reason), then give the result. Passing on only final_text is not enough. ' + core.ENDED_HINT, decided_for_user: st.decided_for_user } : {}),
         run_id: st.run_id, state: st.state, session_id: st.session_id, timed_out: !!st.timed_out, error: st.error, final_text: st.final_text,
         ...(st.state === 'completed' && !st.decided_for_user ? { hint: core.ENDED_HINT } : {}),
+        ...(core.failedHint(st) ? { hint: core.failedHint(st) } : {}),
         ...(st.needs_input ? { needs_input: st.needs_input, question: st.question, ...(st.question ? { relay: core.relayText(st.question) } : {}), hint: st.question ? 'The run asks the user something. If the user allowed you to decide, choose by your own judgment and answer with dsh_answer (or dsh-baton answer), passing reason, and tell the user what you chose and why. Otherwise show the user relay, written in the user\'s language, with its first line filled in with your own pick and a reason from your own judgment of the question and the task (harness_suggested is only the asker\'s pick, never a reason by itself), and ask the user first. Then wait again.' : 'The run waits for a person in the Harness UI. Tell the user, then wait again.' } : {}) })
       process.exitCode = st.state === 'completed' ? 0 : st.needs_input ? 3 : 1
       return

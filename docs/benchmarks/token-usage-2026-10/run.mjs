@@ -29,7 +29,7 @@ const MAX_REWORK = 2
 const ROOT = '/private/tmp/dshb-bench'
 
 const CODEX = '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex'
-const CODEX_MODEL = 'gpt-6.1-sol', CODEX_EFFORT = 'high'
+const CODEX_MODEL = arg('model', 'gpt-6.1-sol'), CODEX_EFFORT = 'high' // --model gpt-6-astra for the Astra check
 const CLAUDE = path.join(os.homedir(), 'Library/Application Support/Claude/claude-code/2.1.304/6bbba6adc37f/claude.app/Contents/MacOS/claude')
 const CLAUDE_MODEL = 'claude-opus-5-5', CLAUDE_EFFORT = 'high'
 

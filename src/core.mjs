@@ -531,6 +531,17 @@ async function useHost() {
 // where it points, and send every fix back in one message.
 export const REVIEW_REQUEST = '\n\n---\nWhen the work is done, start a read-only sub-agent to check it against every requirement above, then end your final reply with its table: requirement | met (yes / no / unclear) | evidence (file:line or test name). Fix anything marked no before replying.'
 
+// A failed run. An account problem on the DeepSeek side (no balance, bad key) fails every
+// retry, and a client that then does the task itself spends the user's own quota on it: seen
+// when the DeepSeek balance ran out mid-benchmark (2026-10-26).
+const ACCOUNT_ERROR = /insufficient balance|payment required|\b402\b|invalid api key|authentication|unauthori[sz]ed|\b401\b|quota/i
+export function failedHint(st) {
+  if (st?.state !== 'failed') return undefined
+  return ACCOUNT_ERROR.test(String(st.error ?? ''))
+    ? `Harness could not reach its model because of the DeepSeek account (${st.error}). Stop here and tell the user, in their language, to fix it (top up the balance or sign in again in Harness), then resend. Do not retry before that, and do not do the task yourself unless the user asks.`
+    : 'The run failed in Harness (see error). Tell the user what failed. Resend once to the same session only if the error looks temporary; do not do the task yourself unless the user asks.'
+}
+
 export const ENDED_HINT = 'evidence is produced by dsh-baton (files changed, checks it ran), not by the Harness reply: trust it over final_text. If a check failed, a requirement has no check, or a file the task needs is missing from evidence.changes, send all fixes back in one message to the same session, quoting the failing output; do not reproduce failures or write test scripts yourself. If every check passed and final_text ends with a review table whose rows are all met, accept it without reading code; read code only for rows marked no or unclear.'
 
 // The asking model marks its favourite option in the label ("(Recommended)", "（推荐）").
