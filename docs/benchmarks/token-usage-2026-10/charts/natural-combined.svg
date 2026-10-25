@@ -1,82 +1,76 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="580" viewBox="0 0 1400 580" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
-<rect width="1400" height="580" fill="#FFFFFF"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1250" height="580" viewBox="0 0 1250 580" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<rect width="1250" height="580" fill="#FFFFFF"/>
 <text x="20" y="30" font-size="17" font-weight="600" fill="#0F172A">Working alone vs handing over to DeepSeek Harness (0.6.0): cost per task (USD)</text>
 <text x="20" y="53" font-size="12.5" fill="#5B6577">Colour = client model, grey = DeepSeek (peak price); working alone has no grey. Top = total; “client” under a bar = without DeepSeek.</text>
-<text x="20" y="72" font-size="12.5" fill="#5B6577">Each bar is the mean of 3 runs; the Astra pair prices the tokens measured with Sol at Astra list prices. Green = less than working alone, red = more.</text>
-<line x1="60" x2="1376" y1="424" y2="424" stroke="#E2E7EF"/>
+<text x="20" y="72" font-size="12.5" fill="#5B6577">Claude Code and Sol bars are the mean of 3 runs; Astra was measured on the medium task only, one run each. All measured, at list price. Green = less than working alone, red = more.</text>
+<line x1="60" x2="1226" y1="424" y2="424" stroke="#E2E7EF"/>
 <text x="52" y="428" font-size="11.5" fill="#5B6577" text-anchor="end">$0.00</text>
-<line x1="60" x2="1376" y1="314.6666666666667" y2="314.6666666666667" stroke="#E2E7EF"/>
-<text x="52" y="318.6666666666667" font-size="11.5" fill="#5B6577" text-anchor="end">$1.00</text>
-<line x1="60" x2="1376" y1="205.33333333333334" y2="205.33333333333334" stroke="#E2E7EF"/>
-<text x="52" y="209.33333333333334" font-size="11.5" fill="#5B6577" text-anchor="end">$2.00</text>
-<line x1="60" x2="1376" y1="96" y2="96" stroke="#E2E7EF"/>
-<text x="52" y="100" font-size="11.5" fill="#5B6577" text-anchor="end">$3.00</text>
-<text x="132.66666666666669" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
-<path d="M100.66666666666667,424 V311.08986666666664 Q100.66666666666667,307.08986666666664 104.66666666666667,307.08986666666664 H160.66666666666669 Q164.66666666666669,307.08986666666664 164.66666666666669,311.08986666666664 V424 Z" fill="#C27803"/>
-<text x="132.66666666666669" y="299.08986666666664" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$1.07</text>
-<text x="206.66666666666669" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Handed over (0.6.0)</text>
-<rect x="174.66666666666669" y="385.34257777777776" width="64" height="38.65742222222224" fill="#2563EB"/>
-<path d="M174.66666666666669,383.34257777777776 V368.4041608497778 Q174.66666666666669,364.4041608497778 178.66666666666669,364.4041608497778 H234.66666666666669 Q238.66666666666669,364.4041608497778 238.66666666666669,368.4041608497778 V383.34257777777776 Z" fill="#C3CAD5"/>
-<text x="206.66666666666669" y="342.4041608497778" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.55</text>
-<text x="206.66666666666669" y="357.4041608497778" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−49%</text>
-<text x="206.66666666666669" y="458" font-size="11" fill="#5B6577" text-anchor="middle">client $0.37<tspan dx="6" font-weight="600" fill="#067647">−65%</tspan></text>
-<text x="169.66666666666669" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
-<text x="352.00000000000006" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
-<path d="M320.00000000000006,424 V195.56826666666666 Q320.00000000000006,191.56826666666666 324.00000000000006,191.56826666666666 H380.00000000000006 Q384.00000000000006,191.56826666666666 384.00000000000006,195.56826666666666 V424 Z" fill="#C27803"/>
-<text x="352.00000000000006" y="183.56826666666666" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$2.13</text>
-<text x="426.00000000000006" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Handed over (0.6.0)</text>
-<rect x="394.00000000000006" y="380.7068444444444" width="64" height="43.293155555555586" fill="#2563EB"/>
-<path d="M394.00000000000006,378.7068444444444 V351.5066968071111 Q394.00000000000006,347.5066968071111 398.00000000000006,347.5066968071111 H454.00000000000006 Q458.00000000000006,347.5066968071111 458.00000000000006,351.5066968071111 V378.7068444444444 Z" fill="#C3CAD5"/>
-<text x="426.00000000000006" y="325.5066968071111" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.70</text>
-<text x="426.00000000000006" y="340.5066968071111" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−67%</text>
-<text x="426.00000000000006" y="458" font-size="11" fill="#5B6577" text-anchor="middle">client $0.41<tspan dx="6" font-weight="600" fill="#067647">−81%</tspan></text>
-<text x="389.00000000000006" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Large task</text>
-<text x="571.3333333333334" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
-<path d="M539.3333333333334,424 V409.4793706666667 Q539.3333333333334,405.4793706666667 543.3333333333334,405.4793706666667 H599.3333333333334 Q603.3333333333334,405.4793706666667 603.3333333333334,409.4793706666667 V424 Z" fill="#C27803"/>
-<text x="571.3333333333334" y="397.4793706666667" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.17</text>
-<text x="645.3333333333334" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Handed over (0.6.0)</text>
-<rect x="613.3333333333334" y="416.63871964444445" width="64" height="7.36128035555555" fill="#2563EB"/>
-<path d="M613.3333333333334,414.63871964444445 V396.0409654684444 Q613.3333333333334,392.0409654684444 617.3333333333334,392.0409654684444 H673.3333333333334 Q677.3333333333334,392.0409654684444 677.3333333333334,396.0409654684444 V414.63871964444445 Z" fill="#C3CAD5"/>
-<text x="645.3333333333334" y="370.0409654684444" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.29</text>
-<text x="645.3333333333334" y="385.0409654684444" font-size="11.5" font-weight="600" fill="#B42318" text-anchor="middle">+73%</text>
-<text x="645.3333333333334" y="458" font-size="11" fill="#5B6577" text-anchor="middle">client $0.09<tspan dx="6" font-weight="600" fill="#067647">−49%</tspan></text>
-<text x="608.3333333333334" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
-<text x="790.6666666666666" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
-<path d="M758.6666666666666,424 V382.7743104 Q758.6666666666666,378.7743104 762.6666666666666,378.7743104 H818.6666666666666 Q822.6666666666666,378.7743104 822.6666666666666,382.7743104 V424 Z" fill="#C27803"/>
-<text x="790.6666666666666" y="370.7743104" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.41</text>
-<text x="864.6666666666666" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Handed over (0.6.0)</text>
-<rect x="832.6666666666666" y="414.6668419555555" width="64" height="9.333158044444474" fill="#2563EB"/>
-<path d="M832.6666666666666,412.6668419555555 V383.68995855288887 Q832.6666666666666,379.68995855288887 836.6666666666666,379.68995855288887 H892.6666666666666 Q896.6666666666666,379.68995855288887 896.6666666666666,383.68995855288887 V412.6668419555555 Z" fill="#C3CAD5"/>
-<text x="864.6666666666666" y="357.68995855288887" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.41</text>
-<text x="864.6666666666666" y="372.68995855288887" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−2%</text>
-<text x="864.6666666666666" y="458" font-size="11" fill="#5B6577" text-anchor="middle">client $0.10<tspan dx="6" font-weight="600" fill="#067647">−75%</tspan></text>
-<text x="827.6666666666666" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Large task</text>
-<text x="1010" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
-<path d="M978,424 V326.6735111111111 Q978,322.6735111111111 982,322.6735111111111 H1038 Q1042,322.6735111111111 1042,326.6735111111111 V424 Z" fill="#C27803"/>
-<text x="1010" y="314.6735111111111" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.93</text>
-<text x="1084" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Handed over (0.6.0)</text>
-<rect x="1052" y="366.6380497777778" width="64" height="57.36195022222222" fill="#2563EB"/>
-<path d="M1052,364.6380497777778 V346.04029560177776 Q1052,342.04029560177776 1056,342.04029560177776 H1112 Q1116,342.04029560177776 1116,346.04029560177776 V364.6380497777778 Z" fill="#C3CAD5"/>
-<text x="1084" y="320.04029560177776" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.75</text>
-<text x="1084" y="335.04029560177776" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−19%</text>
-<text x="1084" y="458" font-size="11" fill="#5B6577" text-anchor="middle">client $0.54<tspan dx="6" font-weight="600" fill="#067647">−41%</tspan></text>
-<text x="1047" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
-<text x="1229.3333333333335" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
-<path d="M1197.3333333333335,424 V141.99537066666664 Q1197.3333333333335,137.99537066666664 1201.3333333333335,137.99537066666664 H1257.3333333333335 Q1261.3333333333335,137.99537066666664 1261.3333333333335,141.99537066666664 V424 Z" fill="#C27803"/>
-<text x="1229.3333333333335" y="129.99537066666664" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$2.62</text>
-<text x="1303.3333333333335" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Handed over (0.6.0)</text>
-<rect x="1271.3333333333335" y="354.68412622222223" width="64" height="69.31587377777777" fill="#2563EB"/>
-<path d="M1271.3333333333335,352.68412622222223 V323.7072428195556 Q1271.3333333333335,319.7072428195556 1275.3333333333335,319.7072428195556 H1331.3333333333335 Q1335.3333333333335,319.7072428195556 1335.3333333333335,323.7072428195556 V352.68412622222223 Z" fill="#C3CAD5"/>
-<text x="1303.3333333333335" y="297.7072428195556" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.95</text>
-<text x="1303.3333333333335" y="312.7072428195556" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−64%</text>
-<text x="1303.3333333333335" y="458" font-size="11" fill="#5B6577" text-anchor="middle">client $0.65<tspan dx="6" font-weight="600" fill="#067647">−75%</tspan></text>
-<text x="1266.3333333333335" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Large task</text>
-<line x1="72" x2="486.6666666666667" y1="494" y2="494" stroke="#E2E7EF" stroke-width="2"/>
-<text x="279.33333333333337" y="514" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Claude Code · Opus 5.5 high</text>
-<line x1="510.6666666666667" x2="925.3333333333334" y1="494" y2="494" stroke="#E2E7EF" stroke-width="2"/>
-<text x="718" y="514" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Codex · GPT-6.1 Sol high</text>
-<line x1="949.3333333333334" x2="1364" y1="494" y2="494" stroke="#E2E7EF" stroke-width="2"/>
-<text x="1156.6666666666667" y="514" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Codex · GPT-6 Astra high (priced estimate)</text>
+<line x1="60" x2="1226" y1="358.40000000000003" y2="358.40000000000003" stroke="#E2E7EF"/>
+<text x="52" y="362.40000000000003" font-size="11.5" fill="#5B6577" text-anchor="end">$0.50</text>
+<line x1="60" x2="1226" y1="292.79999999999995" y2="292.79999999999995" stroke="#E2E7EF"/>
+<text x="52" y="296.79999999999995" font-size="11.5" fill="#5B6577" text-anchor="end">$1.00</text>
+<line x1="60" x2="1226" y1="227.20000000000002" y2="227.20000000000002" stroke="#E2E7EF"/>
+<text x="52" y="231.20000000000002" font-size="11.5" fill="#5B6577" text-anchor="end">$1.50</text>
+<line x1="60" x2="1226" y1="161.59999999999997" y2="161.59999999999997" stroke="#E2E7EF"/>
+<text x="52" y="165.59999999999997" font-size="11.5" fill="#5B6577" text-anchor="end">$2.00</text>
+<line x1="60" x2="1226" y1="96" y2="96" stroke="#E2E7EF"/>
+<text x="52" y="100" font-size="11.5" fill="#5B6577" text-anchor="end">$2.50</text>
+<text x="139.6" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M107.6,424 V287.70784000000003 Q107.6,283.70784000000003 111.6,283.70784000000003 H167.6 Q171.6,283.70784000000003 171.6,287.70784000000003 V424 Z" fill="#C27803"/>
+<text x="139.6" y="275.70784000000003" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$1.07</text>
+<text x="213.6" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Handed over (0.6.0)</text>
+<rect x="181.6" y="377.21109333333334" width="64" height="46.78890666666666" fill="#2563EB"/>
+<path d="M181.6,375.21109333333334 V356.48499301973334 Q181.6,352.48499301973334 185.6,352.48499301973334 H241.6 Q245.6,352.48499301973334 245.6,356.48499301973334 V375.21109333333334 Z" fill="#C3CAD5"/>
+<text x="213.6" y="330.48499301973334" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.55</text>
+<text x="213.6" y="345.48499301973334" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−49%</text>
+<text x="213.6" y="458" font-size="11" fill="#5B6577" text-anchor="middle">client $0.37<tspan dx="6" font-weight="600" fill="#067647">−65%</tspan></text>
+<text x="176.6" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
+<text x="372.79999999999995" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M340.79999999999995,424 V149.08192 Q340.79999999999995,145.08192 344.79999999999995,145.08192 H400.79999999999995 Q404.79999999999995,145.08192 404.79999999999995,149.08192 V424 Z" fill="#C27803"/>
+<text x="372.79999999999995" y="137.08192" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$2.13</text>
+<text x="446.79999999999995" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Handed over (0.6.0)</text>
+<rect x="414.79999999999995" y="371.64821333333333" width="64" height="52.35178666666667" fill="#2563EB"/>
+<path d="M414.79999999999995,369.64821333333333 V336.20803616853334 Q414.79999999999995,332.20803616853334 418.79999999999995,332.20803616853334 H474.79999999999995 Q478.79999999999995,332.20803616853334 478.79999999999995,336.20803616853334 V369.64821333333333 Z" fill="#C3CAD5"/>
+<text x="446.79999999999995" y="310.20803616853334" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.70</text>
+<text x="446.79999999999995" y="325.20803616853334" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−67%</text>
+<text x="446.79999999999995" y="458" font-size="11" fill="#5B6577" text-anchor="middle">client $0.41<tspan dx="6" font-weight="600" fill="#067647">−81%</tspan></text>
+<text x="409.79999999999995" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Large task</text>
+<text x="606" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M574,424 V405.7752448 Q574,401.7752448 578,401.7752448 H634 Q638,401.7752448 638,405.7752448 V424 Z" fill="#C27803"/>
+<text x="606" y="393.7752448" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.17</text>
+<text x="680" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Handed over (0.6.0)</text>
+<rect x="648" y="414.76646357333334" width="64" height="9.23353642666666" fill="#2563EB"/>
+<path d="M648,412.76646357333334 V389.6491585621333 Q648,385.6491585621333 652,385.6491585621333 H708 Q712,385.6491585621333 712,389.6491585621333 V412.76646357333334 Z" fill="#C3CAD5"/>
+<text x="680" y="363.6491585621333" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.29</text>
+<text x="680" y="378.6491585621333" font-size="11.5" font-weight="600" fill="#B42318" text-anchor="middle">+73%</text>
+<text x="680" y="458" font-size="11" fill="#5B6577" text-anchor="middle">client $0.09<tspan dx="6" font-weight="600" fill="#067647">−49%</tspan></text>
+<text x="643" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
+<text x="839.1999999999999" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M807.1999999999999,424 V373.72917248 Q807.1999999999999,369.72917248 811.1999999999999,369.72917248 H867.1999999999999 Q871.1999999999999,369.72917248 871.1999999999999,373.72917248 V424 Z" fill="#C27803"/>
+<text x="839.1999999999999" y="361.72917248" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.41</text>
+<text x="913.1999999999999" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Handed over (0.6.0)</text>
+<rect x="881.1999999999999" y="412.40021034666665" width="64" height="11.599789653333346" fill="#2563EB"/>
+<path d="M881.1999999999999,410.40021034666665 V374.8279502634667 Q881.1999999999999,370.8279502634667 885.1999999999999,370.8279502634667 H941.1999999999999 Q945.1999999999999,370.8279502634667 945.1999999999999,374.8279502634667 V410.40021034666665 Z" fill="#C3CAD5"/>
+<text x="913.1999999999999" y="348.8279502634667" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.41</text>
+<text x="913.1999999999999" y="363.8279502634667" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−2%</text>
+<text x="913.1999999999999" y="458" font-size="11" fill="#5B6577" text-anchor="middle">client $0.10<tspan dx="6" font-weight="600" fill="#067647">−75%</tspan></text>
+<text x="876.1999999999999" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Large task</text>
+<text x="1072.3999999999999" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M1040.3999999999999,424 V324.285088 Q1040.3999999999999,320.285088 1044.3999999999999,320.285088 H1100.3999999999999 Q1104.3999999999999,320.285088 1104.3999999999999,324.285088 V424 Z" fill="#C27803"/>
+<text x="1072.3999999999999" y="312.285088" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.79</text>
+<text x="1146.3999999999999" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">Handed over (0.6.0)</text>
+<rect x="1114.3999999999999" y="366.4913536" width="64" height="57.508646399999975" fill="#2563EB"/>
+<path d="M1114.3999999999999,364.4913536 V342.99342447360004 Q1114.3999999999999,338.99342447360004 1118.3999999999999,338.99342447360004 H1174.3999999999999 Q1178.3999999999999,338.99342447360004 1178.3999999999999,342.99342447360004 V364.4913536 Z" fill="#C3CAD5"/>
+<text x="1146.3999999999999" y="316.99342447360004" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.65</text>
+<text x="1146.3999999999999" y="331.99342447360004" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−18%</text>
+<text x="1146.3999999999999" y="458" font-size="11" fill="#5B6577" text-anchor="middle">client $0.45<tspan dx="6" font-weight="600" fill="#067647">−43%</tspan></text>
+<text x="1109.3999999999999" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
+<line x1="72" x2="514.4" y1="494" y2="494" stroke="#E2E7EF" stroke-width="2"/>
+<text x="293.2" y="514" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Claude Code · Opus 5.5 high</text>
+<line x1="538.4" x2="980.8" y1="494" y2="494" stroke="#E2E7EF" stroke-width="2"/>
+<text x="759.5999999999999" y="514" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Codex · GPT-6.1 Sol high</text>
+<line x1="1004.8" x2="1214" y1="494" y2="494" stroke="#E2E7EF" stroke-width="2"/>
+<text x="1109.4" y="514" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Codex · GPT-6 Astra high (1 run each)</text>
 <rect x="20" y="546" width="12" height="12" rx="2" fill="#C27803"/>
 <text x="38" y="556" font-size="12.5" fill="#0F172A">Alone</text>
 <rect x="90.4" y="546" width="12" height="12" rx="2" fill="#2563EB"/>

@@ -48,7 +48,8 @@ function courierCost(r) {
     .map((f) => path.join(dir, f)).filter((f) => { const head = fs.readFileSync(f, 'utf8').slice(0, 20000); return head.includes(r.thread) && head.includes(r.dir) })
     .reduce((a, f) => { const u = lastUsage(f); return a + (u ? solCost(u) : 0) }, 0)
 }
-const mainCost = (r) => (r.gpt ? solCost(r.gpt) + (r.courier ? courierCost(r) : 0) : r.cost_usd)
+// Runs made with Astra (--model gpt-6-astra) are priced as Astra; the rest as Sol (or Astra under --astra).
+const mainCost = (r) => (r.gpt ? (/astra/.test(r.model) ? costAt(r.gpt, ASTRA_PRICE) : solCost(r.gpt)) + (r.courier ? courierCost(r) : 0) : r.cost_usd)
 const dsCost = (r) => (r.harness ? (r.harness.deepseek.inputTokens * PRICE.deepseek.miss + r.harness.deepseek.cacheReadTokens * PRICE.deepseek.hit + r.harness.deepseek.outputTokens * PRICE.deepseek.output) / 1e6 : 0)
 function measuredQuota(r) {
   const seen = fs.readFileSync(home(r.rollout), 'utf8').split('\n').filter((l) => l.includes('"token_count"') && l.includes('used_percent'))
@@ -205,27 +206,28 @@ const quotaGroups = ['medium', 'large'].map((size) => ({
 if (!ASTRA) chart({ title: T.quotaTitle, note: T.quotaNote.replace('$RATE', `$${DOLLARS_PER_PERCENT.toFixed(3)}`), note2: ZH ? '每根柱子是 3 次的平均值；≈ 表示含估算。绿色百分比 = 比自己做省多少。' : 'Each bar is the mean of 3 runs; ≈ marks estimates. Green % = less than working alone.', groups: quotaGroups, file: `natural-codex-quota${RELEASE ? '-release' : ''}`, unit: (v) => `${v.toFixed(1)}%`, legend: methodsFor('codex').map((m) => ({ name: name(m), color: m.color })) })
 if (COMBINED) {
   const alone = METHODS[0], handed = { key: 'B', label: 'nreview', color: '#2563EB', zh: '转交（0.6.0）', en: 'Handed over (0.6.0)' }
+  // Astra: measured, medium only (one run each way, 2026-10-26); no estimate.
   const panels = [
-    { client: 'claude', model: ZH ? 'Claude Code · Opus 5.5 high' : 'Claude Code · Opus 5.5 high', own: mainCost },
-    { client: 'codex', model: ZH ? 'Codex · GPT-6.1 Sol high' : 'Codex · GPT-6.1 Sol high', own: mainCost },
-    { client: 'codex', model: ZH ? 'Codex · GPT-6 Astra high（按标价估算）' : 'Codex · GPT-6 Astra high (priced estimate)', own: (r) => costAt(r.gpt, ASTRA_PRICE) },
+    { client: 'claude', model: 'Claude Code · Opus 5.5 high', sizes: ['medium', 'large'], alone, handed },
+    { client: 'codex', model: 'Codex · GPT-6.1 Sol high', sizes: ['medium', 'large'], alone, handed },
+    { client: 'codex', model: ZH ? 'Codex · GPT-6 Astra high（各 1 次）' : 'Codex · GPT-6 Astra high (1 run each)', sizes: ['medium'], alone: { ...alone, label: 'nastra' }, handed: { ...handed, label: 'nastra' } },
   ]
-  const groups = panels.flatMap((pnl) => ['medium', 'large'].map((size) => {
-    const base = pick(pnl.client, size, alone), list = pick(pnl.client, size, handed)
-    const tot = (l) => mean(l.map((r) => pnl.own(r) + dsCost(r)))
-    const own = mean(list.map(pnl.own)), baseOwn = mean(base.map(pnl.own))
+  const groups = panels.flatMap((pnl) => pnl.sizes.map((size) => {
+    const base = pick(pnl.client, size, pnl.alone), list = pick(pnl.client, size, pnl.handed)
+    const tot = (l) => mean(l.map((r) => mainCost(r) + dsCost(r)))
+    const own = mean(list.map(mainCost)), baseOwn = mean(base.map(mainCost))
     return {
       name: T[size], section: pnl.model,
       bars: [
-        { name: name(alone), label: mean(base.map(pnl.own)), parts: [{ v: baseOwn, color: alone.color }] },
+        { name: name(alone), label: baseOwn, parts: [{ v: baseOwn, color: alone.color }] },
         { name: name(handed), label: tot(list), change: change(tot(list), baseOwn), inner: { value: own, change: change(own, baseOwn) }, parts: [{ v: own, color: handed.color }, { v: mean(list.map(dsCost)), color: C.DS }] },
       ],
     }
   }))
   chart({
     title: ZH ? '自己做 vs 转交 DeepSeek Harness（0.6.0）：每个任务花多少钱（美元）' : 'Working alone vs handing over to DeepSeek Harness (0.6.0): cost per task (USD)',
-    note: ZH ? '彩色 = 主 Agent，灰色 = DeepSeek（按高峰价）；“自己做”不用 DeepSeek，所以没有灰色。柱顶 = 合计；柱下“主 Agent” = 不含 DeepSeek。' : 'Colour = client model, grey = DeepSeek (peak price); working alone has no grey. Top = total; “client” under a bar = without DeepSeek.', note2: ZH ? '每根柱子是 3 次运行的平均值；Astra 一组用 Sol 实测的 token 数按 Astra 标价换算。绿色 = 比自己做省多少，红色 = 贵多少。' : 'Each bar is the mean of 3 runs; the Astra pair prices the tokens measured with Sol at Astra list prices. Green = less than working alone, red = more.',
-    groups, file: 'natural-combined', width: 1400, height: 580, innerBelow: true, unit: (v) => `$${v.toFixed(2)}`,
+    note: ZH ? '彩色 = 主 Agent，灰色 = DeepSeek（按高峰价）；“自己做”不用 DeepSeek，所以没有灰色。柱顶 = 合计；柱下“主 Agent” = 不含 DeepSeek。' : 'Colour = client model, grey = DeepSeek (peak price); working alone has no grey. Top = total; “client” under a bar = without DeepSeek.', note2: ZH ? 'Claude Code 和 Sol 每根柱子是 3 次运行的平均值；Astra 只测了中号，各 1 次。全部为实测，按标价计。绿色 = 比自己做省多少，红色 = 贵多少。' : 'Claude Code and Sol bars are the mean of 3 runs; Astra was measured on the medium task only, one run each. All measured, at list price. Green = less than working alone, red = more.',
+    groups, file: 'natural-combined', width: 1250, height: 580, innerBelow: true, unit: (v) => `$${v.toFixed(2)}`,
     legend: [{ name: name(alone), color: alone.color }, { name: name(handed), color: handed.color }, { name: T.ds, color: C.DS }],
   })
 }

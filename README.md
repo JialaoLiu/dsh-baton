@@ -81,7 +81,7 @@ Measured on 2026-10-25/26 with plain-language requests (what a user would type, 
 | Large: web app, API, tests | $2.13 | $0.41 client, $0.70 with DeepSeek | $0.41 | $0.10 client, $0.41 with DeepSeek |
 
 - **Claude Code** spends 65–81% less, and still about half or less once DeepSeek is added.
-- **Codex** (gpt-6.1-sol, high) spends half to three quarters less of its own model, so a ChatGPT Plus 5-hour window lasts more than twice as long: 0.8% instead of 1.9% per medium task, 1.0% instead of 4.3% per large one. Sol is cheap, so with DeepSeek added a medium task costs more in total than doing it in Codex, and a large one about the same; the saving is in the subscription quota. With a pricier model the total drops too.
+- **Codex** (gpt-6.1-sol, high) spends half to three quarters less of its own model, so a ChatGPT Plus 5-hour window lasts more than twice as long: 0.8% instead of 1.9% per medium task, 1.0% instead of 4.3% per large one. Sol is cheap, so with DeepSeek added a medium task costs more in total than doing it in Codex, and a large one about the same; the saving is in the subscription quota. With GPT-6 Astra (high; medium task, one run each) the total drops too: $0.79 alone against $0.45 for Codex and $0.65 with DeepSeek, and 3% of the 5-hour window instead of 7%.
 - All 12 runs of 0.6.0 passed the acceptance test the first time.
 
 The [full report](./docs/benchmarks/token-usage-2026-10.md) has the method, every run, the earlier builds that were compared, raw data and scripts.

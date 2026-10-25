@@ -78,3 +78,11 @@ With the check fixed, the hand-over costs about half of working alone on the lar
 - Started to fill Codex lean and Claude evidence cells. The DeepSeek account ran out of balance during the batch, so these runs are marked `valid: false` (`invalid_reason` in the rows) and left out of every chart; the last two were stopped.
 - The 0.6.0 (review table) runs had finished before (all 12 by 02:30) and are unaffected.
 - Charts: one combined chart (`charts/natural-combined[.zh]`) compares working alone with 0.6.0 for Claude Code, Codex (Sol) and Codex priced as Astra, with the model named under each pair. The Codex desktop run was not done.
+
+### 2026-10-26 02:57–03:20: Codex with GPT-6 Astra (high), medium task, one run each, run one after the other
+| | GPT tokens in / cached / out | Astra list price | DeepSeek | 5-hour window |
+|---|---|---|---|---|
+| Alone | 163,329 / 152,320 / 10,562 | $0.79 | – | 61% → 68% (7%) |
+| Handed over (0.6.0-next.0) | 202,236 / 181,632 / 1,318 | $0.45 | $0.19 | 69% → 72% (3%) |
+- Both passed the first time. The earlier estimate (Sol tokens at Astra prices) was $0.93 alone and $0.54 handed over: Astra used slightly fewer tokens than Sol, so the estimate ran about 15% high; the savings were close (−43% measured vs −41%).
+- About $0.11–0.15 of Astra per 1% of the Plus window, close to Sol's $0.10: the window tracks list price. The estimated Astra charts are removed; the combined chart shows these measured runs.
