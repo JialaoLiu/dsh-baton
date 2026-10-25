@@ -66,7 +66,7 @@ The npm name `dsh-bridge` belongs to an unrelated project. `dsh-baton`, `dsh-bat
    git push && git push origin v<version>
    ```
 
-   A plain version (`v0.4.1`) goes to `latest`. A pre-release (`v0.5.0-next.0`) goes to `next`, for trying a release before users get it: `npx -y dsh-baton-mcp@next setup`, and `dsh-baton-host@next` in Harness. To hand a version already tried under `next` to everyone, push its plain tag (`v0.4.0` for 0.4.0): the workflow sees it is published and moves `latest` to it instead of publishing again. This needs the Trusted Publisher to allow managing dist-tags (Allowed actions).
+   A plain version (`v0.4.1`) goes to `latest`. A pre-release (`v0.5.0-next.0`) goes to `next`, for trying a release before users get it: `npx -y dsh-baton-mcp@next setup`, and in Harness the exact version, `dsh-baton-host@0.5.0-next.0`: Harness resolves the tag `@next` to a broken placeholder tarball (`0.0.0-stage`, "Unexpected end of TAR archive") and drops the plugin. To hand a version already tried under `next` to everyone, push its plain tag (`v0.4.0` for 0.4.0): the workflow sees it is published and moves `latest` to it instead of publishing again. This needs the Trusted Publisher to allow managing dist-tags (Allowed actions).
 
    Watch the run under the repo's **Actions** tab.
 

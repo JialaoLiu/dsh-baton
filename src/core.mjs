@@ -168,11 +168,18 @@ export async function hostAvailable() {
 export const hostVersionSeen = () => hostVersion
 
 // The plugin and the MCP server update separately (Harness and npx), so they can drift.
-// A different major.minor gets a note asking to update the older side; patch releases mix.
+// A different major.minor gets a note asking to update the older side to the newer side's
+// exact version; patch releases mix. Not @latest: on a pre-release that would go back a version
+// (and Harness resolves a tag such as @next to a broken tarball, so the plugin needs the number).
 const minorOf = (v) => String(v).split('.').slice(0, 2).join('.')
+const parts = (v) => String(v).split('-')[0].split('.').map(Number)
+const older = (a, b) => { const x = parts(a), y = parts(b); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i]; return false }
 export function versionWarning(plugin = hostVersion, server = VERSION) {
   if (!plugin || minorOf(plugin) === minorOf(server)) return null
-  return `The Harness plugin dsh-baton-host is ${plugin} but this MCP server is ${server}. Update the older one: the server with \`npx -y dsh-baton-mcp@latest setup\`, the plugin in Harness (Plugins → dsh-baton-host → Uninstall, then Add plugin → dsh-baton-host).`
+  const fix = older(plugin, server)
+    ? `Update the plugin in Harness: Plugins → dsh-baton-host → Uninstall, then Add plugin → dsh-baton-host@${server}.`
+    : `Update the server: \`npx -y dsh-baton-mcp@${plugin} setup\`.`
+  return `The Harness plugin dsh-baton-host is ${plugin} but this MCP server is ${server}. ${fix}`
 }
 
 // Who a relayed message is from, shown on it in the Harness chat: DSH_BATON_SENDER if set,

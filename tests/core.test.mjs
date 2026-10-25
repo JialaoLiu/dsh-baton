@@ -155,6 +155,9 @@ test('a plugin on another major.minor than the MCP server gets a warning; a patc
   assert.equal(core.versionWarning('0.4.1', '0.4.0'), null)
   assert.equal(core.versionWarning(null, '0.4.0'), null)
   assert.match(core.versionWarning('0.3.1', '0.4.0'), /dsh-baton-host is 0\.3\.1 but this MCP server is 0\.4\.0/)
+  assert.match(core.versionWarning('0.5.9', '0.6.0-next.0'), /Add plugin → dsh-baton-host@0\.6\.0-next\.0\.$/)
+  assert.match(core.versionWarning('0.6.0', '0.5.9'), /npx -y dsh-baton-mcp@0\.6\.0 setup/)
+  assert.doesNotMatch(core.versionWarning('0.5.9', '0.6.0-next.0'), /@latest/)
 })
 
 test('a relayed question keeps the asker\'s pick apart from the option labels', () => {
