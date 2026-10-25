@@ -58,7 +58,7 @@ function ended({ recent_events, message_preview, backend, ...st }) {
   // decided_for_user first, so a client that skims to final_text still meets it.
   return st.decided_for_user
     ? { hint: `${DECIDED_HINT} ${core.ENDED_HINT}`, decided_for_user: st.decided_for_user, ...out }
-    : { ...out, hint: core.ENDED_HINT }
+    : { ...out, hint: core.failedHint(st) ?? core.ENDED_HINT }
 }
 
 // Wait in short chunks, reporting progress between them (clients that support it can
