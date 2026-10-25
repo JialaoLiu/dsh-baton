@@ -217,10 +217,11 @@ if (COMBINED) {
   }
   const panels = [
     { title: 'Claude Code · Opus 5.5 high', cells: [cell('claude', 'medium'), cell('claude', 'large')] },
-    { title: 'Codex', cells: [cell('codex', 'medium', null, 'GPT-6.1 Sol high'), cell('codex', 'large', null, 'GPT-6.1 Sol high'), cell('codex', 'medium', 'nastra', ZH ? 'GPT-6 Astra high（各 1 次）' : 'GPT-6 Astra high (1 run each)')] },
+    { title: 'Codex · GPT-6.1 Sol high', cells: [cell('codex', 'medium'), cell('codex', 'large')] },
+    { title: 'Codex · GPT-6 Astra high', cells: [cell('codex', 'medium', 'nastra', ZH ? '转交为 2 次平均' : 'hand-over: mean of 2'), cell('codex', 'large', 'nastra', ZH ? '各 1 次' : '1 run each')] },
   ]
-  const W = 1400, H = 640, TOP = 120, BOT = 150, GAP = 70, LEFT = 70
-  const usable = W - LEFT - 30 - GAP - 60
+  const W = 1600, H = 640, TOP = 120, BOT = 150, GAP = 76, LEFT = 70
+  const usable = W - LEFT - 30 - GAP * (panels.length - 1) - 20
   const n = panels.reduce((a, p) => a + p.cells.length, 0)
   const out = [`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" ${FONT}>`, `<rect width="${W}" height="${H}" fill="${C.BG}"/>`,
     `<text x="24" y="38" font-size="20" font-weight="600" fill="${C.FG}">${esc(ZH ? '自己做 vs 交给 DeepSeek Harness（0.6.0）：每个任务花多少钱' : 'Working alone vs handing over to DeepSeek Harness (0.6.0): cost per task')}</text>`,

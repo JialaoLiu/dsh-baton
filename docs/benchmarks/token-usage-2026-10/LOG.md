@@ -93,3 +93,17 @@ With the check fixed, the hand-over costs about half of working alone on the lar
 
 ### 2026-10-26 04:40: Windows verification of 0.6.0-next.0 passed
 - Install by exact version (`dsh-baton-host@0.6.0-next.0`; `@next` resolves to a broken 0.0.0-stage tarball in Harness). Session created in the conversation's folder; evidence block present (13 files created, npm test 64/64, source "dsh-baton, not the Harness model"); Harness's final reply ended with a sub-agent requirement table, and the audit found and fixed a prototype-key validation bug with regression tests. Only odd thing: Harness left its own todo list showing in progress after the run ended (UI state).
+
+### 2026-10-26 04:56–05:15: Astra large, handed over (0.6.0), rerun after the window reset
+- Passed the first time. GPT input 231,829 (210,304 cached), output 1,106: $0.48 at Astra list price; DeepSeek $0.30; total $0.78. Window 0% → 4%.
+- Against Astra alone on the same task ($2.27, 22%): client −79%, total −66%, window −82%.
+
+### Why the Astra medium hand-over saved less (run 1, 7 requests)
+- Request 1: Codex filtered its tool catalogue (`ALL_TOOLS`) for "deepseek|harness" and printed it: 22.7k characters, about 9.4k new input tokens. Every dsh-baton tool entry in that catalogue repeats the server instructions, so the instructions are paid for once per tool (bug 2, still open).
+- Request 2: writing the spec and sending it, 5.5k new tokens. Requests 3–6: four waits, under 300 new tokens each. Request 7: the finished result (final text with the review table, plus evidence), 9.5k characters, 4.1k new tokens.
+- So about half of the hand-over's new input is the catalogue read, which is the same for a medium or a large task. Shortening the server instructions (they are repeated per tool in Codex) is the next cut, for 0.6.1.
+
+### 2026-10-26 05:15–05:40: Astra medium hand-over, run 2
+- Passed the first time; $0.67 at Astra list price (run 1: $0.45), DeepSeek $0.17, window 5% → 9% (4%).
+- Why dearer than run 1: six waits instead of four, and after one 270 s wait the provider's prompt cache had dropped most of the conversation (16k new input tokens on that request instead of a few hundred). The catalogue read at the start was again about 9.4k new tokens.
+- Astra medium hand-over, mean of 2: $0.56 client (−29% vs alone), $0.75 with DeepSeek (−6%), 3.5% of the window (alone 7%). Astra large: $0.48 client (−79%), $0.78 total (−65%), 4% vs 22%. README table and combined chart (now three panels: Claude, Sol, Astra) updated.

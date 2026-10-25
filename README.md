@@ -79,7 +79,7 @@ You don't have to take DeepSeek's word for it. Before the run, dsh-baton notes w
 
 ## Token usage
 
-**In short: hand over the big, long jobs.** A feature that spans many files, a large refactor, a whole small app: that is where it saves the most. Claude Code's own bill drops by 65–81%, and Codex gets 2 to 4 times as many tasks out of a ChatGPT Plus 5-hour window.
+**In short: hand over the big, long jobs.** A feature that spans many files, a large refactor, a whole small app: that is where it saves the most. Claude Code's own bill drops by 65–81%, and Codex gets 2 to 5 times as many tasks out of a ChatGPT Plus 5-hour window (5 times on a large task with GPT-6 Astra).
 
 **The honest part:** for small and medium tasks, Codex on GPT-6.1 Sol is cheap enough that doing it alone costs less in total than handing it over. The hand-over pays off when you want Claude or GPT to plan and review, a cheaper model to do the typing, and you'd rather not keep hitting the 5-hour limit.
 
@@ -97,9 +97,10 @@ Cost per task at list price, DeepSeek V4.1 Flash 1017 at its peak price:
 | Claude Code · Opus 5.5 high | Large | $2.13 | $0.41 (−81%) | $0.70 (−67%) |
 | Codex · GPT-6.1 Sol high | Medium | $0.17 | $0.09 (−49%) | $0.29 (+73%) |
 | Codex · GPT-6.1 Sol high | Large | $0.41 | $0.10 (−75%) | $0.41 (−2%) |
-| Codex · GPT-6 Astra high | Medium | $0.79 | $0.45 (−43%) | $0.65 (−18%) |
+| Codex · GPT-6 Astra high | Medium | $0.79 | $0.56 (−29%) | $0.75 (−6%) |
+| Codex · GPT-6 Astra high | Large | $2.27 | $0.48 (−79%) | $0.78 (−65%) |
 
-Share of the ChatGPT Plus 5-hour window per task: Sol medium 1.9% → 0.8%, Sol large 4.3% → 1.0%, Astra medium 7% → 3%.
+Share of the ChatGPT Plus 5-hour window per task: Sol medium 1.9% → 0.8%, Sol large 4.3% → 1.0%, Astra medium 7% → 3.5%, Astra large 22% → 4%.
 
 <details>
 <summary>What was tested, and how</summary>
@@ -108,7 +109,7 @@ Share of the ChatGPT Plus 5-hour window per task: Sol medium 1.9% → 0.8%, Sol 
   - Medium: a command-line task manager in Node, no dependencies, split into modules, with tests. [Request](docs/benchmarks/token-usage-2026-10/natural/medium.md) · [acceptance check](docs/benchmarks/token-usage-2026-10/checks/natural-medium.mjs)
   - Large: a task manager web app, Node server plus page, REST API, stats, tests and a README. [Request](docs/benchmarks/token-usage-2026-10/natural/large.md) · [acceptance check](docs/benchmarks/token-usage-2026-10/checks/natural-large.mjs)
 - **The only difference** in the hand-over runs is one line added at the end: 交给 DeepSeek Harness 去做。 ("Hand it to DeepSeek Harness.")
-- Same model and effort in both arms, three runs per cell (Astra: one run, medium only), and every run judged by the same acceptance check, which the model never sees. All 12 hand-over runs passed it the first time.
+- Same model and effort in both arms, three runs per cell (Astra: one run each, two for the medium hand-over), and every run judged by the same acceptance check, which the model never sees. All 12 hand-over runs passed it the first time.
 - Prices are list prices. DeepSeek is counted at its peak price, the most conservative case; the real DeepSeek bill came to about 58% of that.
 - Every run, the raw data and the scripts: [run log](docs/benchmarks/token-usage-2026-10/LOG.md) and [full report](docs/benchmarks/token-usage-2026-10.md).
 
