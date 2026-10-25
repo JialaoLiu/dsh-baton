@@ -529,7 +529,7 @@ async function useHost() {
 
 // Said with a finished run's reply: review from the evidence dsh-baton produced, read code only
 // where it points, and send every fix back in one message.
-export const ENDED_HINT = 'evidence is produced by dsh-baton (files changed, checks it ran), not by the Harness reply: trust it over final_text. If a check failed, a requirement has no check, or a file the task needs is missing from evidence.changes, send all fixes back in one message to the same session; read code only for those items.'
+export const ENDED_HINT = 'evidence is produced by dsh-baton (files changed, checks it ran), not by the Harness reply: trust it over final_text. If a check failed, a requirement has no check, or a file the task needs is missing from evidence.changes, send all fixes back in one message to the same session, quoting the failing output; do not reproduce failures or write test scripts yourself. If every check passed, read code only for requirements no check covers.'
 
 // The asking model marks its favourite option in the label ("(Recommended)", "（推荐）").
 // Clients relaying the question tended to repeat that mark as their own advice, so the
