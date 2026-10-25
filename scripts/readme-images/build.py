@@ -208,33 +208,46 @@ def install():
 
 # ---------------------------------------------------------------- tools map
 def tools():
+    # listed in tools/list (0.6.0); the rest are hidden and reached through dsh_call
     groups = [
-        ('WORKSPACES', [('dsh_list_workspaces', 'sidebar workspaces'),
-                        ('dsh_create_workspace', 'register a folder'),
-                        ('dsh_rename_workspace', 'sidebar title only')]),
-        ('SESSIONS', [('dsh_list_sessions', 'newest first, filterable'),
-                      ('dsh_read_session', 'recent prompts + replies'),
-                      ('dsh_session_activity', 'turn, sub-agents, jobs'),
-                      ('dsh_rename_session', 'rename a session')]),
+        ('WORKSPACES · SESSIONS', [('dsh_list_workspaces', 'sidebar workspaces'),
+                                   ('dsh_list_sessions', 'newest first, filterable'),
+                                   ('dsh_read_session', 'recent prompts + replies')]),
         ('RUNS', [('dsh_send', 'start a run → run_id'),
                   ('dsh_status', 'progress + final reply'),
-                  ('dsh_wait', 'block until it ends'),
-                  ('dsh_cancel', 'stop turn, agents, jobs'),
-                  ('dsh_list_runs', 'recent runs')]),
+                  ('dsh_wait', 'until it ends, with evidence')]),
+        ('CONTROL', [('dsh_answer', "answer a run's questions"),
+                     ('dsh_cancel', 'stop turn, agents, jobs'),
+                     ('dsh_call', 'reaches the six below')]),
     ]
+    hidden = [('dsh_create_workspace', 'register a folder'),
+              ('dsh_rename_workspace', 'sidebar title only'),
+              ('dsh_session_activity', 'turn, sub-agents, jobs'),
+              ('dsh_rename_session', 'rename a session'),
+              ('dsh_update_queued', 'edit a queued message'),
+              ('dsh_list_runs', 'recent runs')]
     W, gap, x0 = 341, 24, 64
-    b = [t(64, 76, '12 tools, three things to control', 30, FG, weight=700)]
+    b = [t(64, 76, '9 tools listed, 6 more through dsh_call', 30, FG, weight=700)]
     for i, (name, items) in enumerate(groups):
         x = x0 + i * (W + gap)
-        b.append(r(x, 104, W, 404, 16, PANEL, LINE))
+        b.append(r(x, 104, W, 276, 16, PANEL, LINE))
         b.append(t(x + 26, 146, name, 18, ACC, mono=True, ls=2))
         for k, (tool, what) in enumerate(items):
             y = 196 + k * 64
-            b.append(t(x + 26, y, tool, 20, FG, mono=True, weight=600))
+            hot = tool == 'dsh_call'
+            b.append(t(x + 26, y, tool, 20, ACC if hot else FG, mono=True, weight=600))
             b.append(t(x + 26, y + 28, what, 18, MUTED))
-    return svg(1200, 548, 'dsh-baton MCP tools',
-               'Workspaces: list, create, rename. Sessions: list, read, activity, rename. '
-               'Runs: send, status, wait, cancel, list runs.', '\n'.join(b), BG)
+    b.append(r(x0, 404, 3 * W + 2 * gap, 212, 16, PANEL2, LINE2, sw=1.5, dash='8 6'))
+    b.append(t(x0 + 26, 446, 'LESS USED · NOT IN THE TOOL LIST', 18, MUTED, mono=True, ls=2))
+    for k, (tool, what) in enumerate(hidden):
+        x = x0 + (k % 3) * (W + gap) + 26
+        y = 496 + (k // 3) * 64
+        b.append(t(x, y, tool, 20, MUTED, mono=True, weight=600))
+        b.append(t(x, y + 28, what, 18, MUTED, opacity=0.8))
+    return svg(1200, 656, 'dsh-baton MCP tools',
+               'Listed: list workspaces, list sessions, read session, send, status, wait, answer, cancel, call. '
+               'Less used, reached through dsh_call: create and rename workspace, session activity, '
+               'rename session, update queued, list runs.', '\n'.join(b), BG)
 
 
 # ---------------------------------------------------------------- run states

@@ -130,6 +130,15 @@ ZH = {
     'Wait, no polling': '等待，不轮询',
     'Claude Code: woken once': 'Claude Code：只唤醒一次',
     'Codex: dsh_wait, 270 s': 'Codex：每次等 270 秒',
+    # 0.6.0 tools card: six tools leave the list and are reached through dsh_call
+    '9 tools listed, 6 more through dsh_call': '列出 9 个工具，另外 6 个经 dsh_call 调用',
+    'WORKSPACES · SESSIONS': '工作区 · 对话',
+    'CONTROL': '控制',
+    'until it ends, with evidence': '等到结束，附带证据',
+    "answer a run's questions": '回答运行中的提问',
+    'reaches the six below': '调用下面 6 个工具',
+    'LESS USED · NOT IN THE TOOL LIST': '不常用 · 不在工具列表里',
+    'edit a queued message': '修改排队中的消息',
     # npx install card and the good-to-know card
     '# no clone, no npm install': '# 不用克隆，不用 npm install',
     'Registers Claude Code + Codex': '给 Claude Code 和 Codex 注册，',

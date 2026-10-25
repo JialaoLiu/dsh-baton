@@ -50,7 +50,7 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 
 插件启用后会为 Claude Code 和 Codex 注册 dsh-baton（对所有文件夹生效），Harness 里会弹出提示。
 
-**2. 检查：**在 Claude Code 或 Codex 里**新开**一个对话，让它调用 `dsh_list_workspaces`，会列出你的 Harness 工作区。
+**2. 检查**：在 Claude Code 或 Codex 里**新开**一个对话，让它调用 `dsh_list_workspaces`，会列出你的 Harness 工作区。
 
 就这些。如果 Harness 提示没能注册，在终端运行 `npx -y dsh-baton-mcp setup`（这需要 Node.js ≥ 22.15），它做的是同样的注册。更新、卸载和 Windows 说明在[后面](#安装细节)。
 
@@ -69,31 +69,55 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 - **Codex** 在 `dsh_wait` 里等待，每次最多 270 秒，刚好低于它 300 秒的工具超时。没做完时只返回状态，Codex 会直接再调用，不会去总结进度。Codex 不会收到 `wait_command`：它的终端无法在命令结束时唤醒它，只能轮询。
 - Codex 调用 MCP 工具时会请你批准，批准 `dsh-baton` 的工具即可；无人值守的 `codex exec` 加上 `--approve-for-me`。
 
-**转交之后怎么验收**（0.6.0 起）：客户端发任务时附上 `checks`，也就是项目自己的测试命令，比如 `npm test`。dsh-baton 在运行前记下文件夹里的文件，运行结束后自己列出新建、修改、删除了哪些文件，并自己跑一遍这些命令；这份 `evidence`（证据）来自 dsh-baton，不是 DeepSeek 的自述。消息末尾还会请 Harness 派一个只读子智能体，对照每条需求复查，最后附一张表（需求、是否满足、依据在哪个文件第几行）。客户端凭证据和这张表验收，没满足的一次性发回去修，只对没满足的行看代码。新开对话默认建在当前对话所在的文件夹，除非用 `cwd` 指定别的文件夹。
+**转交之后怎么验收**（0.6.0 起）
+
+不用光听 DeepSeek 自己说做完了。运行前，dsh-baton 先记下文件夹里有什么；运行结束后，它会列出到底新建、修改、删除了哪些文件，并亲自跑一遍项目自己的测试（`npm test`，或者客户端在 `checks` 里给的命令）。接着，另一个只读的 DeepSeek 子智能体会对照需求逐条检查，最后给一张表：哪条需求、做到没有、依据在哪个文件第几行。Claude 或 GPT 只看这些，没做到的一次性发回去改，只有表里写着「没做到」的地方才去翻代码。不用 `cwd` 指定的话，新对话就开在你当前工作的文件夹里。
+
+<p align="center">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/evidence-chain.zh.svg" width="100%" alt="一次真实转交的证据链：用户提需求，Codex 写规格和验收命令，dsh-baton 给文件夹拍快照，DeepSeek Harness 写出 11 个文件，dsh-baton 自己列出改动并跑 npm test，Codex 主动打回一处，dsh-baton 再次验收，Codex 通过，基准测试自己的验收 13/13 通过">
+</p>
 
 ## Token 用量实测
 
-2026-10-25/26 实测：用户用大白话提需求（末尾加一句「交给 DeepSeek Harness 去做」），两边用同一个模型，每格跑 3 次，每次都用同一套隐藏的验收脚本检查。下表是每个任务的平均花费，按标价计；DeepSeek 按高峰价，是最保守的算法：
+**一句话：大活、长活交给它**。一次性做一个跨很多文件的功能、一次大重构、一整个小应用，这种时候最省：Claude Code 自己的花费少 65–81%，Codex 在 ChatGPT Plus 一个 5 小时额度里能多做 2 到 4 倍的任务。
 
-| 任务 | Claude Code 自己做 | Claude Code → 0.6.0 | Codex 自己做 | Codex → 0.6.0 |
-|---|---|---|---|---|
-| 中号：命令行工具、分模块、测试 | $1.07 | 主 Agent $0.37，含 DeepSeek $0.55 | $0.17 | 主 Agent $0.09，含 DeepSeek $0.29 |
-| 大号：网页应用、接口、测试 | $2.13 | 主 Agent $0.41，含 DeepSeek $0.70 | $0.41 | 主 Agent $0.10，含 DeepSeek $0.41 |
+**说实话**：中小任务，Codex 用 GPT-6.1 Sol 自己做，总价反而比转交更便宜。转交值得的场景是：你想让 Claude 或 GPT 负责规划和把关，让更便宜的模型去动手写，又不想老是撞上 5 小时额度上限。
 
-- **Claude Code** 自己的花费少 65–81%，加上 DeepSeek 后总价也只有自己做的一半左右甚至更少。
-- **Codex**（gpt-6.1-sol，high）自己模型的花费少一半到四分之三，ChatGPT Plus 的 5 小时额度能多撑一倍以上：中号任务从 1.9% 降到 0.8%，大号从 4.3% 降到 1.0%。Sol 本身很便宜，加上 DeepSeek 后，中号的总价比 Codex 自己做还贵，大号基本持平；省下的是订阅额度。换成 GPT-6 Astra（high，中号任务，各跑 1 次），总价也省：自己做 $0.79，转交后 Codex 花 $0.45、含 DeepSeek $0.65，5 小时额度从 7% 降到 3%。
-- 0.6.0 的 12 次运行全部一次通过验收。
-
-[完整报告](./docs/benchmarks/token-usage-2026-10.md)里有方法、每一次运行、对比过的其他版本、原始数据和脚本。
+**适合谁**：大多数人用 Claude 或 ChatGPT 走的是订阅套餐（Plus、Pro、Max 5x 之类），而 DeepSeek 是充值后按用量扣费，所以每次转交都是套餐之外多花的钱。如果你的套餐额度本来就够用，就不用折腾这套流程，省一点是一点。如果你像我一样，经常跑又长又杂、要反复修改的大任务，老是撞上额度上限，那花一点 DeepSeek 的钱，就能让你已经付费的套餐多干很多活。
 
 <p align="center">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-combined.zh.svg" width="100%" alt="每个任务的花费，自己做与用 0.6.0 转交：Claude Code（Opus 5.5）、Codex（GPT-6.1 Sol），以及按 GPT-6 Astra 标价换算的 Codex">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-combined.zh.svg" width="100%" alt="每个任务的花费，自己做与用 0.6.0 转交：Claude Code（Opus 5.5）和 Codex（GPT-6.1 Sol、GPT-6 Astra），各用自己的刻度">
 </p>
+
+每个任务的花费，按标价计，DeepSeek V4.1 Flash 1017 按高峰价：
+
+| 客户端 · 模型 | 任务 | 自己做 | 转交，只算客户端 | 转交，含 DeepSeek |
+|---|---|---|---|---|
+| Claude Code · Opus 5.5 high | 中号 | $1.07 | $0.37（−65%） | $0.55（−49%） |
+| Claude Code · Opus 5.5 high | 大号 | $2.13 | $0.41（−81%） | $0.70（−67%） |
+| Codex · GPT-6.1 Sol high | 中号 | $0.17 | $0.09（−49%） | $0.29（+73%） |
+| Codex · GPT-6.1 Sol high | 大号 | $0.41 | $0.10（−75%） | $0.41（−2%） |
+| Codex · GPT-6 Astra high | 中号 | $0.79 | $0.45（−43%） | $0.65（−18%） |
+
+每个任务占 ChatGPT Plus 5 小时额度：Sol 中号 1.9% → 0.8%，Sol 大号 4.3% → 1.0%，Astra 中号 7% → 3%。
+
+<details>
+<summary>测了什么、怎么测的</summary>
+
+- **两个任务，用普通用户的口吻提**（原文如下，可以直接点开看）：
+  - 中号：用 Node 写一个命令行任务管理工具，零依赖，分模块，带测试。[需求原文](docs/benchmarks/token-usage-2026-10/natural/medium.md) · [验收脚本](docs/benchmarks/token-usage-2026-10/checks/natural-medium.mjs)
+  - 大号：一个任务管理网页应用，Node 服务器加前端页面，REST 接口、统计、测试和 README。[需求原文](docs/benchmarks/token-usage-2026-10/natural/large.md) · [验收脚本](docs/benchmarks/token-usage-2026-10/checks/natural-large.mjs)
+- **转交组唯一的区别**，是在需求末尾多一句：交给 DeepSeek Harness 去做。
+- 两组用同一个模型、同样的推理强度，每格跑 3 次（Astra 只跑了中号，各 1 次）；每次都用同一套验收脚本检查，模型看不到这个脚本。转交组 12 次全部一次通过。
+- 价格按标价算。DeepSeek 按高峰价，是最保守的算法；实际 DeepSeek 账单大约是这个数的 58%。
+- 每一次运行、原始数据和脚本：[运行日志](docs/benchmarks/token-usage-2026-10/LOG.md)、[完整报告](docs/benchmarks/token-usage-2026-10.md)。
+
+</details>
 
 ## 工具
 
 <p align="center">
-  <img src="./assets/readme/zh/tools.svg" width="100%" alt="工作区：列出、新建、改名。对话：列出、读取、当前活动、改名。运行：发送、状态、等待、取消、列出最近运行">
+  <img src="./assets/readme/zh/tools.svg" width="100%" alt="工具列表里有 9 个：列出工作区、列出对话、读取对话、发送、状态、等待、回答、取消、dsh_call。另外 6 个不常用的经 dsh_call 调用：新建和改名工作区、对话动态、给对话改名、修改排队消息、列出运行">
 </p>
 
 <p align="center">
@@ -106,19 +130,19 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 | 工具 | 作用 |
 |---|---|
 | `dsh_list_workspaces` | 列出 Harness 侧边栏里的工作区 |
-| `dsh_create_workspace` | 把一个文件夹登记为工作区（文件夹不存在会先创建）；已登记的直接返回原来那个 |
+| `dsh_create_workspace` | 经 `dsh_call` 调用。把一个文件夹登记为工作区（文件夹不存在会先创建）；已登记的直接返回原来那个 |
 | `dsh_list_sessions` | 列出对话（最新在前），带标题、目录、是否在跑；可按目录或关键字过滤。已归档的对话不会列出 |
 | `dsh_read_session` | 读某个对话最近的消息和回复（含用到的工具名）；已归档的对话会带 `archived: true` |
 | `dsh_send` | 发消息。带 `session_id` 续接那个对话；否则新开对话，建在 `cwd` 或 `workspace_id` 指定的位置，都不带时建在当前对话所在的文件夹（`cwd` 还不是工作区时会先登记；指定的 `cwd` 在当前对话文件夹之外也可以，结果里的 `folder_note` 会提醒）。`checks`：运行结束后 dsh-baton 自己跑的测试命令（见「转交之后怎么验收」）。立即返回 `run_id`。Harness 里这条消息会标注「由 Claude / ChatGPT 从另一个聊天发送」。已归档的对话会被拒绝：先在 Harness 里取消归档，或新开对话。对话正忙时，`mode` 为 `followup` 会排在当前回合之后，`steer` 会插进正在跑的回合；不传时跟随 Harness 自己的设置（设置 → 繁忙时的发送行为：排队发送或插话发送），读不到设置时按 `followup`。返回里的 `mode_source` 说明用的是哪种 |
 | `dsh_status` | 查看运行进度：状态、最近的文字和工具调用、最终回复；回合结束但子智能体/后台任务还在跑时给出 `waiting_on`；中途有人在 Harness 界面里发消息时给出 `human_interjections`；被 Harness 重启打断的任务状态为 `interrupted` |
 | `dsh_wait` | 等运行结束；发消息时带了 `checks` 的，结束后会附上 `evidence`（改了哪些文件、测试结果）（或者等到它停下来问人，见 `dsh_answer`）：Codex 每次最多等 270 秒，其他客户端 50 秒。没做完会带 `timed_out`，只返回状态，再调用一次即可。能在后台等待的客户端改用 `dsh_send` 返回的 `wait_command`。`dsh_status` 只用来看一眼，不用来等待 |
 | `dsh_answer` | 回答运行中途提出的问题（Harness 的 ask_user_question）：每道题可以填选项编号或选项文字、自由填写，或者跳过；可以逐题回答，也可以一次答完。运行一提问，`dsh_wait` 和 `wait_command` 就会立刻返回，并带上题目（`needs_input`、`question`；Harness 那边模型推荐的选项单独放在 `harness_suggested` 里，不再写在选项文字中）。只有你说过让它自己决定时，助手才会按自己的判断回答，这时它会带上 `reason`，并告诉你选了什么、为什么；否则它会把题目转给你，开头先写它自己的建议和理由。你也可以直接在 Harness 窗口里回答，谁先答就算谁的 |
-| `dsh_session_activity` | 对话此刻在做什么：正在跑的回合、子智能体（任意层级）、后台任务；已归档的对话会带 `archived: true` |
-| `dsh_update_queued` | 按 `run_id` 修改还在忙碌对话队列里等待的消息：`edit` 改文字，`remove` 撤回，`steer` 立刻插进正在跑的回合。消息一旦进入对话就改不了了 |
+| `dsh_session_activity` | 经 `dsh_call` 调用。对话此刻在做什么：正在跑的回合、子智能体（任意层级）、后台任务；已归档的对话会带 `archived: true` |
+| `dsh_update_queued` | 经 `dsh_call` 调用。按 `run_id` 修改还在忙碌对话队列里等待的消息：`edit` 改文字，`remove` 撤回，`steer` 立刻插进正在跑的回合。消息一旦进入对话就改不了了 |
 | `dsh_cancel` | 按 `run_id` 或 `session_id` 停掉整个对话的工作：当前回合、子智能体、后台任务。Harness 会同时清掉队列里等待的消息，这些运行记为 `cancelled` |
-| `dsh_rename_session` | 给对话改名 |
-| `dsh_rename_workspace` | 给工作区改名（只改侧边栏标题，不动文件夹） |
-| `dsh_list_runs` | 列出最近的运行，可按会话筛选 |
+| `dsh_rename_session` | 经 `dsh_call` 调用。给对话改名 |
+| `dsh_rename_workspace` | 经 `dsh_call` 调用。给工作区改名（只改侧边栏标题，不动文件夹） |
+| `dsh_list_runs` | 经 `dsh_call` 调用。列出最近的运行，可按会话筛选 |
 | `dsh_call` | 按名字调用任意 `dsh_*` 工具：0.6.0 起，不常用的工具（新建和重命名工作区、重命名对话、对话动态、修改排队消息、运行列表）不再出现在工具列表里，好让每次请求更短，改由这里调用；对话的工具列表还是更新前的旧版时也用它。名字不存在时会列出所有可用工具 |
 
 </details>
@@ -164,21 +188,24 @@ dsh-baton rename-workspace ~/code/new-app 新名字
 
 ## 安装细节
 
-**插件启用时做了什么。**它把 MCP 服务器复制到 `~/.dsh-baton/app` 这个固定的文件夹，再直接把 MCP 注册写进 `~/.claude.json` 和 `~/.codex/config.toml`，各留一份 `*.bak-dsh-baton` 备份。电脑上有 Node.js ≥ 22.15（在 `PATH` 里能找到）就用它启动服务器；没有的话，就用 Harness 自带的运行环境（Harness 应用本身以 Node 模式运行，`ELECTRON_RUN_AS_NODE=1`），不用另外安装任何东西。两种情况下，只装了桌面应用、`claude` / `codex` 不在 `PATH` 里也能用。每次 Harness 启动都会再检查一遍：已经正确的注册、或者指向另一份可用 dsh-baton 的注册，都不会改动。在 Harness 里输入包名后，安装源会自动切到「npm 官方源」（英文界面是 "Official npm registry"），不用另外选择，也不用重启。不想让插件自动注册，给 Harness 设置 `DSH_BATON_AUTO_REGISTER=0`。
+<details>
+<summary>插件做了什么、更新、卸载、从 dsh-bridge 升级、从源码安装、Windows</summary>
 
-**更新不用重启。**新版本装进 `~/.dsh-baton/app` 后（插件更新、`setup` 或手动复制），Claude Code 和 Codex 里已经开着的对话，下一次调用 `dsh_*` 工具时就会用上：服务器每次调用前检查这个文件夹，启动新版本，并在这次调用的结果里提示一次已经更新。正在进行的 `dsh_wait` 会先在旧版本里跑完。新版本启动失败时，旧版本继续工作，结果里会说明原因。新版本新增的工具，Claude Code 里马上就能用（服务器会通知客户端工具列表变了）；Codex 一直用对话开始时的工具列表，新工具要到下一个新对话才会显示；从 0.5.9 起，旧对话里也能通过 `dsh_call` 马上用上新功能（更新提示里会写明），已有的工具也会立刻用上新代码。这个功能从 0.5.8 之后的版本开始有效；由 0.5.8 或更早版本启动的服务器，还需要最后重启一次（或在 `/mcp` 里重新连接）。
+**插件启用时做了什么**。它把 MCP 服务器复制到 `~/.dsh-baton/app` 这个固定的文件夹，再直接把 MCP 注册写进 `~/.claude.json` 和 `~/.codex/config.toml`，各留一份 `*.bak-dsh-baton` 备份。电脑上有 Node.js ≥ 22.15（在 `PATH` 里能找到）就用它启动服务器；没有的话，就用 Harness 自带的运行环境（Harness 应用本身以 Node 模式运行，`ELECTRON_RUN_AS_NODE=1`），不用另外安装任何东西。两种情况下，只装了桌面应用、`claude` / `codex` 不在 `PATH` 里也能用。每次 Harness 启动都会再检查一遍：已经正确的注册、或者指向另一份可用 dsh-baton 的注册，都不会改动。在 Harness 里输入包名后，安装源会自动切到「npm 官方源」（英文界面是 "Official npm registry"），不用另外选择，也不用重启。不想让插件自动注册，给 Harness 设置 `DSH_BATON_AUTO_REGISTER=0`。
+
+**更新不用重启**。新版本装进 `~/.dsh-baton/app` 后（插件更新、`setup` 或手动复制），Claude Code 和 Codex 里已经开着的对话，下一次调用 `dsh_*` 工具时就会用上：服务器每次调用前检查这个文件夹，启动新版本，并在这次调用的结果里提示一次已经更新。正在进行的 `dsh_wait` 会先在旧版本里跑完。新版本启动失败时，旧版本继续工作，结果里会说明原因。新版本新增的工具，Claude Code 里马上就能用（服务器会通知客户端工具列表变了）；Codex 一直用对话开始时的工具列表，新工具要到下一个新对话才会显示；从 0.5.9 起，旧对话里也能通过 `dsh_call` 马上用上新功能（更新提示里会写明），已有的工具也会立刻用上新代码。这个功能从 0.5.8 之后的版本开始有效；由 0.5.8 或更早版本启动的服务器，还需要最后重启一次（或在 `/mcp` 里重新连接）。
 
 **`npx -y dsh-baton-mcp setup`** 在终端里做同样的注册：用于插件没能注册的情况，或者从 MCP 目录过来的用户。插件已经注册过时它什么都不改；插件没装的话，它会提示去添加。
 
-**更新。**Harness 只给官方插件提供"更新"按钮，所以要：插件 → dsh-baton-host → **卸载**，再**添加插件** → `dsh-baton-host`。新版本刚发布的一段时间里，Harness 会装上一个版本（pnpm 的 `minimumReleaseAge` 会暂缓刚发布的版本，安装弹窗里会说明）；想马上用新版，输入带版本号的名字：`dsh-baton-host@0.6.0`。重新启用后，插件会把 MCP 服务器也更新到同一版本，新开的对话就会用上。万一两边版本对不上，第一次发现不一致的工具调用会提示。
+**更新**。Harness 只给官方插件提供"更新"按钮，所以要：插件 → dsh-baton-host → **卸载**，再**添加插件** → `dsh-baton-host`。新版本刚发布的一段时间里，Harness 会装上一个版本（pnpm 的 `minimumReleaseAge` 会暂缓刚发布的版本，安装弹窗里会说明）；想马上用新版，输入带版本号的名字：`dsh-baton-host@0.6.0`。预发布版必须写确切版本号添加，比如 `dsh-baton-host@0.6.0-next.0`：Harness 会把 `@next` 解析成一个坏掉的占位包。只输入 `dsh-baton-host` 装的是最新正式版。重新启用后，插件会把 MCP 服务器也更新到同一版本，新开的对话就会用上。万一两边版本对不上，第一次发现不一致的工具调用会提示，并写明哪一边旧、另一边的确切版本号。
 
-**卸载。**Harness → 插件 → dsh-baton-host → **卸载**，再运行 `npx -y dsh-baton-mcp setup --remove`。插件分不清"被卸载"和"Harness 退出"，所以 MCP 注册交给这条命令删，它也会删掉 `~/.dsh-baton/app`；运行记录留在 `~/.dsh-baton`，不需要的话自己删掉。
+**卸载**。Harness → 插件 → dsh-baton-host → **卸载**，再运行 `npx -y dsh-baton-mcp setup --remove`。插件分不清"被卸载"和"Harness 退出"，所以 MCP 注册交给这条命令删，它也会删掉 `~/.dsh-baton/app`；运行记录留在 `~/.dsh-baton`，不需要的话自己删掉。
 
-**从 dsh-bridge 升级。**在 Harness 里先卸载 `dsh-bridge-host`，再添加 `dsh-baton-host`；启用后它会替换掉旧的 `dsh-bridge` MCP 注册。`DSH_BRIDGE_*` 环境变量和已有的 `~/.dsh-bridge` 文件夹暂时继续可用。工具前缀变成 `mcp__dsh-baton__…`，权限白名单里写了旧前缀的要改一下。0.4 之前通过粘贴 `~/.dsh-baton/app/host` 装的插件仍然能用，但不会跟着 npm 更新：卸载它，再按包名添加 `dsh-baton-host`。
+**从 dsh-bridge 升级**。在 Harness 里先卸载 `dsh-bridge-host`，再添加 `dsh-baton-host`；启用后它会替换掉旧的 `dsh-bridge` MCP 注册。`DSH_BRIDGE_*` 环境变量和已有的 `~/.dsh-bridge` 文件夹暂时继续可用。工具前缀变成 `mcp__dsh-baton__…`，权限白名单里写了旧前缀的要改一下。0.4 之前通过粘贴 `~/.dsh-baton/app/host` 装的插件仍然能用，但不会跟着 npm 更新：卸载它，再按包名添加 `dsh-baton-host`。
 
 **从源码安装**（想跟进 `main` 或改代码）：`git clone https://github.com/JialaoLiu/dsh-baton.git`，然后在 Harness 里从克隆目录的 `host` 文件夹添加插件（添加插件 → 粘贴路径）。启用后注册的就是克隆目录本身，改动在发布前就能跑起来；更新用 `git pull`。在终端里运行 `node dsh-baton/src/cli.mjs setup` 也能注册克隆目录。
 
-**Windows。**步骤相同；[WINDOWS.md](WINDOWS.md) 说明了不同之处（用命名管道代替套接字文件），以及插件页装不上或卸不掉时的修法。
+**Windows**。步骤相同；[WINDOWS.md](WINDOWS.md) 说明了不同之处（用命名管道代替套接字文件），以及插件页装不上或卸不掉时的修法。
 
 <details>
 <summary>手动注册与 Claude 桌面应用</summary>
@@ -197,6 +224,8 @@ codex mcp add dsh-baton -- "$(command -v node)" "$PWD/dsh-baton/src/server.mjs"
 ```json
 { "mcpServers": { "dsh-baton": { "command": "/node 的绝对路径", "args": ["/dsh-baton 的绝对路径/src/server.mjs"] } } }
 ```
+
+</details>
 
 </details>
 

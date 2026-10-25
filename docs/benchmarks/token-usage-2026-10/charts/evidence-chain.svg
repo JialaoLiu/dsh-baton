@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="868" viewBox="0 0 900 868" font-family="-apple-system, 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<rect width="900" height="868" fill="#FFFFFF"/>
+<text x="24" y="36" font-size="19" font-weight="600" fill="#0F172A">Evidence chain: one real hand-over, from request to acceptance</text>
+<line x1="98" x2="98" y1="118" y2="138" stroke="#C3CAD5" stroke-width="2"/>
+<rect x="24" y="64" width="148" height="54" rx="8" fill="#5B6577"/>
+<text x="98" y="96" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">User</text>
+<rect x="184" y="64" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#E2E7EF" stroke-width="1"/>
+<text x="200" y="86" font-size="14" font-weight="600" fill="#0F172A">1. Asks for it</text>
+<text x="200" y="106" font-size="12.5" fill="#3B4556">One plain-language request: a small task manager web app (Node server + front-end page)</text>
+<line x1="98" x2="98" y1="192" y2="212" stroke="#C3CAD5" stroke-width="2"/>
+<rect x="24" y="138" width="148" height="54" rx="8" fill="#2563EB"/>
+<text x="98" y="170" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">Codex (main agent)</text>
+<rect x="184" y="138" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#E2E7EF" stroke-width="1"/>
+<text x="200" y="160" font-size="14" font-weight="600" fill="#0F172A">2. Writes spec + checks, dsh_send</text>
+<text x="200" y="180" font-size="12.5" fill="#3B4556">Spec of 1,401 characters; 2 checks: npm test, and package.json has zero dependencies</text>
+<line x1="98" x2="98" y1="266" y2="286" stroke="#C3CAD5" stroke-width="2"/>
+<rect x="24" y="212" width="148" height="54" rx="8" fill="#C27803"/>
+<text x="98" y="244" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">dsh-baton</text>
+<rect x="184" y="212" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#C27803" stroke-width="2"/>
+<text x="200" y="234" font-size="14" font-weight="600" fill="#0F172A">3. Snapshots the folder before sending</text>
+<text x="200" y="254" font-size="12.5" fill="#3B4556">Records every file's hash and line count (the folder was empty then)</text>
+<line x1="98" x2="98" y1="340" y2="360" stroke="#C3CAD5" stroke-width="2"/>
+<rect x="24" y="286" width="148" height="54" rx="8" fill="#0E9F6E"/>
+<text x="98" y="318" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">DeepSeek Harness</text>
+<rect x="184" y="286" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#E2E7EF" stroke-width="1"/>
+<text x="200" y="308" font-size="14" font-weight="600" fill="#0F172A">4. Does the work</text>
+<text x="200" y="328" font-size="12.5" fill="#3B4556">DeepSeek V4.1 Flash 1017: 49 requests, writes 11 files: server.js 452 lines, public/app.js 818, tests 600…</text>
+<line x1="98" x2="98" y1="414" y2="434" stroke="#C3CAD5" stroke-width="2"/>
+<rect x="24" y="360" width="148" height="54" rx="8" fill="#C27803"/>
+<text x="98" y="392" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">dsh-baton</text>
+<rect x="184" y="360" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#C27803" stroke-width="2"/>
+<text x="200" y="382" font-size="14" font-weight="600" fill="#0F172A">5. Run ends: compares files, runs the checks itself</text>
+<text x="200" y="402" font-size="12.5" fill="#3B4556">11 created, 0 changed, 0 deleted; npm test exit code 0 (9 tests pass); zero-dependency check passes</text>
+<line x1="98" x2="98" y1="488" y2="508" stroke="#C3CAD5" stroke-width="2"/>
+<rect x="24" y="434" width="148" height="54" rx="8" fill="#2563EB"/>
+<text x="98" y="466" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">Codex (main agent)</text>
+<rect x="184" y="434" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#E2E7EF" stroke-width="1"/>
+<text x="200" y="456" font-size="14" font-weight="600" fill="#0F172A">6. Reads the evidence and reviews; sends one fix back on its own</text>
+<text x="200" y="476" font-size="12.5" fill="#3B4556">README /api/stats example says total=6, should be 5; sends only this fix, with one new check</text>
+<line x1="98" x2="98" y1="562" y2="582" stroke="#C3CAD5" stroke-width="2"/>
+<rect x="24" y="508" width="148" height="54" rx="8" fill="#0E9F6E"/>
+<text x="98" y="540" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">DeepSeek Harness</text>
+<rect x="184" y="508" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#E2E7EF" stroke-width="1"/>
+<text x="200" y="530" font-size="14" font-weight="600" fill="#0F172A">7. Fixes it</text>
+<text x="200" y="550" font-size="12.5" fill="#3B4556">Changes one place in README.md</text>
+<line x1="98" x2="98" y1="636" y2="656" stroke="#C3CAD5" stroke-width="2"/>
+<rect x="24" y="582" width="148" height="54" rx="8" fill="#C27803"/>
+<text x="98" y="614" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">dsh-baton</text>
+<rect x="184" y="582" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#C27803" stroke-width="2"/>
+<text x="200" y="604" font-size="14" font-weight="600" fill="#0F172A">8. Compares and checks again</text>
+<text x="200" y="624" font-size="12.5" fill="#3B4556">README.md changed (251 lines → 251 lines); "total": 5 check passes</text>
+<line x1="98" x2="98" y1="710" y2="730" stroke="#C3CAD5" stroke-width="2"/>
+<rect x="24" y="656" width="148" height="54" rx="8" fill="#2563EB"/>
+<text x="98" y="688" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">Codex (main agent)</text>
+<rect x="184" y="656" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#E2E7EF" stroke-width="1"/>
+<text x="200" y="678" font-size="14" font-weight="600" fill="#0F172A">9. Accepts</text>
+<text x="200" y="698" font-size="12.5" fill="#3B4556">Codex $0.126 in total, about 1% of the Plus 5-hour window (shown in whole percent); DeepSeek $0.224 (at peak price)</text>
+<rect x="24" y="730" width="148" height="54" rx="8" fill="#0F172A"/>
+<text x="98" y="762" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">Independent test</text>
+<rect x="184" y="730" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#E2E7EF" stroke-width="1"/>
+<text x="200" y="752" font-size="14" font-weight="600" fill="#0F172A">10. The benchmark's own acceptance test</text>
+<text x="200" y="772" font-size="12.5" fill="#3B4556">13/13 pass: start, create/read/update/delete, stats, 400/404, data written to DATA_FILE</text>
+<text x="24" y="842" font-size="12" fill="#5B6577">Raw records: results/codex-nevidence.jsonl (rep 2), its Codex rollout and Harness session files; evidence field source = "dsh-baton, not the Harness model".</text>
+</svg>
