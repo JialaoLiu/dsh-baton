@@ -27,9 +27,9 @@
   status: open
 - id: 7
   title: natural-large check guesses field names (due, text) and reports only the fallback's error
-  seen: natural round, all 8 large runs (one or two reworks each)
+  seen: natural round, all 8 medium runs (one or two reworks each)
   status: fixed 2026-10-25 (title-only create, server-returned field names, all attempts reported)
 - id: 8
   title: Codex main thread polls a courier sub-agent (65 sleep calls), costing more than the hand-over saves
-  seen: natural round, codex ncourier large ($1.02 client cost vs $0.15 for nevidence)
+  seen: natural round, codex ncourier medium ($1.02 client cost vs $0.15 for nevidence)
   status: open (courier not worth it for Codex as built)
