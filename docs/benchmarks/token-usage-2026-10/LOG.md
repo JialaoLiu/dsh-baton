@@ -86,3 +86,10 @@ With the check fixed, the hand-over costs about half of working alone on the lar
 | Handed over (0.6.0-next.0) | 202,236 / 181,632 / 1,318 | $0.45 | $0.19 | 69% → 72% (3%) |
 - Both passed the first time. The earlier estimate (Sol tokens at Astra prices) was $0.93 alone and $0.54 handed over: Astra used slightly fewer tokens than Sol, so the estimate ran about 15% high; the savings were close (−43% measured vs −41%).
 - About $0.11–0.15 of Astra per 1% of the Plus window, close to Sol's $0.10: the window tracks list price. The estimated Astra charts are removed; the combined chart shows these measured runs.
+
+### 2026-10-26 03:24–03:37: Codex with GPT-6 Astra, large task
+- Alone: passed first time; 1,062,294 GPT input tokens (1,031,552 cached), 18,540 output; $2.27 at Astra list price; 5-hour window 73% → 95% (22%).
+- Handed over: stopped at 99% of the window, before the run ended, so it would not hit the limit; its Harness run was cancelled. Not counted. To rerun after the window resets (04:54 local).
+
+### 2026-10-26 04:40: Windows verification of 0.6.0-next.0 passed
+- Install by exact version (`dsh-baton-host@0.6.0-next.0`; `@next` resolves to a broken 0.0.0-stage tarball in Harness). Session created in the conversation's folder; evidence block present (13 files created, npm test 64/64, source "dsh-baton, not the Harness model"); Harness's final reply ended with a sub-agent requirement table, and the audit found and fixed a prototype-key validation bug with regression tests. Only odd thing: Harness left its own todo list showing in progress after the run ended (UI state).
