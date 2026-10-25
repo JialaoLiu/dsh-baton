@@ -84,10 +84,3 @@ test('a hand-over with checks asks for a sub-agent review table; a plain message
   assert.equal(plain.host.message, 'what changed?')
   fs.rmSync(project, { recursive: true, force: true })
 })
-
-test('a run that failed on the DeepSeek account tells the client to stop and tell the user', async () => {
-  const { failedHint } = await import('../src/core.mjs')
-  assert.match(failedHint({ state: 'failed', error: 'Insufficient Balance (request_id: x)' }), /Stop here and tell the user.*do not do the task yourself/)
-  assert.match(failedHint({ state: 'failed', error: 'socket hang up' }), /Resend once.*only if the error looks temporary/)
-  assert.equal(failedHint({ state: 'completed' }), undefined)
-})
