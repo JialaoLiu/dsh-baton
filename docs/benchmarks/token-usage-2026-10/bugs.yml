@@ -1,0 +1,35 @@
+# Problems found during the experiments. status: open | fixed | wontfix
+- id: 1
+  title: Codex sometimes ignores the hand-over line and does the task itself
+  seen: spec round, codex large B run 2 (1 of 9 Codex arm B attempts)
+  impact: run excluded; a user asking for a hand-over gets none
+  status: open
+- id: 2
+  title: Codex reads the whole matching tool catalogue (30-40k chars) before the first dsh_send
+  seen: every Codex arm B run in the spec round
+  impact: about 7-10k uncached input tokens per task (~$0.02 on gpt-6.1-sol)
+  status: open (exp/evidence lists 9 tools, 8.3k chars)
+- id: 3
+  title: Review hint made Claude Code read every source file
+  seen: spec round, trimmed build, claude medium B (+19% cost)
+  status: wontfix (hint replaced by evidence in exp/evidence)
+- id: 4
+  title: "app.js calls the API" check matches literal paths only
+  seen: spec round, claude large B run 2
+  status: open (natural round checks behaviour instead)
+- id: 5
+  title: wait_command exits 3 while a run waits for an answer; Claude Code shows "1 failed"
+  seen: Windows 0.5.9 verification C and D
+  status: open
+- id: 6
+  title: Relay put Harness's pick inside an option line (zh) and kept the English header
+  seen: Windows 0.5.9 verification C and D
+  status: open
+- id: 7
+  title: natural-large check guesses field names (due, text) and reports only the fallback's error
+  seen: natural round, all 8 large runs (one or two reworks each)
+  status: fixed 2026-10-25 (title-only create, server-returned field names, all attempts reported)
+- id: 8
+  title: Codex main thread polls a courier sub-agent (65 sleep calls), costing more than the hand-over saves
+  seen: natural round, codex ncourier large ($1.02 client cost vs $0.15 for nevidence)
+  status: open (courier not worth it for Codex as built)

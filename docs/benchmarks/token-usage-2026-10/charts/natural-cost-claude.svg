@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="450" viewBox="0 0 940 450" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<rect width="940" height="450" fill="#FFFFFF"/>
+<text x="20" y="30" font-size="17" font-weight="600" fill="#0F172A">Claude Code（Opus 5.5 high）: the client’s own cost per task (list price, USD)</text>
+<text x="20" y="53" font-size="12.5" fill="#5B6577">Only the client model (the part that uses the subscription quota), without DeepSeek.</text>
+<text x="20" y="72" font-size="12.5" fill="#5B6577">Each bar is the mean of 3 runs. Green % = cheaper than working alone, red % = dearer.</text>
+<line x1="60" x2="916" y1="358" y2="358" stroke="#E2E7EF"/>
+<text x="52" y="362" font-size="11.5" fill="#5B6577" text-anchor="end">$0.00</text>
+<line x1="60" x2="916" y1="305.6" y2="305.6" stroke="#E2E7EF"/>
+<text x="52" y="309.6" font-size="11.5" fill="#5B6577" text-anchor="end">$0.50</text>
+<line x1="60" x2="916" y1="253.2" y2="253.2" stroke="#E2E7EF"/>
+<text x="52" y="257.2" font-size="11.5" fill="#5B6577" text-anchor="end">$1.00</text>
+<line x1="60" x2="916" y1="200.8" y2="200.8" stroke="#E2E7EF"/>
+<text x="52" y="204.8" font-size="11.5" fill="#5B6577" text-anchor="end">$1.50</text>
+<line x1="60" x2="916" y1="148.39999999999998" y2="148.39999999999998" stroke="#E2E7EF"/>
+<text x="52" y="152.39999999999998" font-size="11.5" fill="#5B6577" text-anchor="end">$2.00</text>
+<line x1="60" x2="916" y1="96" y2="96" stroke="#E2E7EF"/>
+<text x="52" y="100" font-size="11.5" fill="#5B6577" text-anchor="end">$2.50</text>
+<text x="163" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M131,358 V249.93736 Q131,245.93736 135,245.93736 H191 Q195,245.93736 195,249.93736 V358 Z" fill="#C27803"/>
+<text x="163" y="237.93736" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$1.07</text>
+<text x="237" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Evidence</text>
+<path d="M205,358 V304.61152 Q205,300.61152 209,300.61152 H265 Q269,300.61152 269,304.61152 V358 Z" fill="#0E9F6E"/>
+<text x="237" y="278.61152" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.55</text>
+<text x="237" y="293.61152" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−49%</text>
+<text x="311" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Lean evidence</text>
+<path d="M279,358 V320.4433066666667 Q279,316.4433066666667 283,316.4433066666667 H339 Q343,316.4433066666667 343,320.4433066666667 V358 Z" fill="#7C3AED"/>
+<text x="311" y="294.4433066666667" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.40</text>
+<text x="311" y="309.4433066666667" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−63%</text>
+<text x="385" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Review table</text>
+<path d="M353,358 V323.0283733333333 Q353,319.0283733333333 357,319.0283733333333 H413 Q417,319.0283733333333 417,323.0283733333333 V358 Z" fill="#C0267A"/>
+<text x="385" y="297.0283733333333" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.37</text>
+<text x="385" y="312.0283733333333" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−65%</text>
+<text x="274" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
+<text x="591" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M559,358 V139.20568 Q559,135.20568 563,135.20568 H619 Q623,135.20568 623,139.20568 V358 Z" fill="#C27803"/>
+<text x="591" y="127.20568" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$2.13</text>
+<text x="665" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Evidence</text>
+<text x="665" y="350" font-size="11" fill="#5B6577" text-anchor="middle">not run</text>
+<text x="739" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Lean evidence</text>
+<path d="M707,358 V304.24122666666665 Q707,300.24122666666665 711,300.24122666666665 H767 Q771,300.24122666666665 771,304.24122666666665 V358 Z" fill="#7C3AED"/>
+<text x="739" y="278.24122666666665" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.55</text>
+<text x="739" y="293.24122666666665" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−74%</text>
+<text x="813" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Review table</text>
+<path d="M781,358 V316.74212 Q781,312.74212 785,312.74212 H841 Q845,312.74212 845,316.74212 V358 Z" fill="#C0267A"/>
+<text x="813" y="290.74212" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.43</text>
+<text x="813" y="305.74212" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−80%</text>
+<text x="702" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Large task</text>
+<rect x="20" y="416" width="12" height="12" rx="2" fill="#C27803"/>
+<text x="38" y="426" font-size="12.5" fill="#0F172A">Alone</text>
+<rect x="90.4" y="416" width="12" height="12" rx="2" fill="#0E9F6E"/>
+<text x="108.4" y="426" font-size="12.5" fill="#0F172A">Evidence</text>
+<rect x="182.64000000000001" y="416" width="12" height="12" rx="2" fill="#7C3AED"/>
+<text x="200.64000000000001" y="426" font-size="12.5" fill="#0F172A">Lean evidence</text>
+<rect x="311.28000000000003" y="416" width="12" height="12" rx="2" fill="#C0267A"/>
+<text x="329.28000000000003" y="426" font-size="12.5" fill="#0F172A">Review table</text>
+</svg>

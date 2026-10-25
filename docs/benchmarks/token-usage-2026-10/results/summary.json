@@ -1,6 +1,361 @@
 [
   {
     "client": "claude",
+    "label": "n059",
+    "size": "medium",
+    "arm": "A",
+    "runs": 1,
+    "passed": 1,
+    "reworks": [
+      0
+    ],
+    "input": {
+      "mean": 443406,
+      "min": 443406,
+      "max": 443406
+    },
+    "uncached_input": {
+      "mean": 49032,
+      "min": 49032,
+      "max": 49032
+    },
+    "output": {
+      "mean": 30846,
+      "min": 30846,
+      "max": 30846
+    },
+    "reasoning": null,
+    "model_requests": {
+      "mean": 8,
+      "min": 8,
+      "max": 8
+    },
+    "wall_s": {
+      "mean": 261,
+      "min": 261,
+      "max": 261
+    },
+    "dsh_sends": {
+      "mean": 0,
+      "min": 0,
+      "max": 0
+    },
+    "claude_cost_usd": 1.088,
+    "deepseek_input": null,
+    "deepseek_output": null
+  },
+  {
+    "client": "claude",
+    "label": "n059",
+    "size": "medium",
+    "arm": "B",
+    "runs": 1,
+    "passed": 1,
+    "reworks": [
+      0
+    ],
+    "input": {
+      "mean": 321971,
+      "min": 321971,
+      "max": 321971
+    },
+    "uncached_input": {
+      "mean": 27861,
+      "min": 27861,
+      "max": 27861
+    },
+    "output": {
+      "mean": 4318,
+      "min": 4318,
+      "max": 4318
+    },
+    "reasoning": null,
+    "model_requests": {
+      "mean": 7,
+      "min": 7,
+      "max": 7
+    },
+    "wall_s": {
+      "mean": 540,
+      "min": 540,
+      "max": 540
+    },
+    "dsh_sends": {
+      "mean": 1,
+      "min": 1,
+      "max": 1
+    },
+    "claude_cost_usd": 0.368,
+    "deepseek_input": {
+      "mean": 2778707,
+      "min": 2778707,
+      "max": 2778707
+    },
+    "deepseek_output": {
+      "mean": 56367,
+      "min": 56367,
+      "max": 56367
+    }
+  },
+  {
+    "client": "claude",
+    "label": "n059",
+    "size": "large",
+    "arm": "A",
+    "runs": 1,
+    "passed": 1,
+    "reworks": [
+      1
+    ],
+    "input": {
+      "mean": 3891808,
+      "min": 3891808,
+      "max": 3891808
+    },
+    "uncached_input": {
+      "mean": 182992,
+      "min": 182992,
+      "max": 182992
+    },
+    "output": {
+      "mean": 129947,
+      "min": 129947,
+      "max": 129947
+    },
+    "reasoning": null,
+    "model_requests": {
+      "mean": 27,
+      "min": 27,
+      "max": 27
+    },
+    "wall_s": {
+      "mean": 650,
+      "min": 650,
+      "max": 650
+    },
+    "dsh_sends": {
+      "mean": 0,
+      "min": 0,
+      "max": 0
+    },
+    "claude_cost_usd": 4.804,
+    "deepseek_input": null,
+    "deepseek_output": null
+  },
+  {
+    "client": "claude",
+    "label": "n059",
+    "size": "large",
+    "arm": "B",
+    "runs": 1,
+    "passed": 1,
+    "reworks": [
+      1
+    ],
+    "input": {
+      "mean": 1171506,
+      "min": 1171506,
+      "max": 1171506
+    },
+    "uncached_input": {
+      "mean": 83764,
+      "min": 83764,
+      "max": 83764
+    },
+    "output": {
+      "mean": 14689,
+      "min": 14689,
+      "max": 14689
+    },
+    "reasoning": null,
+    "model_requests": {
+      "mean": 14,
+      "min": 14,
+      "max": 14
+    },
+    "wall_s": {
+      "mean": 1885,
+      "min": 1885,
+      "max": 1885
+    },
+    "dsh_sends": {
+      "mean": 2,
+      "min": 2,
+      "max": 2
+    },
+    "claude_cost_usd": 1.181,
+    "deepseek_input": {
+      "mean": 19256055,
+      "min": 19256055,
+      "max": 19256055
+    },
+    "deepseek_output": {
+      "mean": 85494,
+      "min": 85494,
+      "max": 85494
+    }
+  },
+  {
+    "client": "claude",
+    "label": "ncourier",
+    "size": "medium",
+    "arm": "B",
+    "runs": 1,
+    "passed": 1,
+    "reworks": [
+      0
+    ],
+    "input": {
+      "mean": 411029,
+      "min": 411029,
+      "max": 411029
+    },
+    "uncached_input": {
+      "mean": 51516,
+      "min": 51516,
+      "max": 51516
+    },
+    "output": {
+      "mean": 18917,
+      "min": 18917,
+      "max": 18917
+    },
+    "reasoning": null,
+    "model_requests": {
+      "mean": 5,
+      "min": 5,
+      "max": 5
+    },
+    "wall_s": {
+      "mean": 508,
+      "min": 508,
+      "max": 508
+    },
+    "dsh_sends": {
+      "mean": 0,
+      "min": 0,
+      "max": 0
+    },
+    "claude_cost_usd": 0.42,
+    "deepseek_input": {
+      "mean": 2158364,
+      "min": 2158364,
+      "max": 2158364
+    },
+    "deepseek_output": {
+      "mean": 72418,
+      "min": 72418,
+      "max": 72418
+    }
+  },
+  {
+    "client": "claude",
+    "label": "nevidence",
+    "size": "medium",
+    "arm": "B",
+    "runs": 1,
+    "passed": 1,
+    "reworks": [
+      0
+    ],
+    "input": {
+      "mean": 487810,
+      "min": 487810,
+      "max": 487810
+    },
+    "uncached_input": {
+      "mean": 32430,
+      "min": 32430,
+      "max": 32430
+    },
+    "output": {
+      "mean": 9860,
+      "min": 9860,
+      "max": 9860
+    },
+    "reasoning": null,
+    "model_requests": {
+      "mean": 10,
+      "min": 10,
+      "max": 10
+    },
+    "wall_s": {
+      "mean": 767,
+      "min": 767,
+      "max": 767
+    },
+    "dsh_sends": {
+      "mean": 1,
+      "min": 1,
+      "max": 1
+    },
+    "claude_cost_usd": 0.548,
+    "deepseek_input": {
+      "mean": 4308733,
+      "min": 4308733,
+      "max": 4308733
+    },
+    "deepseek_output": {
+      "mean": 90700,
+      "min": 90700,
+      "max": 90700
+    }
+  },
+  {
+    "client": "claude",
+    "label": "nevidence",
+    "size": "large",
+    "arm": "B",
+    "runs": 1,
+    "passed": 1,
+    "reworks": [
+      2
+    ],
+    "input": {
+      "mean": 3076712,
+      "min": 3076712,
+      "max": 3076712
+    },
+    "uncached_input": {
+      "mean": 130511,
+      "min": 130511,
+      "max": 130511
+    },
+    "output": {
+      "mean": 42926,
+      "min": 42926,
+      "max": 42926
+    },
+    "reasoning": null,
+    "model_requests": {
+      "mean": 26,
+      "min": 26,
+      "max": 26
+    },
+    "wall_s": {
+      "mean": 1831,
+      "min": 1831,
+      "max": 1831
+    },
+    "dsh_sends": {
+      "mean": 3,
+      "min": 3,
+      "max": 3
+    },
+    "claude_cost_usd": 2.491,
+    "deepseek_input": {
+      "mean": 25537999,
+      "min": 25537999,
+      "max": 25537999
+    },
+    "deepseek_output": {
+      "mean": 205776,
+      "min": 205776,
+      "max": 205776
+    }
+  },
+  {
+    "client": "claude",
     "label": "v2",
     "size": "medium",
     "arm": "B",
@@ -405,6 +760,389 @@
       "mean": 89389,
       "min": 83583,
       "max": 95194
+    }
+  },
+  {
+    "client": "codex",
+    "label": "n059",
+    "size": "medium",
+    "arm": "A",
+    "runs": 1,
+    "passed": 1,
+    "reworks": [
+      0
+    ],
+    "input": {
+      "mean": 177652,
+      "min": 177652,
+      "max": 177652
+    },
+    "uncached_input": {
+      "mean": 15220,
+      "min": 15220,
+      "max": 15220
+    },
+    "output": {
+      "mean": 11564,
+      "min": 11564,
+      "max": 11564
+    },
+    "reasoning": {
+      "mean": 744,
+      "min": 744,
+      "max": 744
+    },
+    "model_requests": {
+      "mean": 6,
+      "min": 6,
+      "max": 6
+    },
+    "wall_s": {
+      "mean": 193,
+      "min": 193,
+      "max": 193
+    },
+    "dsh_sends": {
+      "mean": 0,
+      "min": 0,
+      "max": 0
+    },
+    "claude_cost_usd": null,
+    "deepseek_input": null,
+    "deepseek_output": null
+  },
+  {
+    "client": "codex",
+    "label": "n059",
+    "size": "medium",
+    "arm": "B",
+    "runs": 1,
+    "passed": 1,
+    "reworks": [
+      1
+    ],
+    "input": {
+      "mean": 755187,
+      "min": 755187,
+      "max": 755187
+    },
+    "uncached_input": {
+      "mean": 55411,
+      "min": 55411,
+      "max": 55411
+    },
+    "output": {
+      "mean": 2082,
+      "min": 2082,
+      "max": 2082
+    },
+    "reasoning": {
+      "mean": 99,
+      "min": 99,
+      "max": 99
+    },
+    "model_requests": {
+      "mean": 16,
+      "min": 16,
+      "max": 16
+    },
+    "wall_s": {
+      "mean": 1275,
+      "min": 1275,
+      "max": 1275
+    },
+    "dsh_sends": {
+      "mean": 2,
+      "min": 2,
+      "max": 2
+    },
+    "claude_cost_usd": null,
+    "deepseek_input": {
+      "mean": 11376373,
+      "min": 11376373,
+      "max": 11376373
+    },
+    "deepseek_output": {
+      "mean": 151167,
+      "min": 151167,
+      "max": 151167
+    }
+  },
+  {
+    "client": "codex",
+    "label": "n059",
+    "size": "large",
+    "arm": "A",
+    "runs": 1,
+    "passed": 1,
+    "reworks": [
+      1
+    ],
+    "input": {
+      "mean": 2231609,
+      "min": 2231609,
+      "max": 2231609
+    },
+    "uncached_input": {
+      "mean": 92473,
+      "min": 92473,
+      "max": 92473
+    },
+    "output": {
+      "mean": 30006,
+      "min": 30006,
+      "max": 30006
+    },
+    "reasoning": {
+      "mean": 5348,
+      "min": 5348,
+      "max": 5348
+    },
+    "model_requests": {
+      "mean": 29,
+      "min": 29,
+      "max": 29
+    },
+    "wall_s": {
+      "mean": 616,
+      "min": 616,
+      "max": 616
+    },
+    "dsh_sends": {
+      "mean": 0,
+      "min": 0,
+      "max": 0
+    },
+    "claude_cost_usd": null,
+    "deepseek_input": null,
+    "deepseek_output": null
+  },
+  {
+    "client": "codex",
+    "label": "n059",
+    "size": "large",
+    "arm": "B",
+    "runs": 1,
+    "passed": 1,
+    "reworks": [
+      2
+    ],
+    "input": {
+      "mean": 1494631,
+      "min": 1494631,
+      "max": 1494631
+    },
+    "uncached_input": {
+      "mean": 85223,
+      "min": 85223,
+      "max": 85223
+    },
+    "output": {
+      "mean": 4475,
+      "min": 4475,
+      "max": 4475
+    },
+    "reasoning": {
+      "mean": 669,
+      "min": 669,
+      "max": 669
+    },
+    "model_requests": {
+      "mean": 25,
+      "min": 25,
+      "max": 25
+    },
+    "wall_s": {
+      "mean": 2064,
+      "min": 2064,
+      "max": 2064
+    },
+    "dsh_sends": {
+      "mean": 3,
+      "min": 3,
+      "max": 3
+    },
+    "claude_cost_usd": null,
+    "deepseek_input": {
+      "mean": 25180829,
+      "min": 25180829,
+      "max": 25180829
+    },
+    "deepseek_output": {
+      "mean": 224122,
+      "min": 224122,
+      "max": 224122
+    }
+  },
+  {
+    "client": "codex",
+    "label": "ncourier",
+    "size": "medium",
+    "arm": "B",
+    "runs": 1,
+    "passed": 1,
+    "reworks": [
+      0
+    ],
+    "input": {
+      "mean": 375621,
+      "min": 375621,
+      "max": 375621
+    },
+    "uncached_input": {
+      "mean": 29253,
+      "min": 29253,
+      "max": 29253
+    },
+    "output": {
+      "mean": 2273,
+      "min": 2273,
+      "max": 2273
+    },
+    "reasoning": {
+      "mean": 224,
+      "min": 224,
+      "max": 224
+    },
+    "model_requests": {
+      "mean": 13,
+      "min": 13,
+      "max": 13
+    },
+    "wall_s": {
+      "mean": 551,
+      "min": 551,
+      "max": 551
+    },
+    "dsh_sends": {
+      "mean": 0,
+      "min": 0,
+      "max": 0
+    },
+    "claude_cost_usd": null,
+    "deepseek_input": {
+      "mean": 3287663,
+      "min": 3287663,
+      "max": 3287663
+    },
+    "deepseek_output": {
+      "mean": 87270,
+      "min": 87270,
+      "max": 87270
+    }
+  },
+  {
+    "client": "codex",
+    "label": "nevidence",
+    "size": "medium",
+    "arm": "B",
+    "runs": 1,
+    "passed": 1,
+    "reworks": [
+      0
+    ],
+    "input": {
+      "mean": 223749,
+      "min": 223749,
+      "max": 223749
+    },
+    "uncached_input": {
+      "mean": 24325,
+      "min": 24325,
+      "max": 24325
+    },
+    "output": {
+      "mean": 1506,
+      "min": 1506,
+      "max": 1506
+    },
+    "reasoning": {
+      "mean": 130,
+      "min": 130,
+      "max": 130
+    },
+    "model_requests": {
+      "mean": 7,
+      "min": 7,
+      "max": 7
+    },
+    "wall_s": {
+      "mean": 972,
+      "min": 972,
+      "max": 972
+    },
+    "dsh_sends": {
+      "mean": 1,
+      "min": 1,
+      "max": 1
+    },
+    "claude_cost_usd": null,
+    "deepseek_input": {
+      "mean": 4463129,
+      "min": 4463129,
+      "max": 4463129
+    },
+    "deepseek_output": {
+      "mean": 59586,
+      "min": 59586,
+      "max": 59586
+    }
+  },
+  {
+    "client": "codex",
+    "label": "nevidence",
+    "size": "large",
+    "arm": "B",
+    "runs": 1,
+    "passed": 1,
+    "reworks": [
+      1
+    ],
+    "input": {
+      "mean": 266050,
+      "min": 266050,
+      "max": 266050
+    },
+    "uncached_input": {
+      "mean": 52674,
+      "min": 52674,
+      "max": 52674
+    },
+    "output": {
+      "mean": 1894,
+      "min": 1894,
+      "max": 1894
+    },
+    "reasoning": {
+      "mean": 50,
+      "min": 50,
+      "max": 50
+    },
+    "model_requests": {
+      "mean": 8,
+      "min": 8,
+      "max": 8
+    },
+    "wall_s": {
+      "mean": 882,
+      "min": 882,
+      "max": 882
+    },
+    "dsh_sends": {
+      "mean": 2,
+      "min": 2,
+      "max": 2
+    },
+    "claude_cost_usd": null,
+    "deepseek_input": {
+      "mean": 7246990,
+      "min": 7246990,
+      "max": 7246990
+    },
+    "deepseek_output": {
+      "mean": 145047,
+      "min": 145047,
+      "max": 145047
     }
   },
   {

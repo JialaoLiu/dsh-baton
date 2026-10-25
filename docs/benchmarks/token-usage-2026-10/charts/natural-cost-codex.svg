@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="450" viewBox="0 0 940 450" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<rect width="940" height="450" fill="#FFFFFF"/>
+<text x="20" y="30" font-size="17" font-weight="600" fill="#0F172A">Codex（gpt-6.1-sol high）: the client’s own cost per task (list price, USD)</text>
+<text x="20" y="53" font-size="12.5" fill="#5B6577">Only the client model (the part that uses the subscription quota), without DeepSeek.</text>
+<text x="20" y="72" font-size="12.5" fill="#5B6577">Each bar is the mean of 3 runs. Green % = cheaper than working alone, red % = dearer.</text>
+<line x1="60" x2="916" y1="358" y2="358" stroke="#E2E7EF"/>
+<text x="52" y="362" font-size="11.5" fill="#5B6577" text-anchor="end">$0.00</text>
+<line x1="60" x2="916" y1="305.6" y2="305.6" stroke="#E2E7EF"/>
+<text x="52" y="309.6" font-size="11.5" fill="#5B6577" text-anchor="end">$0.10</text>
+<line x1="60" x2="916" y1="253.2" y2="253.2" stroke="#E2E7EF"/>
+<text x="52" y="257.2" font-size="11.5" fill="#5B6577" text-anchor="end">$0.20</text>
+<line x1="60" x2="916" y1="200.79999999999998" y2="200.79999999999998" stroke="#E2E7EF"/>
+<text x="52" y="204.79999999999998" font-size="11.5" fill="#5B6577" text-anchor="end">$0.30</text>
+<line x1="60" x2="916" y1="148.39999999999998" y2="148.39999999999998" stroke="#E2E7EF"/>
+<text x="52" y="152.39999999999998" font-size="11.5" fill="#5B6577" text-anchor="end">$0.40</text>
+<line x1="60" x2="916" y1="96" y2="96" stroke="#E2E7EF"/>
+<text x="52" y="100" font-size="11.5" fill="#5B6577" text-anchor="end">$0.50</text>
+<text x="200" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M168,358 V273.236496 Q168,269.236496 172,269.236496 H228 Q232,269.236496 232,273.236496 V358 Z" fill="#C27803"/>
+<text x="200" y="261.236496" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.17</text>
+<text x="274" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Evidence</text>
+<path d="M242,358 V320.2734608 Q242,316.2734608 246,316.2734608 H302 Q306,316.2734608 306,320.2734608 V358 Z" fill="#0E9F6E"/>
+<text x="274" y="294.2734608" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.08</text>
+<text x="274" y="309.2734608" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−53%</text>
+<text x="348" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Review table</text>
+<path d="M316,358 V317.13435146666666 Q316,313.13435146666666 320,313.13435146666666 H376 Q380,313.13435146666666 380,317.13435146666666 V358 Z" fill="#C0267A"/>
+<text x="348" y="291.13435146666666" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.09</text>
+<text x="348" y="306.13435146666666" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−49%</text>
+<text x="274" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
+<text x="628" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M596,358 V145.2476096 Q596,141.2476096 600,141.2476096 H656 Q660,141.2476096 660,145.2476096 V358 Z" fill="#C27803"/>
+<text x="628" y="133.2476096" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.41</text>
+<text x="702" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Evidence</text>
+<path d="M670,358 V314.2821845333333 Q670,310.2821845333333 674,310.2821845333333 H730 Q734,310.2821845333333 734,314.2821845333333 V358 Z" fill="#0E9F6E"/>
+<text x="702" y="288.2821845333333" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.09</text>
+<text x="702" y="303.2821845333333" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−78%</text>
+<text x="776" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Review table</text>
+<path d="M744,358 V303.8944784 Q744,299.8944784 748,299.8944784 H804 Q808,299.8944784 808,303.8944784 V358 Z" fill="#C0267A"/>
+<text x="776" y="277.8944784" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.11</text>
+<text x="776" y="292.8944784" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−73%</text>
+<text x="702" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Large task</text>
+<rect x="20" y="416" width="12" height="12" rx="2" fill="#C27803"/>
+<text x="38" y="426" font-size="12.5" fill="#0F172A">Alone</text>
+<rect x="90.4" y="416" width="12" height="12" rx="2" fill="#0E9F6E"/>
+<text x="108.4" y="426" font-size="12.5" fill="#0F172A">Evidence</text>
+<rect x="182.64000000000001" y="416" width="12" height="12" rx="2" fill="#C0267A"/>
+<text x="200.64000000000001" y="426" font-size="12.5" fill="#0F172A">Review table</text>
+</svg>

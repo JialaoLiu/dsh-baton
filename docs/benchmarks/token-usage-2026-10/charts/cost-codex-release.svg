@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<rect width="760" height="380" fill="#FFFFFF"/>
+<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#DBE6FD"/><rect width="3" height="6" fill="#2563EB"/></pattern></defs>
+<text x="24" y="30" font-size="17" font-weight="600" fill="#0F172A">Codex (gpt-6.1-sol, high): cost per accepted task (list price, USD)</text>
+<text x="24" y="52" font-size="12.5" fill="#5B6577">Bar = mean, whisker = lowest to highest run.</text>
+<line x1="64" x2="736" y1="316" y2="316" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="320" font-size="11.5" fill="#5B6577" text-anchor="end">$0.00</text>
+<line x1="64" x2="736" y1="256.5" y2="256.5" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="260.5" font-size="11.5" fill="#5B6577" text-anchor="end">$0.20</text>
+<line x1="64" x2="736" y1="197" y2="197" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="201" font-size="11.5" fill="#5B6577" text-anchor="end">$0.40</text>
+<line x1="64" x2="736" y1="137.49999999999997" y2="137.49999999999997" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="141.49999999999997" font-size="11.5" fill="#5B6577" text-anchor="end">$0.60</text>
+<line x1="64" x2="736" y1="78" y2="78" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="82" font-size="11.5" fill="#5B6577" text-anchor="end">$0.80</text>
+<path d="M118,316 V302.786888 Q118,298.786888 122,298.786888 H170 Q174,298.786888 174,302.786888 V316 Z" fill="#C27803"/>
+<line x1="146" x2="146" y1="307.48733500000003" y2="290.08644100000004" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="140" x2="152" y1="290.08644100000004" y2="290.08644100000004" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="140" x2="152" y1="307.48733500000003" y2="307.48733500000003" stroke="#0F172A" stroke-width="1.5"/>
+<text x="146" y="283.08644100000004" font-size="11.5" fill="#0F172A" text-anchor="middle">$0.06</text>
+<rect x="178" y="287.7353845" width="56" height="28.26461549999999" fill="#2563EB"/>
+<path d="M178,285.7353845 V282.563698965 Q178,278.563698965 182,278.563698965 H230 Q234,278.563698965 234,282.563698965 V285.7353845 Z" fill="#1baf7a"/>
+<line x1="206" x2="206" y1="279.19824921" y2="277.92914872" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="200" x2="212" y1="277.92914872" y2="277.92914872" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="200" x2="212" y1="279.19824921" y2="279.19824921" stroke="#0F172A" stroke-width="1.5"/>
+<text x="206" y="270.92914872" font-size="11.5" fill="#0F172A" text-anchor="middle">$0.13</text>
+<text x="176" y="338" font-size="13" fill="#0F172A" text-anchor="middle">Small</text>
+<path d="M342,316 V272.90450050000004 Q342,268.90450050000004 346,268.90450050000004 H394 Q398,268.90450050000004 398,272.90450050000004 V316 Z" fill="#C27803"/>
+<line x1="370" x2="370" y1="272.043899" y2="265.76510199999996" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="364" x2="376" y1="265.76510199999996" y2="265.76510199999996" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="364" x2="376" y1="272.043899" y2="272.043899" stroke="#0F172A" stroke-width="1.5"/>
+<text x="370" y="258.76510199999996" font-size="11.5" fill="#0F172A" text-anchor="middle">$0.16</text>
+<rect x="402" y="280.2074445" width="56" height="35.79255549999999" fill="#2563EB"/>
+<path d="M402,278.2074445 V250.66516288999998 Q402,246.66516288999998 406,246.66516288999998 H454 Q458,246.66516288999998 458,250.66516288999998 V278.2074445 Z" fill="#1baf7a"/>
+<line x1="430" x2="430" y1="261.92068919" y2="231.40963659" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="424" x2="436" y1="231.40963659" y2="231.40963659" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="424" x2="436" y1="261.92068919" y2="261.92068919" stroke="#0F172A" stroke-width="1.5"/>
+<text x="430" y="224.40963659" font-size="11.5" fill="#0F172A" text-anchor="middle">$0.23</text>
+<text x="400" y="338" font-size="13" fill="#0F172A" text-anchor="middle">Medium</text>
+<path d="M566,316 V165.53389450000003 Q566,161.53389450000003 570,161.53389450000003 H618 Q622,161.53389450000003 622,165.53389450000003 V316 Z" fill="#C27803"/>
+<line x1="594" x2="594" y1="198.133475" y2="124.93431400000003" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="588" x2="600" y1="124.93431400000003" y2="124.93431400000003" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="588" x2="600" y1="198.133475" y2="198.133475" stroke="#0F172A" stroke-width="1.5"/>
+<text x="594" y="117.93431400000003" font-size="11.5" fill="#0F172A" text-anchor="middle">$0.52</text>
+<rect x="626" y="267.215798" width="56" height="48.78420199999999" fill="#2563EB"/>
+<path d="M626,265.215798 V215.01387137500004 Q626,211.01387137500004 630,211.01387137500004 H678 Q682,211.01387137500004 682,215.01387137500004 V265.215798 Z" fill="#1baf7a"/>
+<line x1="654" x2="654" y1="222.37500546" y2="199.65273729000003" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="648" x2="660" y1="199.65273729000003" y2="199.65273729000003" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="648" x2="660" y1="222.37500546" y2="222.37500546" stroke="#0F172A" stroke-width="1.5"/>
+<text x="654" y="192.65273729000003" font-size="11.5" fill="#0F172A" text-anchor="middle">$0.35</text>
+<text x="624" y="338" font-size="13" fill="#0F172A" text-anchor="middle">Large</text>
+<rect x="64" y="354" width="12" height="12" rx="2" fill="#C27803"/>
+<text x="82" y="364" font-size="12.5" fill="#0F172A">Alone (A)</text>
+<rect x="162.8" y="354" width="12" height="12" rx="2" fill="#2563EB"/>
+<text x="180.8" y="364" font-size="12.5" fill="#0F172A">Handed to Harness (B)</text>
+<rect x="348" y="354" width="12" height="12" rx="2" fill="#1baf7a"/>
+<text x="366" y="364" font-size="12.5" fill="#0F172A">DeepSeek share</text>
+</svg>

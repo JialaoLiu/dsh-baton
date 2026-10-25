@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="450" viewBox="0 0 940 450" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<rect width="940" height="450" fill="#FFFFFF"/>
+<text x="20" y="30" font-size="17" font-weight="600" fill="#0F172A">Codex（gpt-6.1-sol high）：加上 DeepSeek 的总价（美元）</text>
+<text x="20" y="53" font-size="12.5" fill="#5B6577">柱顶 = 含 DeepSeek 的总价（DeepSeek 按高峰价）；灰色底部（或彩色顶部的白字）= 只算主 Agent，不含 DeepSeek。</text>
+<text x="20" y="72" font-size="12.5" fill="#5B6577">每根柱子是跑 3 次的平均值。绿色百分比 = 比自己做省多少，红色 = 比自己做贵多少。</text>
+<line x1="60" x2="916" y1="358" y2="358" stroke="#E2E7EF"/>
+<text x="52" y="362" font-size="11.5" fill="#5B6577" text-anchor="end">$0.00</text>
+<line x1="60" x2="916" y1="305.6" y2="305.6" stroke="#E2E7EF"/>
+<text x="52" y="309.6" font-size="11.5" fill="#5B6577" text-anchor="end">$0.10</text>
+<line x1="60" x2="916" y1="253.2" y2="253.2" stroke="#E2E7EF"/>
+<text x="52" y="257.2" font-size="11.5" fill="#5B6577" text-anchor="end">$0.20</text>
+<line x1="60" x2="916" y1="200.79999999999998" y2="200.79999999999998" stroke="#E2E7EF"/>
+<text x="52" y="204.79999999999998" font-size="11.5" fill="#5B6577" text-anchor="end">$0.30</text>
+<line x1="60" x2="916" y1="148.39999999999998" y2="148.39999999999998" stroke="#E2E7EF"/>
+<text x="52" y="152.39999999999998" font-size="11.5" fill="#5B6577" text-anchor="end">$0.40</text>
+<line x1="60" x2="916" y1="96" y2="96" stroke="#E2E7EF"/>
+<text x="52" y="100" font-size="11.5" fill="#5B6577" text-anchor="end">$0.50</text>
+<text x="200" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">自己做</text>
+<path d="M168,358 V273.236496 Q168,269.236496 172,269.236496 H228 Q232,269.236496 232,273.236496 V358 Z" fill="#C27803"/>
+<text x="200" y="261.236496" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.17</text>
+<text x="274" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">加证据</text>
+<rect x="242" y="318.2734608" width="64" height="39.72653919999999" fill="#0E9F6E"/>
+<path d="M242,316.2734608 V242.953747904 Q242,238.953747904 246,238.953747904 H302 Q306,238.953747904 306,242.953747904 V316.2734608 Z" fill="#C3CAD5"/>
+<text x="274" y="216.953747904" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.23</text>
+<text x="274" y="231.953747904" font-size="11.5" font-weight="600" fill="#B42318" text-anchor="middle">+34%</text>
+<text x="274" y="293.2734608" font-size="12" font-weight="600" fill="#0F172A" text-anchor="middle">$0.08</text>
+<text x="274" y="308.2734608" font-size="11" font-weight="600" fill="#067647" text-anchor="middle">−53%</text>
+<text x="348" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">复查表</text>
+<rect x="316" y="315.13435146666666" width="64" height="42.86564853333334" fill="#C0267A"/>
+<path d="M316,313.13435146666666 V208.83048084266667 Q316,204.83048084266667 320,204.83048084266667 H376 Q380,204.83048084266667 380,208.83048084266667 V313.13435146666666 Z" fill="#C3CAD5"/>
+<text x="348" y="182.83048084266667" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.29</text>
+<text x="348" y="197.83048084266667" font-size="11.5" font-weight="600" fill="#B42318" text-anchor="middle">+73%</text>
+<text x="348" y="290.13435146666666" font-size="12" font-weight="600" fill="#0F172A" text-anchor="middle">$0.09</text>
+<text x="348" y="305.13435146666666" font-size="11" font-weight="600" fill="#067647" text-anchor="middle">−49%</text>
+<text x="274" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">中号任务</text>
+<text x="628" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">自己做</text>
+<path d="M596,358 V145.2476096 Q596,141.2476096 600,141.2476096 H656 Q660,141.2476096 660,145.2476096 V358 Z" fill="#C27803"/>
+<text x="628" y="133.2476096" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.41</text>
+<text x="702" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">加证据</text>
+<rect x="670" y="312.2821845333333" width="64" height="45.71781546666671" fill="#0E9F6E"/>
+<path d="M670,310.2821845333333 V199.62469234133334 Q670,195.62469234133334 674,195.62469234133334 H730 Q734,195.62469234133334 734,199.62469234133334 V310.2821845333333 Z" fill="#C3CAD5"/>
+<text x="702" y="173.62469234133334" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.31</text>
+<text x="702" y="188.62469234133334" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−25%</text>
+<text x="702" y="287.2821845333333" font-size="12" font-weight="600" fill="#0F172A" text-anchor="middle">$0.09</text>
+<text x="702" y="302.2821845333333" font-size="11" font-weight="600" fill="#067647" text-anchor="middle">−78%</text>
+<text x="776" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">复查表</text>
+<rect x="744" y="301.8944784" width="64" height="56.105521599999975" fill="#C0267A"/>
+<path d="M744,299.8944784 V151.157895728 Q744,147.157895728 748,147.157895728 H804 Q808,147.157895728 808,151.157895728 V299.8944784 Z" fill="#C3CAD5"/>
+<text x="776" y="125.157895728" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.40</text>
+<text x="776" y="140.157895728" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−3%</text>
+<text x="776" y="276.8944784" font-size="12" font-weight="600" fill="#0F172A" text-anchor="middle">$0.11</text>
+<text x="776" y="291.8944784" font-size="11" font-weight="600" fill="#067647" text-anchor="middle">−73%</text>
+<text x="702" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">大号任务</text>
+<rect x="20" y="416" width="12" height="12" rx="2" fill="#C27803"/>
+<text x="38" y="426" font-size="12.5" fill="#0F172A">自己做</text>
+<rect x="93" y="416" width="12" height="12" rx="2" fill="#0E9F6E"/>
+<text x="111" y="426" font-size="12.5" fill="#0F172A">加证据</text>
+<rect x="166" y="416" width="12" height="12" rx="2" fill="#C0267A"/>
+<text x="184" y="426" font-size="12.5" fill="#0F172A">复查表</text>
+<rect x="239" y="416" width="12" height="12" rx="2" fill="#C3CAD5"/>
+<text x="257" y="426" font-size="12.5" fill="#0F172A">DeepSeek 费用（按高峰价，不占主 Agent 额度）</text>
+</svg>

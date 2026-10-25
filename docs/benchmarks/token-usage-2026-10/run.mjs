@@ -19,6 +19,12 @@ const reps = Number(arg('reps', '2'))
 const start = Number(arg('start', '1'))
 // A label keeps runs of another dsh-baton build apart: own folders and results/<client>-<label>.jsonl.
 const label = arg('label', '')
+// --tasks natural: the plain-language requests in natural/ with behaviour checks (checks/natural-*.mjs).
+const taskSet = arg('tasks', 'spec')
+// --server: arm B uses this dsh-baton server.mjs (a worktree) instead of the installed ~/.dsh-baton/app.
+const serverPath = path.resolve(arg('server', path.join(os.homedir(), '.dsh-baton', 'app', 'src', 'server.mjs')))
+// --courier: the client gets the dsh-courier sub-agent (courier/), Luna for Codex, Haiku for Claude Code.
+const courier = process.argv.includes('--courier')
 const MAX_REWORK = 2
 const ROOT = '/private/tmp/dshb-bench'
 
@@ -27,7 +33,10 @@ const CODEX_MODEL = 'gpt-6.1-sol', CODEX_EFFORT = 'high'
 const CLAUDE = path.join(os.homedir(), 'Library/Application Support/Claude/claude-code/2.1.304/6bbba6adc37f/claude.app/Contents/MacOS/claude')
 const CLAUDE_MODEL = 'claude-opus-5-5', CLAUDE_EFFORT = 'high'
 
-const prompt = (size, arm) => fs.readFileSync(path.join(HERE, 'prompts', `${size}-${arm === 'A' ? 'A-alone' : 'B-harness'}.md`), 'utf8')
+const prompt = (size, arm) => taskSet === 'natural'
+  ? fs.readFileSync(path.join(HERE, 'natural', `${size}.md`), 'utf8') + (arm === 'B' ? '\n交给 DeepSeek Harness 去做。\n' : '')
+  : fs.readFileSync(path.join(HERE, 'prompts', `${size}-${arm === 'A' ? 'A-alone' : 'B-harness'}.md`), 'utf8')
+const checkScript = (size) => path.join(HERE, 'checks', `${taskSet === 'natural' ? 'natural-' : ''}${size}.mjs`)
 const reworkPrompt = (failures) => `验收没通过，失败项如下：\n${failures.map((f) => `- ${f}`).join('\n')}\n\n请修好。`
 
 function exec(cmd, args, { cwd, input }) {
@@ -45,6 +54,7 @@ function exec(cmd, args, { cwd, input }) {
 async function codexTurn(dir, arm, text, thread) {
   const args = ['exec', '--json', '-m', CODEX_MODEL, '-c', `model_reasoning_effort="${CODEX_EFFORT}"`, '--skip-git-repo-check', '-C', dir]
   if (arm === 'A') args.push('-c', 'mcp_servers.dsh-baton.enabled=false')
+  else args.push('-c', `mcp_servers.dsh-baton.args=[${JSON.stringify(serverPath)}]`)
   if (thread) args.push('resume', thread)
   args.push('-')
   const r = await exec(CODEX, args, { cwd: dir, input: text })
@@ -76,8 +86,9 @@ function codexUsage(thread) {
 async function claudeTurn(dir, arm, text, session) {
   // Arm A loads no MCP server; arm B loads only the installed dsh-baton (~/.dsh-baton/app).
   const cfg = path.join(os.tmpdir(), `dshb-bench-mcp-${arm}.json`)
-  fs.writeFileSync(cfg, JSON.stringify({ mcpServers: arm === 'A' ? {} : { 'dsh-baton': { command: process.execPath, args: [path.join(os.homedir(), '.dsh-baton', 'app', 'src', 'server.mjs')] } } }))
+  fs.writeFileSync(cfg, JSON.stringify({ mcpServers: arm === 'A' ? {} : { 'dsh-baton': { command: process.execPath, args: [serverPath] } } }))
   const args = ['-p', '--output-format', 'json', '--model', CLAUDE_MODEL, '--effort', CLAUDE_EFFORT, '--dangerously-skip-permissions', '--strict-mcp-config', '--mcp-config', cfg]
+  if (courier && arm === 'B') args.push('--agents', path.join(HERE, 'courier', 'claude-agents.json'))
   if (session) args.push('--resume', session)
   const r = await exec(CLAUDE, args, { cwd: dir, input: text })
   let res = null
@@ -144,7 +155,7 @@ function harnessUsage(dir) {
 
 // --- One run ---------------------------------------------------------------------------------
 async function runOne(size, arm, rep) {
-  const dir = path.join(ROOT, `${client}-${size}-${arm}-${rep}${label ? `-${label}` : ''}`)
+  const dir = path.join(ROOT, `${client}-${taskSet === 'natural' ? 'n' : ''}${size}-${arm}-${rep}${label ? `-${label}` : ''}`)
   fs.rmSync(dir, { recursive: true, force: true })
   fs.mkdirSync(dir, { recursive: true })
   const turn = client === 'codex' ? codexTurn : claudeTurn
@@ -156,7 +167,7 @@ async function runOne(size, arm, rep) {
     const r = await turn(dir, arm, text, thread)
     thread = r.thread
     turns.push({ code: r.code, result: r.result, tail: r.code ? r.tail : undefined })
-    const c = spawnSync('node', [path.join(HERE, 'checks', `${size}.mjs`), dir], { encoding: 'utf8', timeout: 300000 })
+    const c = spawnSync('node', [checkScript(size), dir], { encoding: 'utf8', timeout: 300000 })
     try { check = JSON.parse(c.stdout) } catch { check = { pass: false, failures: [`check crashed: ${(c.stderr || c.stdout).slice(-300)}`] } }
     if (check.pass || reworks >= MAX_REWORK || !thread) break
     reworks++
@@ -165,7 +176,7 @@ async function runOne(size, arm, rep) {
   const wall_s = Math.round((Date.now() - t0) / 1000)
   const usage = client === 'codex' ? codexUsage(thread) : claudeUsage(thread, turns.map((t) => t.result))
   const row = {
-    client, label: label || 'baseline', model: client === 'codex' ? `${CODEX_MODEL} (${CODEX_EFFORT})` : `${CLAUDE_MODEL} (${CLAUDE_EFFORT})`,
+    client, label: label || 'baseline', tasks: taskSet, server: serverPath, courier, model: client === 'codex' ? `${CODEX_MODEL} (${CODEX_EFFORT})` : `${CLAUDE_MODEL} (${CLAUDE_EFFORT})`,
     size, arm, rep, dir, thread, at: new Date().toISOString(), wall_s,
     pass: check.pass, checks_passed: check.passed, checks_failed: check.failed, failures: check.failures,
     reworks, exit_codes: turns.map((t) => t.code), errors: turns.map((t) => t.tail).filter(Boolean),
@@ -178,4 +189,12 @@ async function runOne(size, arm, rep) {
   console.log(`${client}${label ? ` [${label}]` : ''} ${size} ${arm} #${rep}: pass=${row.pass} reworks=${reworks} wall=${wall_s}s`)
 }
 
-for (let rep = start; rep < start + reps; rep++) for (const size of sizes) for (const arm of arms) await runOne(size, arm, rep)
+// The Codex courier is a custom agent file, which Codex reads only from ~/.codex/agents/: it is
+// put there for these runs and removed afterwards.
+const codexAgent = path.join(os.homedir(), '.codex', 'agents', 'dsh-courier.toml')
+if (courier && client === 'codex') { fs.mkdirSync(path.dirname(codexAgent), { recursive: true }); fs.copyFileSync(path.join(HERE, 'courier', 'dsh-courier.toml'), codexAgent) }
+try {
+  for (let rep = start; rep < start + reps; rep++) for (const size of sizes) for (const arm of arms) await runOne(size, arm, rep)
+} finally {
+  if (courier && client === 'codex') fs.rmSync(codexAgent, { force: true })
+}

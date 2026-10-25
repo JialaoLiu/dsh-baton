@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="450" viewBox="0 0 940 450" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<rect width="940" height="450" fill="#FFFFFF"/>
+<text x="20" y="30" font-size="17" font-weight="600" fill="#0F172A">Codex Plus: 5-hour window used per task (%)</text>
+<text x="20" y="53" font-size="12.5" fill="#5B6577">Runs that overlapped are estimated from GPT cost (about $0.102 per 1%); runs alone are measured.</text>
+<text x="20" y="72" font-size="12.5" fill="#5B6577">Each bar is the mean of 3 runs; ≈ marks estimates. Green % = less than working alone.</text>
+<line x1="60" x2="916" y1="358" y2="358" stroke="#E2E7EF"/>
+<text x="52" y="362" font-size="11.5" fill="#5B6577" text-anchor="end">0.0%</text>
+<line x1="60" x2="916" y1="305.6" y2="305.6" stroke="#E2E7EF"/>
+<text x="52" y="309.6" font-size="11.5" fill="#5B6577" text-anchor="end">1.0%</text>
+<line x1="60" x2="916" y1="253.2" y2="253.2" stroke="#E2E7EF"/>
+<text x="52" y="257.2" font-size="11.5" fill="#5B6577" text-anchor="end">2.0%</text>
+<line x1="60" x2="916" y1="200.8" y2="200.8" stroke="#E2E7EF"/>
+<text x="52" y="204.8" font-size="11.5" fill="#5B6577" text-anchor="end">3.0%</text>
+<line x1="60" x2="916" y1="148.39999999999998" y2="148.39999999999998" stroke="#E2E7EF"/>
+<text x="52" y="152.39999999999998" font-size="11.5" fill="#5B6577" text-anchor="end">4.0%</text>
+<line x1="60" x2="916" y1="96" y2="96" stroke="#E2E7EF"/>
+<text x="52" y="100" font-size="11.5" fill="#5B6577" text-anchor="end">5.0%</text>
+<text x="200" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M168,358 V260.7313574687083 Q168,256.7313574687083 172,256.7313574687083 H228 Q232,256.7313574687083 232,260.7313574687083 V358 Z" fill="#C27803"/>
+<text x="200" y="248.73135746870832" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">1.9%≈</text>
+<text x="274" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Evidence</text>
+<path d="M242,358 V318.02613873203404 Q242,314.02613873203404 246,314.02613873203404 H302 Q306,314.02613873203404 306,318.02613873203404 V358 Z" fill="#0E9F6E"/>
+<text x="274" y="292.02613873203404" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.8%≈</text>
+<text x="274" y="307.02613873203404" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−57%</text>
+<text x="348" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Review table</text>
+<path d="M316,358 V318.1404622716698 Q316,314.1404622716698 320,314.1404622716698 H376 Q380,314.1404622716698 380,318.1404622716698 V358 Z" fill="#C0267A"/>
+<text x="348" y="292.1404622716698" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.8%≈</text>
+<text x="348" y="307.1404622716698" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−57%</text>
+<text x="274" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
+<text x="628" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M596,358 V137.20802501870185 Q596,133.20802501870185 600,133.20802501870185 H656 Q660,133.20802501870185 660,137.20802501870185 V358 Z" fill="#C27803"/>
+<text x="628" y="125.20802501870185" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">4.3%≈</text>
+<text x="702" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Evidence</text>
+<path d="M670,358 V319.34296097350034 Q670,315.34296097350034 674,315.34296097350034 H730 Q734,315.34296097350034 734,319.34296097350034 V358 Z" fill="#0E9F6E"/>
+<text x="702" y="293.34296097350034" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.8%≈</text>
+<text x="702" y="308.34296097350034" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−81%</text>
+<text x="776" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Review table</text>
+<path d="M744,358 V305.1974929561959 Q744,301.1974929561959 748,301.1974929561959 H804 Q808,301.1974929561959 808,305.1974929561959 V358 Z" fill="#C0267A"/>
+<text x="776" y="279.1974929561959" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">1.1%≈</text>
+<text x="776" y="294.1974929561959" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−75%</text>
+<text x="702" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Large task</text>
+<rect x="20" y="416" width="12" height="12" rx="2" fill="#C27803"/>
+<text x="38" y="426" font-size="12.5" fill="#0F172A">Alone</text>
+<rect x="90.4" y="416" width="12" height="12" rx="2" fill="#0E9F6E"/>
+<text x="108.4" y="426" font-size="12.5" fill="#0F172A">Evidence</text>
+<rect x="182.64000000000001" y="416" width="12" height="12" rx="2" fill="#C0267A"/>
+<text x="200.64000000000001" y="426" font-size="12.5" fill="#0F172A">Review table</text>
+</svg>

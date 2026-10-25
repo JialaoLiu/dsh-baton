@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<rect width="760" height="380" fill="#FFFFFF"/>
+<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#DBE6FD"/><rect width="3" height="6" fill="#2563EB"/></pattern></defs>
+<text x="24" y="30" font-size="17" font-weight="600" fill="#0F172A">Claude Code (Opus 5.5, high)：每个通过验收的任务的费用（按标价，美元）</text>
+<text x="24" y="52" font-size="12.5" fill="#5B6577">柱高为平均值，细线为最低到最高的一次。</text>
+<line x1="64" x2="736" y1="316" y2="316" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="320" font-size="11.5" fill="#5B6577" text-anchor="end">$0.00</text>
+<line x1="64" x2="736" y1="268.4" y2="268.4" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="272.4" font-size="11.5" fill="#5B6577" text-anchor="end">$0.50</text>
+<line x1="64" x2="736" y1="220.79999999999998" y2="220.79999999999998" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="224.79999999999998" font-size="11.5" fill="#5B6577" text-anchor="end">$1.00</text>
+<line x1="64" x2="736" y1="173.2" y2="173.2" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="177.2" font-size="11.5" fill="#5B6577" text-anchor="end">$1.50</text>
+<line x1="64" x2="736" y1="125.6" y2="125.6" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="129.6" font-size="11.5" fill="#5B6577" text-anchor="end">$2.00</text>
+<line x1="64" x2="736" y1="78" y2="78" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="82" font-size="11.5" fill="#5B6577" text-anchor="end">$2.50</text>
+<path d="M118,316 V298.13256 Q118,294.13256 122,294.13256 H170 Q174,294.13256 174,298.13256 V316 Z" fill="#C27803"/>
+<line x1="146" x2="146" y1="294.73231999999996" y2="293.53279999999995" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="140" x2="152" y1="293.53279999999995" y2="293.53279999999995" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="140" x2="152" y1="294.73231999999996" y2="294.73231999999996" stroke="#0F172A" stroke-width="1.5"/>
+<text x="146" y="286.53279999999995" font-size="11.5" fill="#0F172A" text-anchor="middle">$0.23</text>
+<rect x="178" y="288.43088" width="56" height="27.569119999999998" fill="#2563EB"/>
+<path d="M178,286.43088 V288.9898971952 Q178,284.9898971952 182,284.9898971952 H230 Q234,284.9898971952 234,288.9898971952 V286.43088 Z" fill="#1baf7a"/>
+<line x1="206" x2="206" y1="285.3649004672" y2="284.61489392320004" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="200" x2="212" y1="284.61489392320004" y2="284.61489392320004" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="200" x2="212" y1="285.3649004672" y2="285.3649004672" stroke="#0F172A" stroke-width="1.5"/>
+<text x="206" y="277.61489392320004" font-size="11.5" fill="#0F172A" text-anchor="middle">$0.33</text>
+<text x="176" y="338" font-size="13" fill="#0F172A" text-anchor="middle">小</text>
+<path d="M342,316 V253.28384 Q342,249.28384 346,249.28384 H394 Q398,249.28384 398,253.28384 V316 Z" fill="#C27803"/>
+<line x1="370" x2="370" y1="257.33776" y2="241.22992" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="364" x2="376" y1="241.22992" y2="241.22992" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="364" x2="376" y1="257.33776" y2="257.33776" stroke="#0F172A" stroke-width="1.5"/>
+<text x="370" y="234.22992" font-size="11.5" fill="#0F172A" text-anchor="middle">$0.70</text>
+<rect x="402" y="286.822" width="56" height="29.177999999999997" fill="#2563EB"/>
+<path d="M402,284.822 V283.36714338720003 Q402,279.36714338720003 406,279.36714338720003 H454 Q458,279.36714338720003 458,283.36714338720003 V284.822 Z" fill="#1baf7a"/>
+<line x1="430" x2="430" y1="279.50438922880005" y2="279.2298975456" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="424" x2="436" y1="279.2298975456" y2="279.2298975456" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="424" x2="436" y1="279.50438922880005" y2="279.50438922880005" stroke="#0F172A" stroke-width="1.5"/>
+<text x="430" y="272.2298975456" font-size="11.5" fill="#0F172A" text-anchor="middle">$0.38</text>
+<text x="400" y="338" font-size="13" fill="#0F172A" text-anchor="middle">中</text>
+<path d="M566,316 V128.65276000000003 Q566,124.65276000000003 570,124.65276000000003 H618 Q622,124.65276000000003 622,128.65276000000003 V316 Z" fill="#C27803"/>
+<line x1="594" x2="594" y1="137.57616" y2="111.72935999999999" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="588" x2="600" y1="111.72935999999999" y2="111.72935999999999" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="588" x2="600" y1="137.57616" y2="137.57616" stroke="#0F172A" stroke-width="1.5"/>
+<text x="594" y="104.72935999999999" font-size="11.5" fill="#0F172A" text-anchor="middle">$2.0</text>
+<rect x="626" y="246.91415999999998" width="56" height="69.08584000000002" fill="#2563EB"/>
+<path d="M626,244.91415999999998 V235.06133534720001 Q626,231.06133534720001 630,231.06133534720001 H678 Q682,231.06133534720001 682,235.06133534720001 V244.91415999999998 Z" fill="#1baf7a"/>
+<line x1="654" x2="654" y1="254.8502057056" y2="207.2724649888" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="648" x2="660" y1="207.2724649888" y2="207.2724649888" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="648" x2="660" y1="254.8502057056" y2="254.8502057056" stroke="#0F172A" stroke-width="1.5"/>
+<text x="654" y="200.2724649888" font-size="11.5" fill="#0F172A" text-anchor="middle">$0.89</text>
+<text x="624" y="338" font-size="13" fill="#0F172A" text-anchor="middle">大</text>
+<rect x="64" y="354" width="12" height="12" rx="2" fill="#C27803"/>
+<text x="82" y="364" font-size="12.5" fill="#0F172A">直接做（A）</text>
+<rect x="170.2" y="354" width="12" height="12" rx="2" fill="#2563EB"/>
+<text x="188.2" y="364" font-size="12.5" fill="#0F172A">转交 Harness（B）</text>
+<rect x="321" y="354" width="12" height="12" rx="2" fill="#1baf7a"/>
+<text x="339" y="364" font-size="12.5" fill="#0F172A">DeepSeek 部分</text>
+</svg>

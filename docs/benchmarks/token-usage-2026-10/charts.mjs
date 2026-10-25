@@ -12,6 +12,8 @@ import { spawnSync } from 'node:child_process'
 
 const HERE = import.meta.dirname
 const ZH = process.argv.includes('--zh')
+// --release: only the released build (0.5.9), for the README; files get a -release suffix.
+const RELEASE = process.argv.includes('--release')
 const OUT = path.join(HERE, 'charts')
 fs.mkdirSync(OUT, { recursive: true })
 
@@ -21,7 +23,7 @@ const PRICE = {
 }
 const rows = fs.readdirSync(path.join(HERE, 'results')).filter((f) => f.endsWith('.jsonl'))
   .flatMap((f) => fs.readFileSync(path.join(HERE, 'results', f), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)))
-  .map((r) => ({ label: 'baseline', ...r })).filter((r) => r.valid !== false)
+  .map((r) => ({ label: 'baseline', ...r })).filter((r) => r.valid !== false && (!RELEASE || r.label === 'baseline'))
 
 const mainCost = (r) => r.gpt
   ? ((r.gpt.input_tokens - r.gpt.cached_input_tokens) * PRICE.sol.input + r.gpt.cached_input_tokens * PRICE.sol.cached + r.gpt.output_tokens * PRICE.sol.output) / 1e6
@@ -91,7 +93,7 @@ function barChart({ title, note, groups, legend, unit, file }) {
     lx += 34 + [...it.name].reduce((w, ch) => w + (/[\u3000-\u9fff\uff00-\uffef]/.test(ch) ? 13 : 7.2), 0)
   }
   out.push('</svg>')
-  const svg = path.join(OUT, `${file}${ZH ? '.zh' : ''}.svg`)
+  const svg = path.join(OUT, `${file}${RELEASE ? '-release' : ''}${ZH ? '.zh' : ''}.svg`)
   fs.writeFileSync(svg, out.join('\n') + '\n')
   spawnSync('rsvg-convert', ['-z', '2', '-o', svg.replace(/\.svg$/, '.png'), svg])
   return svg
