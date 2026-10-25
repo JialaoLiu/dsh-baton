@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<rect width="760" height="380" fill="#FFFFFF"/>
+<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#DBE6FD"/><rect width="3" height="6" fill="#2563EB"/></pattern></defs>
+<text x="24" y="30" font-size="17" font-weight="600" fill="#0F172A">Codex Plus: 5-hour window used per task (%)</text>
+<text x="24" y="52" font-size="12.5" fill="#5B6577">The window is reported in whole percent, so small tasks are coarse.</text>
+<line x1="64" x2="736" y1="316" y2="316" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="320" font-size="11.5" fill="#5B6577" text-anchor="end">0%</text>
+<line x1="64" x2="736" y1="268.4" y2="268.4" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="272.4" font-size="11.5" fill="#5B6577" text-anchor="end">2%</text>
+<line x1="64" x2="736" y1="220.79999999999998" y2="220.79999999999998" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="224.79999999999998" font-size="11.5" fill="#5B6577" text-anchor="end">4%</text>
+<line x1="64" x2="736" y1="173.2" y2="173.2" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="177.2" font-size="11.5" fill="#5B6577" text-anchor="end">6%</text>
+<line x1="64" x2="736" y1="125.6" y2="125.6" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="129.6" font-size="11.5" fill="#5B6577" text-anchor="end">8%</text>
+<line x1="64" x2="736" y1="78" y2="78" stroke="#E2E7EF" stroke-width="1"/>
+<text x="56" y="82" font-size="11.5" fill="#5B6577" text-anchor="end">10%</text>
+<text x="116" y="309" font-size="11.5" fill="#0F172A" text-anchor="middle">0%</text>
+<path d="M148,316 V272.4 Q148,268.4 152,268.4 H200 Q204,268.4 204,272.4 V316 Z" fill="#2563EB"/>
+<text x="176" y="261.4" font-size="11.5" fill="#0F172A" text-anchor="middle">2%</text>
+<text x="236" y="308" font-size="11" fill="#5B6577" text-anchor="middle">not run</text>
+<text x="176" y="338" font-size="13" fill="#0F172A" text-anchor="middle">Small</text>
+<path d="M312,316 V272.4 Q312,268.4 316,268.4 H364 Q368,268.4 368,272.4 V316 Z" fill="#C27803"/>
+<text x="340" y="261.4" font-size="11.5" fill="#0F172A" text-anchor="middle">2%</text>
+<path d="M372,316 V284.29999999999995 Q372,280.29999999999995 376,280.29999999999995 H424 Q428,280.29999999999995 428,284.29999999999995 V316 Z" fill="#2563EB"/>
+<line x1="400" x2="400" y1="292.20000000000005" y2="268.4" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="394" x2="406" y1="268.4" y2="268.4" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="394" x2="406" y1="292.20000000000005" y2="292.20000000000005" stroke="#0F172A" stroke-width="1.5"/>
+<text x="400" y="261.4" font-size="11.5" fill="#0F172A" text-anchor="middle">1.5%</text>
+<path d="M432,316 V284.29999999999995 Q432,280.29999999999995 436,280.29999999999995 H484 Q488,280.29999999999995 488,284.29999999999995 V316 Z" fill="url(#hatch)"/>
+<line x1="460" x2="460" y1="292.20000000000005" y2="268.4" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="454" x2="466" y1="268.4" y2="268.4" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="454" x2="466" y1="292.20000000000005" y2="292.20000000000005" stroke="#0F172A" stroke-width="1.5"/>
+<text x="460" y="261.4" font-size="11.5" fill="#0F172A" text-anchor="middle">1.5%</text>
+<text x="400" y="338" font-size="13" fill="#0F172A" text-anchor="middle">Medium</text>
+<path d="M536,316 V141.5 Q536,137.5 540,137.5 H588 Q592,137.5 592,141.5 V316 Z" fill="#C27803"/>
+<line x1="564" x2="564" y1="149.4" y2="125.6" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="558" x2="570" y1="125.6" y2="125.6" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="558" x2="570" y1="149.4" y2="149.4" stroke="#0F172A" stroke-width="1.5"/>
+<text x="564" y="118.6" font-size="11.5" fill="#0F172A" text-anchor="middle">7.5%</text>
+<path d="M596,316 V189.1 Q596,185.1 600,185.1 H648 Q652,185.1 652,189.1 V316 Z" fill="#2563EB"/>
+<line x1="624" x2="624" y1="268.4" y2="101.8" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="618" x2="630" y1="101.8" y2="101.8" stroke="#0F172A" stroke-width="1.5"/>
+<line x1="618" x2="630" y1="268.4" y2="268.4" stroke="#0F172A" stroke-width="1.5"/>
+<text x="624" y="94.8" font-size="11.5" fill="#0F172A" text-anchor="middle">5.5%</text>
+<text x="684" y="308" font-size="11" fill="#5B6577" text-anchor="middle">not run</text>
+<text x="624" y="338" font-size="13" fill="#0F172A" text-anchor="middle">Large</text>
+<rect x="64" y="354" width="12" height="12" rx="2" fill="#C27803"/>
+<text x="82" y="364" font-size="12.5" fill="#0F172A">Alone (A)</text>
+<rect x="162.8" y="354" width="12" height="12" rx="2" fill="#2563EB"/>
+<text x="180.8" y="364" font-size="12.5" fill="#0F172A">Handed to Harness (B)</text>
+<rect x="348" y="354" width="12" height="12" rx="2" fill="url(#hatch)"/>
+<text x="366" y="364" font-size="12.5" fill="#0F172A">Handed over, new build (B)</text>
+</svg>
