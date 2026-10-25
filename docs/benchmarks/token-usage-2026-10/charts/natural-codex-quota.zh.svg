@@ -15,34 +15,40 @@
 <text x="52" y="152.39999999999998" font-size="11.5" fill="#5B6577" text-anchor="end">4.0%</text>
 <line x1="60" x2="916" y1="96" y2="96" stroke="#E2E7EF"/>
 <text x="52" y="100" font-size="11.5" fill="#5B6577" text-anchor="end">5.0%</text>
-<text x="200" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">自己做</text>
-<path d="M168,358 V260.7313574687083 Q168,256.7313574687083 172,256.7313574687083 H228 Q232,256.7313574687083 232,260.7313574687083 V358 Z" fill="#C27803"/>
-<text x="200" y="248.73135746870832" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">1.9%≈</text>
-<text x="274" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">加证据</text>
-<path d="M242,358 V318.02613873203404 Q242,314.02613873203404 246,314.02613873203404 H302 Q306,314.02613873203404 306,318.02613873203404 V358 Z" fill="#0E9F6E"/>
-<text x="274" y="292.02613873203404" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.8%≈</text>
-<text x="274" y="307.02613873203404" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−57%</text>
-<text x="348" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">复查表</text>
-<path d="M316,358 V318.1404622716698 Q316,314.1404622716698 320,314.1404622716698 H376 Q380,314.1404622716698 380,318.1404622716698 V358 Z" fill="#C0267A"/>
-<text x="348" y="292.1404622716698" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.8%≈</text>
-<text x="348" y="307.1404622716698" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−57%</text>
+<text x="163" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">自己做</text>
+<path d="M131,358 V260.7313574687083 Q131,256.7313574687083 135,256.7313574687083 H191 Q195,256.7313574687083 195,260.7313574687083 V358 Z" fill="#C27803"/>
+<text x="163" y="248.73135746870832" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">1.9%≈</text>
+<text x="237" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">加证据</text>
+<path d="M205,358 V318.02613873203404 Q205,314.02613873203404 209,314.02613873203404 H265 Q269,314.02613873203404 269,318.02613873203404 V358 Z" fill="#0E9F6E"/>
+<text x="237" y="292.02613873203404" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.8%≈</text>
+<text x="237" y="307.02613873203404" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−57%</text>
+<text x="311" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">精简证据</text>
+<text x="311" y="350" font-size="11" fill="#5B6577" text-anchor="middle">未测</text>
+<text x="385" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">复查表</text>
+<path d="M353,358 V318.1404622716698 Q353,314.1404622716698 357,314.1404622716698 H413 Q417,314.1404622716698 417,318.1404622716698 V358 Z" fill="#C0267A"/>
+<text x="385" y="292.1404622716698" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.8%≈</text>
+<text x="385" y="307.1404622716698" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−57%</text>
 <text x="274" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">中号任务</text>
-<text x="628" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">自己做</text>
-<path d="M596,358 V137.20802501870185 Q596,133.20802501870185 600,133.20802501870185 H656 Q660,133.20802501870185 660,137.20802501870185 V358 Z" fill="#C27803"/>
-<text x="628" y="125.20802501870185" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">4.3%≈</text>
-<text x="702" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">加证据</text>
-<path d="M670,358 V319.34296097350034 Q670,315.34296097350034 674,315.34296097350034 H730 Q734,315.34296097350034 734,319.34296097350034 V358 Z" fill="#0E9F6E"/>
-<text x="702" y="293.34296097350034" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.8%≈</text>
-<text x="702" y="308.34296097350034" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−81%</text>
-<text x="776" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">复查表</text>
-<path d="M744,358 V305.1974929561959 Q744,301.1974929561959 748,301.1974929561959 H804 Q808,301.1974929561959 808,305.1974929561959 V358 Z" fill="#C0267A"/>
-<text x="776" y="279.1974929561959" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">1.1%≈</text>
-<text x="776" y="294.1974929561959" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−75%</text>
+<text x="591" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">自己做</text>
+<path d="M559,358 V137.20802501870185 Q559,133.20802501870185 563,133.20802501870185 H619 Q623,133.20802501870185 623,137.20802501870185 V358 Z" fill="#C27803"/>
+<text x="591" y="125.20802501870185" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">4.3%≈</text>
+<text x="665" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">加证据</text>
+<path d="M633,358 V319.34296097350034 Q633,315.34296097350034 637,315.34296097350034 H693 Q697,315.34296097350034 697,319.34296097350034 V358 Z" fill="#0E9F6E"/>
+<text x="665" y="293.34296097350034" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.8%≈</text>
+<text x="665" y="308.34296097350034" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−81%</text>
+<text x="739" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">精简证据</text>
+<text x="739" y="350" font-size="11" fill="#5B6577" text-anchor="middle">未测</text>
+<text x="813" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">复查表</text>
+<path d="M781,358 V308.90180680931644 Q781,304.90180680931644 785,304.90180680931644 H841 Q845,304.90180680931644 845,308.90180680931644 V358 Z" fill="#C0267A"/>
+<text x="813" y="282.90180680931644" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">1.0%≈</text>
+<text x="813" y="297.90180680931644" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−76%</text>
 <text x="702" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">大号任务</text>
 <rect x="20" y="416" width="12" height="12" rx="2" fill="#C27803"/>
 <text x="38" y="426" font-size="12.5" fill="#0F172A">自己做</text>
 <rect x="93" y="416" width="12" height="12" rx="2" fill="#0E9F6E"/>
 <text x="111" y="426" font-size="12.5" fill="#0F172A">加证据</text>
-<rect x="166" y="416" width="12" height="12" rx="2" fill="#C0267A"/>
-<text x="184" y="426" font-size="12.5" fill="#0F172A">复查表</text>
+<rect x="166" y="416" width="12" height="12" rx="2" fill="#7C3AED"/>
+<text x="184" y="426" font-size="12.5" fill="#0F172A">精简证据</text>
+<rect x="252" y="416" width="12" height="12" rx="2" fill="#C0267A"/>
+<text x="270" y="426" font-size="12.5" fill="#0F172A">复查表</text>
 </svg>

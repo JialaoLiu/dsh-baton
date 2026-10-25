@@ -11,34 +11,40 @@
 <text x="52" y="187.33333333333334" font-size="11.5" fill="#5B6577" text-anchor="end">$2.00</text>
 <line x1="60" x2="916" y1="96" y2="96" stroke="#E2E7EF"/>
 <text x="52" y="100" font-size="11.5" fill="#5B6577" text-anchor="end">$3.00</text>
-<text x="200" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
-<path d="M168,358 V281.0623777777778 Q168,277.0623777777778 172,277.0623777777778 H228 Q232,277.0623777777778 232,281.0623777777778 V358 Z" fill="#C27803"/>
-<text x="200" y="269.0623777777778" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.93</text>
-<text x="274" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Evidence</text>
-<path d="M242,358 V319.77916577777773 Q242,315.77916577777773 246,315.77916577777773 H302 Q306,315.77916577777773 306,319.77916577777773 V358 Z" fill="#0E9F6E"/>
-<text x="274" y="293.77916577777773" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.48</text>
-<text x="274" y="308.77916577777773" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−48%</text>
-<text x="348" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Review table</text>
-<path d="M316,358 V314.5828324444444 Q316,310.5828324444444 320,310.5828324444444 H376 Q380,310.5828324444444 380,314.5828324444444 V358 Z" fill="#C0267A"/>
-<text x="348" y="288.5828324444444" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.54</text>
-<text x="348" y="303.5828324444444" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−41%</text>
+<text x="163" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M131,358 V281.0623777777778 Q131,277.0623777777778 135,277.0623777777778 H191 Q195,277.0623777777778 195,281.0623777777778 V358 Z" fill="#C27803"/>
+<text x="163" y="269.0623777777778" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.93</text>
+<text x="237" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Evidence</text>
+<path d="M205,358 V319.77916577777773 Q205,315.77916577777773 209,315.77916577777773 H265 Q269,315.77916577777773 269,319.77916577777773 V358 Z" fill="#0E9F6E"/>
+<text x="237" y="293.77916577777773" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.48</text>
+<text x="237" y="308.77916577777773" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−48%</text>
+<text x="311" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Lean evidence</text>
+<text x="311" y="350" font-size="11" fill="#5B6577" text-anchor="middle">not run</text>
+<text x="385" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Review table</text>
+<path d="M353,358 V314.5828324444444 Q353,310.5828324444444 357,310.5828324444444 H413 Q417,310.5828324444444 417,314.5828324444444 V358 Z" fill="#C0267A"/>
+<text x="385" y="288.5828324444444" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.54</text>
+<text x="385" y="303.5828324444444" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−41%</text>
 <text x="274" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
-<text x="628" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
-<path d="M596,358 V133.54508266666664 Q596,129.54508266666664 600,129.54508266666664 H656 Q660,129.54508266666664 660,133.54508266666664 V358 Z" fill="#C27803"/>
-<text x="628" y="121.54508266666664" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$2.62</text>
-<text x="702" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Evidence</text>
-<path d="M670,358 V312.13336533333336 Q670,308.13336533333336 674,308.13336533333336 H730 Q734,308.13336533333336 734,312.13336533333336 V358 Z" fill="#0E9F6E"/>
-<text x="702" y="286.13336533333336" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.57</text>
-<text x="702" y="301.13336533333336" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−78%</text>
-<text x="776" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Review table</text>
-<path d="M744,358 V301.26543066666665 Q744,297.26543066666665 748,297.26543066666665 H804 Q808,297.26543066666665 808,301.26543066666665 V358 Z" fill="#C0267A"/>
-<text x="776" y="275.26543066666665" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.70</text>
-<text x="776" y="290.26543066666665" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−73%</text>
+<text x="591" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M559,358 V133.54508266666664 Q559,129.54508266666664 563,129.54508266666664 H619 Q623,129.54508266666664 623,133.54508266666664 V358 Z" fill="#C27803"/>
+<text x="591" y="121.54508266666664" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$2.62</text>
+<text x="665" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Evidence</text>
+<path d="M633,358 V312.13336533333336 Q633,308.13336533333336 637,308.13336533333336 H693 Q697,308.13336533333336 697,312.13336533333336 V358 Z" fill="#0E9F6E"/>
+<text x="665" y="286.13336533333336" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.57</text>
+<text x="665" y="301.13336533333336" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−78%</text>
+<text x="739" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Lean evidence</text>
+<text x="739" y="350" font-size="11" fill="#5B6577" text-anchor="middle">not run</text>
+<text x="813" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Review table</text>
+<path d="M781,358 V305.0342715555555 Q781,301.0342715555555 785,301.0342715555555 H841 Q845,301.0342715555555 845,305.0342715555555 V358 Z" fill="#C0267A"/>
+<text x="813" y="279.0342715555555" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.65</text>
+<text x="813" y="294.0342715555555" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−75%</text>
 <text x="702" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Large task</text>
 <rect x="20" y="416" width="12" height="12" rx="2" fill="#C27803"/>
 <text x="38" y="426" font-size="12.5" fill="#0F172A">Alone</text>
 <rect x="90.4" y="416" width="12" height="12" rx="2" fill="#0E9F6E"/>
 <text x="108.4" y="426" font-size="12.5" fill="#0F172A">Evidence</text>
-<rect x="182.64000000000001" y="416" width="12" height="12" rx="2" fill="#C0267A"/>
-<text x="200.64000000000001" y="426" font-size="12.5" fill="#0F172A">Review table</text>
+<rect x="182.64000000000001" y="416" width="12" height="12" rx="2" fill="#7C3AED"/>
+<text x="200.64000000000001" y="426" font-size="12.5" fill="#0F172A">Lean evidence</text>
+<rect x="311.28000000000003" y="416" width="12" height="12" rx="2" fill="#C0267A"/>
+<text x="329.28000000000003" y="426" font-size="12.5" fill="#0F172A">Review table</text>
 </svg>

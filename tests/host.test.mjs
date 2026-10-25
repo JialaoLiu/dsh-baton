@@ -121,7 +121,7 @@ test('ping reports the plugin version', async (t) => {
   const h = startHost(); t.after(h.close); await h.ready
   const r = await h.call('ping')
   assert.equal(r.name, 'dsh-baton-host')
-  assert.match(r.version, /^\d+\.\d+\.\d+$/)
+  assert.match(r.version, /^\d+\.\d+\.\d+(-[\w.]+)?$/)
 })
 
 test('switched on, the plugin registers the MCP server and serves the outcome to the Plugins page', async (t) => {

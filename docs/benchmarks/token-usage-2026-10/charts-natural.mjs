@@ -1,7 +1,7 @@
 // Charts for the natural-language round (results/*-n*.jsonl): the client's own cost per accepted
 // task for each way of working, with DeepSeek stacked on top in grey, and the Codex 5-hour window
 // used per task. Bars are the mean of the runs, labelled with the change against working alone. Large tasks
-// use only runs made with the fixed check (rep 2 on): rep 1 had one or two false reworks (bug 7).
+// use only runs made after the large check was fixed: earlier ones had one or two false reworks (bug 7).
 // Codex runs that overlapped another Codex run share the account-wide 5-hour window, so their
 // window share is estimated from GPT cost at the ratio measured on runs that ran alone.
 //   node charts-natural.mjs [--zh]
@@ -15,6 +15,9 @@ const ZH = process.argv.includes('--zh')
 // --astra: the same Codex token counts priced as GPT-6 Astra (a what-if for people who run Astra;
 // Astra may use a different number of tokens, so this is an estimate, not a measurement).
 const ASTRA = process.argv.includes('--astra')
+// --release: only working alone vs the released build (0.6.0 = the review-table build), for the
+// README; files get a -release suffix. Every chart of a set shows the same bars in the same order.
+const RELEASE = process.argv.includes('--release')
 const OUT = path.join(HERE, 'charts')
 fs.mkdirSync(OUT, { recursive: true })
 
@@ -22,6 +25,10 @@ const PRICE = { sol: ASTRA ? { input: 10, cached: 1, output: 50 } : { input: 2, 
 const rows = fs.readdirSync(path.join(HERE, 'results')).filter((f) => /-n\w+\.jsonl$/.test(f))
   .flatMap((f) => fs.readFileSync(path.join(HERE, 'results', f), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)))
   .filter((r) => r.tasks === 'natural' && r.valid !== false)
+
+// Large runs that ended before the large check was fixed (bug 7, 2026-10-25 23:45 local) are left out.
+const CHECK_FIXED = Date.parse('2026-10-25T13:15:00Z')
+const valid = (r) => r.size !== 'large' || Date.parse(r.at) > CHECK_FIXED
 
 const home = (p) => p.replace(/^~/, os.homedir())
 const solCost = (g) => ((g.input_tokens - g.cached_input_tokens) * PRICE.sol.input + g.cached_input_tokens * PRICE.sol.cached + g.output_tokens * PRICE.sol.output) / 1e6
@@ -47,7 +54,7 @@ const span = (r) => [Date.parse(r.at) - r.wall_s * 1000, Date.parse(r.at)]
 const codexRows = rows.filter((r) => r.client === 'codex' && r.rollout)
 // Back-to-back runs touch at the ends (start is derived from wall_s), so only a real overlap counts.
 const overlapped = (r) => { const [a, b] = span(r); return codexRows.some((o) => o !== r && Math.min(b, span(o)[1]) - Math.max(a, span(o)[0]) > 120_000) }
-const alone = codexRows.filter((r) => !overlapped(r) && measuredQuota(r) !== null && (r.size !== 'large' || r.rep >= 2))
+const alone = codexRows.filter((r) => !overlapped(r) && measuredQuota(r) !== null && valid(r))
 export const DOLLARS_PER_PERCENT = alone.reduce((a, r) => a + mainCost(r), 0) / alone.reduce((a, r) => a + measuredQuota(r), 0)
 const quota = (r) => (overlapped(r) ? { v: mainCost(r) / DOLLARS_PER_PERCENT, estimated: true } : { v: measuredQuota(r), estimated: false })
 
@@ -62,14 +69,15 @@ const METHODS = [
   { key: 'B', label: 'nlean', color: '#7C3AED', zh: '精简证据', en: 'Lean evidence' },
   { key: 'B', label: 'nreview', color: '#C0267A', zh: '复查表', en: 'Review table' },
 ]
+if (RELEASE) METHODS.splice(1, METHODS.length - 1, { key: 'B', label: 'nreview', color: '#2563EB', zh: '转交（0.6.0）', en: 'Handed over (0.6.0)' })
 const T = ZH
-  ? { medium: '中号任务', large: '大号任务', ds: 'DeepSeek 费用（按高峰价，不占主 Agent 额度）', title: (c) => `${c}：主 Agent 每个任务花多少钱（按标价，美元）`, note: '只算主 Agent 自己的花费（占订阅额度的部分），不含 DeepSeek。', totalTitle: (c) => `${c}：加上 DeepSeek 的总价（美元）`, totalNote: '柱顶 = 含 DeepSeek 的总价（DeepSeek 按高峰价）；灰色底部（或彩色顶部的白字）= 只算主 Agent，不含 DeepSeek。', note2: '每根柱子是跑 3 次的平均值。绿色百分比 = 比自己做省多少，红色 = 比自己做贵多少。', quotaTitle: 'Codex Plus：每个任务占用的 5 小时额度（%）', quotaNote: '同时跑的几次按 GPT 花费估算（约每 1% 对应 $RATE），单独跑的为实测。' }
-  : { medium: 'Medium task', large: 'Large task', ds: 'DeepSeek cost (peak price, not the client’s quota)', title: (c) => `${c}: the client’s own cost per task (list price, USD)`, note: 'Only the client model (the part that uses the subscription quota), without DeepSeek.', totalTitle: (c) => `${c}: total with DeepSeek (USD)`, totalNote: 'Top = total with DeepSeek (peak price); bottom of the grey (or white text atop the colour) = the client alone, without DeepSeek.', note2: 'Each bar is the mean of 3 runs. Green % = cheaper than working alone, red % = dearer.', quotaTitle: 'Codex Plus: 5-hour window used per task (%)', quotaNote: 'Runs that overlapped are estimated from GPT cost (about $RATE per 1%); runs alone are measured.' }
+  ? { medium: '中号任务', large: '大号任务', ds: 'DeepSeek 费用（按高峰价，不占主 Agent 额度）', title: (c) => `${c}：主 Agent 每个任务花多少钱（按标价，美元）`, note: '只算主 Agent 自己的花费（占订阅额度的部分），不含 DeepSeek。', totalTitle: (c) => `${c}：加上 DeepSeek 的总价（美元）`, totalNote: '彩色 = 主 Agent，灰色 = DeepSeek（按高峰价）；“自己做”不用 DeepSeek，所以没有灰色。柱顶 = 合计，两段交界处 = 只算主 Agent。', note2: '每根柱子是跑 3 次的平均值。绿色百分比 = 比自己做省多少，红色 = 比自己做贵多少。', quotaTitle: 'Codex Plus：每个任务占用的 5 小时额度（%）', quotaNote: '同时跑的几次按 GPT 花费估算（约每 1% 对应 $RATE），单独跑的为实测。' }
+  : { medium: 'Medium task', large: 'Large task', ds: 'DeepSeek cost (peak price, not the client’s quota)', title: (c) => `${c}: the client’s own cost per task (list price, USD)`, note: 'Only the client model (the part that uses the subscription quota), without DeepSeek.', totalTitle: (c) => `${c}: total with DeepSeek (USD)`, totalNote: 'Colour = client model, grey = DeepSeek (peak price); working alone uses no DeepSeek, so it has no grey. Top = total; where the two meet = the client alone.', note2: 'Each bar is the mean of 3 runs. Green % = cheaper than working alone, red % = dearer.', quotaTitle: 'Codex Plus: 5-hour window used per task (%)', quotaNote: 'Runs that overlapped are estimated from GPT cost (about $RATE per 1%); runs alone are measured.' }
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
 const FONT = `font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif"`
 const textW = (s, px) => [...s].reduce((w, ch) => w + (/[　-鿿＀-￯]/.test(ch) ? px : px * 0.56), 0)
 
-const pick = (client, size, m) => rows.filter((r) => r.client === client && r.size === size && r.arm === m.key && r.label === m.label && (size !== 'large' || r.rep >= 2))
+const pick = (client, size, m) => rows.filter((r) => r.client === client && r.size === size && r.arm === m.key && r.label === m.label && valid(r))
 
 function chart({ title, note, note2, groups, legend, unit, file, foot }) {
   const W = 940, H = 450, L = 60, R = 24, TOP = 96, BOT = 92
@@ -137,7 +145,8 @@ const mean = (v) => v.reduce((a, b) => a + b, 0) / v.length
 // Change against working alone, as people read it: "−53%" cheaper, "+27%" dearer.
 const change = (v, base) => (base ? `${v < base ? '−' : '+'}${Math.round(Math.abs(v / base - 1) * 100)}%` : '')
 // Only the ways of working that were run for this client.
-const methodsFor = (client) => METHODS.filter((m) => ['medium', 'large'].some((size) => pick(client, size, m).length))
+// The same bars for every client and chart, so the charts line up; a bar with no runs says so.
+const methodsFor = () => METHODS
 for (const client of ASTRA ? ['codex'] : ['codex', 'claude']) {
   const who = client === 'codex' ? (ASTRA ? (ZH ? 'Codex 换算成 GPT-6 Astra high' : 'Codex priced as GPT-6 Astra high') : 'Codex（gpt-6.1-sol high）') : 'Claude Code（Opus 5.5 high）'
   const cells = (withDs) => ['medium', 'large'].map((size) => {
@@ -161,8 +170,8 @@ for (const client of ASTRA ? ['codex'] : ['codex', 'claude']) {
   const legend = methodsFor(client).map((m) => ({ name: name(m), color: m.color }))
   const astraNote = ZH ? '估算：用 Sol 实测的 token 数，按 Astra 标价（每百万 输入 $10、缓存 $1、输出 $50）重新计价；3 次平均。' : 'Estimate: the token counts measured with Sol, priced at Astra list prices ($10 input, $1 cached, $50 output per million); mean of 3 runs.'
   const n2 = ASTRA ? astraNote : T.note2
-  chart({ title: T.title(who), note: T.note, note2: n2, groups: cells(false), file: `natural-cost-${client}${ASTRA ? '-astra' : ''}`, unit: (v) => `$${v.toFixed(2)}`, legend })
-  chart({ title: T.totalTitle(who), note: T.totalNote, note2: n2, groups: cells(true), file: `natural-total-${client}${ASTRA ? '-astra' : ''}`, unit: (v) => `$${v.toFixed(2)}`, legend: [...legend, { name: T.ds, color: C.DS }] })
+  chart({ title: T.title(who), note: T.note, note2: n2, groups: cells(false), file: `natural-cost-${client}${ASTRA ? '-astra' : ''}${RELEASE ? '-release' : ''}`, unit: (v) => `$${v.toFixed(2)}`, legend })
+  chart({ title: T.totalTitle(who), note: T.totalNote, note2: n2, groups: cells(true), file: `natural-total-${client}${ASTRA ? '-astra' : ''}${RELEASE ? '-release' : ''}`, unit: (v) => `$${v.toFixed(2)}`, legend: [...legend, { name: T.ds, color: C.DS }] })
 }
 
 const quotaGroups = ['medium', 'large'].map((size) => ({
@@ -175,5 +184,5 @@ const quotaGroups = ['medium', 'large'].map((size) => ({
     return { name: name(m), est: q.some((x) => x.estimated), change: m === METHODS[0] || !base.length ? '' : change(v, mean(base)), parts: [{ v, color: m.color }] }
   }),
 }))
-if (!ASTRA) chart({ title: T.quotaTitle, note: T.quotaNote.replace('$RATE', `$${DOLLARS_PER_PERCENT.toFixed(3)}`), note2: ZH ? '每根柱子是 3 次的平均值；≈ 表示含估算。绿色百分比 = 比自己做省多少。' : 'Each bar is the mean of 3 runs; ≈ marks estimates. Green % = less than working alone.', groups: quotaGroups, file: 'natural-codex-quota', unit: (v) => `${v.toFixed(1)}%`, legend: methodsFor('codex').map((m) => ({ name: name(m), color: m.color })) })
+if (!ASTRA) chart({ title: T.quotaTitle, note: T.quotaNote.replace('$RATE', `$${DOLLARS_PER_PERCENT.toFixed(3)}`), note2: ZH ? '每根柱子是 3 次的平均值；≈ 表示含估算。绿色百分比 = 比自己做省多少。' : 'Each bar is the mean of 3 runs; ≈ marks estimates. Green % = less than working alone.', groups: quotaGroups, file: `natural-codex-quota${RELEASE ? '-release' : ''}`, unit: (v) => `${v.toFixed(1)}%`, legend: methodsFor('codex').map((m) => ({ name: name(m), color: m.color })) })
 console.log(`charts written to ${OUT}; $ per 1% of the Codex window: ${DOLLARS_PER_PERCENT.toFixed(4)} (from ${alone.length} runs alone)`)

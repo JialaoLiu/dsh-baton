@@ -69,6 +69,29 @@ That is all. If Harness says it could not register, run `npx -y dsh-baton-mcp se
 - **Codex** waits inside `dsh_wait`, up to 270 s per call, just under its 300 s tool timeout. An unfinished wait returns only the state, so Codex calls again without summarising. Codex gets no `wait_command`: its terminal cannot wake it, so it would poll.
 - Codex asks you to approve MCP tool calls: approve the `dsh-baton` tools. For unattended `codex exec` runs, add `--approve-for-me`.
 
+**How a hand-over is checked** (from 0.6.0): the client sends the task with `checks`, the project's own test commands such as `npm test`. dsh-baton notes the folder's files before the run, and when the run ends it lists the files created, changed and deleted and runs the checks itself; this `evidence` comes from dsh-baton, not from the DeepSeek reply. The message also asks Harness to have a read-only sub-agent check the work against every requirement and end with a table (requirement, met, file:line). The client accepts from the evidence and that table, sends anything not met back in one message, and reads code only for rows not met. A new session starts in the folder the conversation works in unless `cwd` names another one.
+
+## Token usage
+
+Measured on 2026-10-25/26 with plain-language requests (what a user would type, plus "hand it to DeepSeek Harness"), the same model in both arms, three runs per cell, and every run checked by the same hidden acceptance test. Cost per task at list price; DeepSeek at its peak price, the most conservative case:
+
+| Task | Claude Code alone | Claude Code → 0.6.0 | Codex alone | Codex → 0.6.0 |
+|---|---|---|---|---|
+| Medium: CLI, modules, tests | $1.07 | $0.37 client, $0.55 with DeepSeek | $0.17 | $0.09 client, $0.29 with DeepSeek |
+| Large: web app, API, tests | $2.13 | $0.41 client, $0.70 with DeepSeek | $0.41 | $0.10 client, $0.41 with DeepSeek |
+
+- **Claude Code** spends 65–81% less, and still about half or less once DeepSeek is added.
+- **Codex** (gpt-6.1-sol, high) spends half to three quarters less of its own model, so a ChatGPT Plus 5-hour window lasts more than twice as long: 0.8% instead of 1.9% per medium task, 1.0% instead of 4.3% per large one. Sol is cheap, so with DeepSeek added a medium task costs more in total than doing it in Codex, and a large one about the same; the saving is in the subscription quota. With a pricier model the total drops too.
+- All 12 runs of 0.6.0 passed the acceptance test the first time.
+
+The [full report](./docs/benchmarks/token-usage-2026-10.md) has the method, every run, the earlier builds that were compared, raw data and scripts.
+
+<p align="center">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-total-claude-release.svg" width="100%" alt="Claude Code cost per task: alone vs handed over, with and without the DeepSeek share">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-total-codex-release.svg" width="100%" alt="Codex cost per task: alone vs handed over, with and without the DeepSeek share">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-codex-quota-release.svg" width="100%" alt="Codex Plus 5-hour window used per task">
+</p>
+
 ## Tools
 
 <p align="center">
@@ -88,9 +111,9 @@ That is all. If Harness says it could not register, run `npx -y dsh-baton-mcp se
 | `dsh_create_workspace` | Register a folder as a workspace (creates the folder if missing); returns the existing one if already registered |
 | `dsh_list_sessions` | Sessions newest first, with title, folder and running state; filter by folder or text. Archived sessions are left out |
 | `dsh_read_session` | Recent prompts and replies of one session (with tool names); `archived: true` for an archived session |
-| `dsh_send` | Send a message: `session_id` continues that session; `cwd` or `workspace_id` starts a new one (a `cwd` that is not a workspace yet is registered first). Returns a `run_id` at once. In Harness the message is marked "Sent by Claude / ChatGPT from another chat". An archived session is refused: unarchive it in Harness, or start a new session. To a busy session, `mode` `followup` queues the message after the current turn and `steer` adds it to the running turn; left out, it does what Harness's own setting says (Settings → sending while busy: queue or steer), and `followup` when that cannot be read. `mode_source` says which applied |
+| `dsh_send` | Send a message: `session_id` continues that session; otherwise a new one starts in `cwd` or `workspace_id`, or, with neither, in the folder the conversation works in (a `cwd` that is not a workspace yet is registered first; a `cwd` outside the conversation's folder is allowed and noted in `folder_note`). `checks`: test commands dsh-baton runs itself when the run ends (see How a hand-over is checked). Returns a `run_id` at once. In Harness the message is marked "Sent by Claude / ChatGPT from another chat". An archived session is refused: unarchive it in Harness, or start a new session. To a busy session, `mode` `followup` queues the message after the current turn and `steer` adds it to the running turn; left out, it does what Harness's own setting says (Settings → sending while busy: queue or steer), and `followup` when that cannot be read. `mode_source` says which applied |
 | `dsh_status` | Run progress: state, recent text and tool calls, final reply; `waiting_on` when the turn is over but sub-agents or jobs still run; `human_interjections` when someone typed in the Harness UI mid-run; state `interrupted` for a run cut short by a Harness restart |
-| `dsh_wait` | Wait for the run to end (or until it stops to ask a person, see `dsh_answer`): up to 270 s per call for Codex, 50 s for other clients. Still going: returns `timed_out` with just the state; call it again. Clients that can wait in the background use `dsh_send`'s `wait_command` instead. `dsh_status` is a one-off look, not a way to wait |
+| `dsh_wait` | Wait for the run to end; a finished run carries `evidence` (files changed, check results) when the message was sent with `checks` (or until it stops to ask a person, see `dsh_answer`): up to 270 s per call for Codex, 50 s for other clients. Still going: returns `timed_out` with just the state; call it again. Clients that can wait in the background use `dsh_send`'s `wait_command` instead. `dsh_status` is a one-off look, not a way to wait |
 | `dsh_answer` | Answer the questions a run stopped to ask (Harness's ask_user_question): per question, an option number or label, free text, or skip; one at a time or all at once. `dsh_wait` and `wait_command` return as soon as a run asks, with the questions (`needs_input`, `question`; the option Harness's model would pick is in `harness_suggested`, apart from the labels). The assistant answers by its own judgment only when you told it to decide, and then passes `reason` and tells you what it chose and why; otherwise it brings you the questions, starting with its own recommendation and reason. You can also answer in the Harness window: whoever answers first wins |
 | `dsh_session_activity` | What a session is doing now: running turn, sub-agents (any depth), background jobs; `archived: true` for an archived session |
 | `dsh_update_queued` | Change a message still waiting in the queue of a busy session, by its `run_id`: `edit` its text, `remove` it, or `steer` it into the running turn now. Once it has reached the conversation it can no longer be changed |
@@ -98,7 +121,7 @@ That is all. If Harness says it could not register, run `npx -y dsh-baton-mcp se
 | `dsh_rename_session` | Rename a session |
 | `dsh_rename_workspace` | Rename a workspace (sidebar title only; the folder is not moved) |
 | `dsh_list_runs` | Recent runs, optionally of one session |
-| `dsh_call` | Backup entry: calls any `dsh_*` tool by name, for a conversation whose tool list predates an update; an unknown name lists the tools |
+| `dsh_call` | Calls any `dsh_*` tool by name: the less used tools (create and rename workspace, rename session, session activity, update queued, list runs) are not in the tool list from 0.6.0 on, to keep every request short, and are reached this way; also for a conversation whose tool list predates an update. An unknown name lists the tools |
 
 </details>
 

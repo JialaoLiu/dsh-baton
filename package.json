@@ -1,6 +1,6 @@
 {
   "name": "dsh-baton-mcp",
-  "version": "0.5.9",
+  "version": "0.6.0-next.0",
   "mcpName": "io.github.JialaoLiu/dsh-baton",
   "description": "Pass the baton from Claude Code, Codex or any MCP client to a local DeepSeek Harness: an MCP server that hands off tasks, continues a specific session, shows the run live in Harness and hands the result back when it is done.",
   "type": "module",

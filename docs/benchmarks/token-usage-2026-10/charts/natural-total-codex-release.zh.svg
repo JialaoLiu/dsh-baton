@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="450" viewBox="0 0 940 450" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<rect width="940" height="450" fill="#FFFFFF"/>
+<text x="20" y="30" font-size="17" font-weight="600" fill="#0F172A">Codex（gpt-6.1-sol high）：加上 DeepSeek 的总价（美元）</text>
+<text x="20" y="53" font-size="12.5" fill="#5B6577">彩色 = 主 Agent，灰色 = DeepSeek（按高峰价）；“自己做”不用 DeepSeek，所以没有灰色。柱顶 = 合计，两段交界处 = 只算主 Agent。</text>
+<text x="20" y="72" font-size="12.5" fill="#5B6577">每根柱子是跑 3 次的平均值。绿色百分比 = 比自己做省多少，红色 = 比自己做贵多少。</text>
+<line x1="60" x2="916" y1="358" y2="358" stroke="#E2E7EF"/>
+<text x="52" y="362" font-size="11.5" fill="#5B6577" text-anchor="end">$0.00</text>
+<line x1="60" x2="916" y1="305.6" y2="305.6" stroke="#E2E7EF"/>
+<text x="52" y="309.6" font-size="11.5" fill="#5B6577" text-anchor="end">$0.10</text>
+<line x1="60" x2="916" y1="253.2" y2="253.2" stroke="#E2E7EF"/>
+<text x="52" y="257.2" font-size="11.5" fill="#5B6577" text-anchor="end">$0.20</text>
+<line x1="60" x2="916" y1="200.79999999999998" y2="200.79999999999998" stroke="#E2E7EF"/>
+<text x="52" y="204.79999999999998" font-size="11.5" fill="#5B6577" text-anchor="end">$0.30</text>
+<line x1="60" x2="916" y1="148.39999999999998" y2="148.39999999999998" stroke="#E2E7EF"/>
+<text x="52" y="152.39999999999998" font-size="11.5" fill="#5B6577" text-anchor="end">$0.40</text>
+<line x1="60" x2="916" y1="96" y2="96" stroke="#E2E7EF"/>
+<text x="52" y="100" font-size="11.5" fill="#5B6577" text-anchor="end">$0.50</text>
+<text x="237" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">自己做</text>
+<path d="M205,358 V273.236496 Q205,269.236496 209,269.236496 H265 Q269,269.236496 269,273.236496 V358 Z" fill="#C27803"/>
+<text x="237" y="261.236496" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.17</text>
+<text x="311" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">转交（0.6.0）</text>
+<rect x="279" y="315.13435146666666" width="64" height="42.86564853333334" fill="#2563EB"/>
+<path d="M279,313.13435146666666 V208.83048084266667 Q279,204.83048084266667 283,204.83048084266667 H339 Q343,204.83048084266667 343,208.83048084266667 V313.13435146666666 Z" fill="#C3CAD5"/>
+<text x="311" y="182.83048084266667" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.29</text>
+<text x="311" y="197.83048084266667" font-size="11.5" font-weight="600" fill="#B42318" text-anchor="middle">+73%</text>
+<text x="311" y="290.13435146666666" font-size="12" font-weight="600" fill="#0F172A" text-anchor="middle">$0.09</text>
+<text x="311" y="305.13435146666666" font-size="11" font-weight="600" fill="#067647" text-anchor="middle">−49%</text>
+<text x="274" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">中号任务</text>
+<text x="665" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">自己做</text>
+<path d="M633,358 V145.2476096 Q633,141.2476096 637,141.2476096 H693 Q697,141.2476096 697,145.2476096 V358 Z" fill="#C27803"/>
+<text x="665" y="133.2476096" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.41</text>
+<text x="739" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">转交（0.6.0）</text>
+<rect x="707" y="305.68376693333335" width="64" height="52.316233066666655" fill="#2563EB"/>
+<path d="M707,303.68376693333335 V149.63602086933335 Q707,145.63602086933335 711,145.63602086933335 H767 Q771,145.63602086933335 771,149.63602086933335 V303.68376693333335 Z" fill="#C3CAD5"/>
+<text x="739" y="123.63602086933335" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.41</text>
+<text x="739" y="138.63602086933335" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−2%</text>
+<text x="739" y="280.68376693333335" font-size="12" font-weight="600" fill="#0F172A" text-anchor="middle">$0.10</text>
+<text x="739" y="295.68376693333335" font-size="11" font-weight="600" fill="#067647" text-anchor="middle">−75%</text>
+<text x="702" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">大号任务</text>
+<rect x="20" y="416" width="12" height="12" rx="2" fill="#C27803"/>
+<text x="38" y="426" font-size="12.5" fill="#0F172A">自己做</text>
+<rect x="93" y="416" width="12" height="12" rx="2" fill="#2563EB"/>
+<text x="111" y="426" font-size="12.5" fill="#0F172A">转交（0.6.0）</text>
+<rect x="215.4" y="416" width="12" height="12" rx="2" fill="#C3CAD5"/>
+<text x="233.4" y="426" font-size="12.5" fill="#0F172A">DeepSeek 费用（按高峰价，不占主 Agent 额度）</text>
+</svg>
