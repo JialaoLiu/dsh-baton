@@ -194,7 +194,7 @@ Cost per task: the client's own model, and the total with DeepSeek. Reworks are 
 | Evidence | 3 | $0.08 | $0.23 | 0, 0, 0 | 3 | $0.09 | $0.31 | 0, 0, 0 |
 | **Review table (0.6.0)** | 3 | **$0.09** | **$0.29** | 0, 0, 0 | 3 | **$0.10** | **$0.41** | 0, 0, 0 |
 
-Codex with GPT-6 Astra high, medium task, one run each, one after the other: alone $0.79 and 7% of the Plus 5-hour window; handed over to 0.6.0 $0.45 for Codex, $0.65 with DeepSeek, 3% of the window. Astra working alone on the large task cost $2.27 and 22% of the window.
+Codex with GPT-6 Astra high, each run on its own: medium alone $0.79 and 7% of the Plus 5-hour window; handed over to 0.6.0 (mean of 2 runs, $0.45 and $0.67) $0.56 for Codex, $0.75 with DeepSeek, 3.5% of the window. Large alone $2.27 and 22%; handed over $0.48 for Codex, $0.78 with DeepSeek, 4%. The dearer medium run had two more waits and lost the provider's prompt cache after one of them.
 
 Plus 5-hour window per task with Sol: medium 1.9% alone vs 0.8% with 0.6.0, large 4.3% vs 1.0%. Runs that overlapped another Codex run share the account-wide window, so their share is estimated from GPT cost at the ratio measured on runs that ran alone (about $0.10 per 1%; Astra measured $0.11–0.15 per 1%, so the window tracks list price).
 
