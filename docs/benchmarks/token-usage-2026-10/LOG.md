@@ -107,3 +107,9 @@ With the check fixed, the hand-over costs about half of working alone on the lar
 - Passed the first time; $0.67 at Astra list price (run 1: $0.45), DeepSeek $0.17, window 5% → 9% (4%).
 - Why dearer than run 1: six waits instead of four, and after one 270 s wait the provider's prompt cache had dropped most of the conversation (16k new input tokens on that request instead of a few hundred). The catalogue read at the start was again about 9.4k new tokens.
 - Astra medium hand-over, mean of 2: $0.56 client (−29% vs alone), $0.75 with DeepSeek (−6%), 3.5% of the window (alone 7%). Astra large: $0.48 client (−79%), $0.78 total (−65%), 4% vs 22%. README table and combined chart (now three panels: Claude, Sol, Astra) updated.
+
+### 2026-10-26 05:40–05:50: cleanup after the benchmark
+- Everything first copied to /Volumes/LJL4T/dshb-bench-evidence (per-run archive, 102 runs, results/evidence.json) and _extra-2026-10-26 (all workspaces, Claude Code transcripts, Codex rollouts, Harness sessions, Harness workspace list, dsh-baton run records; SHA256SUMS.txt).
+- Harness quit, its workspace list backed up (~/.dsh/storages/workspace.json.bak-dshb-*), 81 test workspaces removed (all /private/tmp/dshb-bench/* and /private/tmp/dsh-baton-mac-test), their sessions moved to the Trash; Harness restarted with 12 workspaces.
+- Mac Harness plugin updated: dsh-baton-host 0.5.9 → 0.6.0 (exact version), setup reports "Harness plugin: running (0.6.0)".
+- Claude Code test transcripts (54 folders), Codex CLI test rollouts (61) and /private/tmp/dshb-bench moved to ~/.Trash/dshb-bench-cleanup-20261026, each checked present in the backup first. The Trash is left for the user to empty.
