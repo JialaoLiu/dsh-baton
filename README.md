@@ -87,9 +87,7 @@ Measured on 2026-10-25/26 with plain-language requests (what a user would type, 
 The [full report](./docs/benchmarks/token-usage-2026-10.md) has the method, every run, the earlier builds that were compared, raw data and scripts.
 
 <p align="center">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-total-claude-release.svg" width="100%" alt="Claude Code cost per task: alone vs handed over, with and without the DeepSeek share">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-total-codex-release.svg" width="100%" alt="Codex cost per task: alone vs handed over, with and without the DeepSeek share">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-codex-quota-release.svg" width="100%" alt="Codex Plus 5-hour window used per task">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-combined.svg" width="100%" alt="Cost per task, working alone vs handed over with 0.6.0: Claude Code (Opus 5.5), Codex (GPT-6.1 Sol), and Codex priced as GPT-6 Astra">
 </p>
 
 ## Tools

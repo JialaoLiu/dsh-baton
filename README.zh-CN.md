@@ -87,9 +87,7 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 [完整报告](./docs/benchmarks/token-usage-2026-10.md)里有方法、每一次运行、对比过的其他版本、原始数据和脚本。
 
 <p align="center">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-total-claude-release.zh.svg" width="100%" alt="Claude Code 每个任务的花费：自己做与转交，含与不含 DeepSeek">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-total-codex-release.zh.svg" width="100%" alt="Codex 每个任务的花费：自己做与转交，含与不含 DeepSeek">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-codex-quota-release.zh.svg" width="100%" alt="Codex Plus 每个任务占用的 5 小时额度">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-combined.zh.svg" width="100%" alt="每个任务的花费，自己做与用 0.6.0 转交：Claude Code（Opus 5.5）、Codex（GPT-6.1 Sol），以及按 GPT-6 Astra 标价换算的 Codex">
 </p>
 
 ## 工具

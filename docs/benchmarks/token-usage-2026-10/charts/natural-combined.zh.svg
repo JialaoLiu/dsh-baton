@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="580" viewBox="0 0 1400 580" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<rect width="1400" height="580" fill="#FFFFFF"/>
+<text x="20" y="30" font-size="17" font-weight="600" fill="#0F172A">自己做 vs 转交 DeepSeek Harness（0.6.0）：每个任务花多少钱（美元）</text>
+<text x="20" y="53" font-size="12.5" fill="#5B6577">彩色 = 主 Agent，灰色 = DeepSeek（按高峰价）；“自己做”不用 DeepSeek，所以没有灰色。柱顶 = 合计；柱下“主 Agent” = 不含 DeepSeek。</text>
+<text x="20" y="72" font-size="12.5" fill="#5B6577">每根柱子是 3 次运行的平均值；Astra 一组用 Sol 实测的 token 数按 Astra 标价换算。绿色 = 比自己做省多少，红色 = 贵多少。</text>
+<line x1="60" x2="1376" y1="424" y2="424" stroke="#E2E7EF"/>
+<text x="52" y="428" font-size="11.5" fill="#5B6577" text-anchor="end">$0.00</text>
+<line x1="60" x2="1376" y1="314.6666666666667" y2="314.6666666666667" stroke="#E2E7EF"/>
+<text x="52" y="318.6666666666667" font-size="11.5" fill="#5B6577" text-anchor="end">$1.00</text>
+<line x1="60" x2="1376" y1="205.33333333333334" y2="205.33333333333334" stroke="#E2E7EF"/>
+<text x="52" y="209.33333333333334" font-size="11.5" fill="#5B6577" text-anchor="end">$2.00</text>
+<line x1="60" x2="1376" y1="96" y2="96" stroke="#E2E7EF"/>
+<text x="52" y="100" font-size="11.5" fill="#5B6577" text-anchor="end">$3.00</text>
+<text x="132.66666666666669" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">自己做</text>
+<path d="M100.66666666666667,424 V311.08986666666664 Q100.66666666666667,307.08986666666664 104.66666666666667,307.08986666666664 H160.66666666666669 Q164.66666666666669,307.08986666666664 164.66666666666669,311.08986666666664 V424 Z" fill="#C27803"/>
+<text x="132.66666666666669" y="299.08986666666664" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$1.07</text>
+<text x="206.66666666666669" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">转交（0.6.0）</text>
+<rect x="174.66666666666669" y="385.34257777777776" width="64" height="38.65742222222224" fill="#2563EB"/>
+<path d="M174.66666666666669,383.34257777777776 V368.4041608497778 Q174.66666666666669,364.4041608497778 178.66666666666669,364.4041608497778 H234.66666666666669 Q238.66666666666669,364.4041608497778 238.66666666666669,368.4041608497778 V383.34257777777776 Z" fill="#C3CAD5"/>
+<text x="206.66666666666669" y="342.4041608497778" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.55</text>
+<text x="206.66666666666669" y="357.4041608497778" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−49%</text>
+<text x="206.66666666666669" y="458" font-size="11" fill="#5B6577" text-anchor="middle">主 Agent $0.37<tspan dx="6" font-weight="600" fill="#067647">−65%</tspan></text>
+<text x="169.66666666666669" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">中号任务</text>
+<text x="352.00000000000006" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">自己做</text>
+<path d="M320.00000000000006,424 V195.56826666666666 Q320.00000000000006,191.56826666666666 324.00000000000006,191.56826666666666 H380.00000000000006 Q384.00000000000006,191.56826666666666 384.00000000000006,195.56826666666666 V424 Z" fill="#C27803"/>
+<text x="352.00000000000006" y="183.56826666666666" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$2.13</text>
+<text x="426.00000000000006" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">转交（0.6.0）</text>
+<rect x="394.00000000000006" y="380.7068444444444" width="64" height="43.293155555555586" fill="#2563EB"/>
+<path d="M394.00000000000006,378.7068444444444 V351.5066968071111 Q394.00000000000006,347.5066968071111 398.00000000000006,347.5066968071111 H454.00000000000006 Q458.00000000000006,347.5066968071111 458.00000000000006,351.5066968071111 V378.7068444444444 Z" fill="#C3CAD5"/>
+<text x="426.00000000000006" y="325.5066968071111" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.70</text>
+<text x="426.00000000000006" y="340.5066968071111" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−67%</text>
+<text x="426.00000000000006" y="458" font-size="11" fill="#5B6577" text-anchor="middle">主 Agent $0.41<tspan dx="6" font-weight="600" fill="#067647">−81%</tspan></text>
+<text x="389.00000000000006" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">大号任务</text>
+<text x="571.3333333333334" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">自己做</text>
+<path d="M539.3333333333334,424 V409.4793706666667 Q539.3333333333334,405.4793706666667 543.3333333333334,405.4793706666667 H599.3333333333334 Q603.3333333333334,405.4793706666667 603.3333333333334,409.4793706666667 V424 Z" fill="#C27803"/>
+<text x="571.3333333333334" y="397.4793706666667" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.17</text>
+<text x="645.3333333333334" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">转交（0.6.0）</text>
+<rect x="613.3333333333334" y="416.63871964444445" width="64" height="7.36128035555555" fill="#2563EB"/>
+<path d="M613.3333333333334,414.63871964444445 V396.0409654684444 Q613.3333333333334,392.0409654684444 617.3333333333334,392.0409654684444 H673.3333333333334 Q677.3333333333334,392.0409654684444 677.3333333333334,396.0409654684444 V414.63871964444445 Z" fill="#C3CAD5"/>
+<text x="645.3333333333334" y="370.0409654684444" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.29</text>
+<text x="645.3333333333334" y="385.0409654684444" font-size="11.5" font-weight="600" fill="#B42318" text-anchor="middle">+73%</text>
+<text x="645.3333333333334" y="458" font-size="11" fill="#5B6577" text-anchor="middle">主 Agent $0.09<tspan dx="6" font-weight="600" fill="#067647">−49%</tspan></text>
+<text x="608.3333333333334" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">中号任务</text>
+<text x="790.6666666666666" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">自己做</text>
+<path d="M758.6666666666666,424 V382.7743104 Q758.6666666666666,378.7743104 762.6666666666666,378.7743104 H818.6666666666666 Q822.6666666666666,378.7743104 822.6666666666666,382.7743104 V424 Z" fill="#C27803"/>
+<text x="790.6666666666666" y="370.7743104" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.41</text>
+<text x="864.6666666666666" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">转交（0.6.0）</text>
+<rect x="832.6666666666666" y="414.6668419555555" width="64" height="9.333158044444474" fill="#2563EB"/>
+<path d="M832.6666666666666,412.6668419555555 V383.68995855288887 Q832.6666666666666,379.68995855288887 836.6666666666666,379.68995855288887 H892.6666666666666 Q896.6666666666666,379.68995855288887 896.6666666666666,383.68995855288887 V412.6668419555555 Z" fill="#C3CAD5"/>
+<text x="864.6666666666666" y="357.68995855288887" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.41</text>
+<text x="864.6666666666666" y="372.68995855288887" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−2%</text>
+<text x="864.6666666666666" y="458" font-size="11" fill="#5B6577" text-anchor="middle">主 Agent $0.10<tspan dx="6" font-weight="600" fill="#067647">−75%</tspan></text>
+<text x="827.6666666666666" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">大号任务</text>
+<text x="1010" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">自己做</text>
+<path d="M978,424 V326.6735111111111 Q978,322.6735111111111 982,322.6735111111111 H1038 Q1042,322.6735111111111 1042,326.6735111111111 V424 Z" fill="#C27803"/>
+<text x="1010" y="314.6735111111111" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.93</text>
+<text x="1084" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">转交（0.6.0）</text>
+<rect x="1052" y="366.6380497777778" width="64" height="57.36195022222222" fill="#2563EB"/>
+<path d="M1052,364.6380497777778 V346.04029560177776 Q1052,342.04029560177776 1056,342.04029560177776 H1112 Q1116,342.04029560177776 1116,346.04029560177776 V364.6380497777778 Z" fill="#C3CAD5"/>
+<text x="1084" y="320.04029560177776" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.75</text>
+<text x="1084" y="335.04029560177776" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−19%</text>
+<text x="1084" y="458" font-size="11" fill="#5B6577" text-anchor="middle">主 Agent $0.54<tspan dx="6" font-weight="600" fill="#067647">−41%</tspan></text>
+<text x="1047" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">中号任务</text>
+<text x="1229.3333333333335" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">自己做</text>
+<path d="M1197.3333333333335,424 V141.99537066666664 Q1197.3333333333335,137.99537066666664 1201.3333333333335,137.99537066666664 H1257.3333333333335 Q1261.3333333333335,137.99537066666664 1261.3333333333335,141.99537066666664 V424 Z" fill="#C27803"/>
+<text x="1229.3333333333335" y="129.99537066666664" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$2.62</text>
+<text x="1303.3333333333335" y="441" font-size="11.5" fill="#0F172A" text-anchor="middle">转交（0.6.0）</text>
+<rect x="1271.3333333333335" y="354.68412622222223" width="64" height="69.31587377777777" fill="#2563EB"/>
+<path d="M1271.3333333333335,352.68412622222223 V323.7072428195556 Q1271.3333333333335,319.7072428195556 1275.3333333333335,319.7072428195556 H1331.3333333333335 Q1335.3333333333335,319.7072428195556 1335.3333333333335,323.7072428195556 V352.68412622222223 Z" fill="#C3CAD5"/>
+<text x="1303.3333333333335" y="297.7072428195556" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$0.95</text>
+<text x="1303.3333333333335" y="312.7072428195556" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−64%</text>
+<text x="1303.3333333333335" y="458" font-size="11" fill="#5B6577" text-anchor="middle">主 Agent $0.65<tspan dx="6" font-weight="600" fill="#067647">−75%</tspan></text>
+<text x="1266.3333333333335" y="482" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">大号任务</text>
+<line x1="72" x2="486.6666666666667" y1="494" y2="494" stroke="#E2E7EF" stroke-width="2"/>
+<text x="279.33333333333337" y="514" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Claude Code · Opus 5.5 high</text>
+<line x1="510.6666666666667" x2="925.3333333333334" y1="494" y2="494" stroke="#E2E7EF" stroke-width="2"/>
+<text x="718" y="514" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Codex · GPT-6.1 Sol high</text>
+<line x1="949.3333333333334" x2="1364" y1="494" y2="494" stroke="#E2E7EF" stroke-width="2"/>
+<text x="1156.6666666666667" y="514" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Codex · GPT-6 Astra high（按标价估算）</text>
+<rect x="20" y="546" width="12" height="12" rx="2" fill="#C27803"/>
+<text x="38" y="556" font-size="12.5" fill="#0F172A">自己做</text>
+<rect x="93" y="546" width="12" height="12" rx="2" fill="#2563EB"/>
+<text x="111" y="556" font-size="12.5" fill="#0F172A">转交（0.6.0）</text>
+<rect x="215.4" y="546" width="12" height="12" rx="2" fill="#C3CAD5"/>
+<text x="233.4" y="556" font-size="12.5" fill="#0F172A">DeepSeek 费用（按高峰价，不占主 Agent 额度）</text>
+</svg>

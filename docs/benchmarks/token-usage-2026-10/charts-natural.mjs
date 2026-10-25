@@ -18,6 +18,9 @@ const ASTRA = process.argv.includes('--astra')
 // --release: only working alone vs the released build (0.6.0 = the review-table build), for the
 // README; files get a -release suffix. Every chart of a set shows the same bars in the same order.
 const RELEASE = process.argv.includes('--release')
+// --combined: one chart, working alone vs 0.6.0 only, for Claude Code, Codex and Codex priced as
+// Astra, with the model named under each pair of bars.
+const COMBINED = process.argv.includes('--combined')
 const OUT = path.join(HERE, 'charts')
 fs.mkdirSync(OUT, { recursive: true })
 
@@ -31,7 +34,9 @@ const CHECK_FIXED = Date.parse('2026-10-25T13:15:00Z')
 const valid = (r) => r.size !== 'large' || Date.parse(r.at) > CHECK_FIXED
 
 const home = (p) => p.replace(/^~/, os.homedir())
-const solCost = (g) => ((g.input_tokens - g.cached_input_tokens) * PRICE.sol.input + g.cached_input_tokens * PRICE.sol.cached + g.output_tokens * PRICE.sol.output) / 1e6
+const ASTRA_PRICE = { input: 10, cached: 1, output: 50 }
+const costAt = (g, p) => ((g.input_tokens - g.cached_input_tokens) * p.input + g.cached_input_tokens * p.cached + g.output_tokens * p.output) / 1e6
+const solCost = (g) => costAt(g, PRICE.sol)
 const lastUsage = (file) => {
   const l = fs.readFileSync(file, 'utf8').split('\n').filter((x) => x.includes('"total_token_usage"')).at(-1)
   return l ? JSON.parse(l).payload.info.total_token_usage : null
@@ -79,8 +84,8 @@ const textW = (s, px) => [...s].reduce((w, ch) => w + (/[　-鿿＀-￯]/.test(c
 
 const pick = (client, size, m) => rows.filter((r) => r.client === client && r.size === size && r.arm === m.key && r.label === m.label && valid(r))
 
-function chart({ title, note, note2, groups, legend, unit, file, foot }) {
-  const W = 940, H = 450, L = 60, R = 24, TOP = 96, BOT = 92
+function chart({ title, note, note2, groups, legend, unit, file, foot, width = 940, height = 450, innerBelow = false }) {
+  const W = width, H = height, L = 60, R = 24, TOP = 96, BOT = groups.some((g) => g.section) ? 156 : 92
   const max = Math.max(...groups.flatMap((g) => g.bars.map((b) => b.parts.reduce((a, p) => a + p.v, 0))))
   const step = [0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10].find((s) => max / s <= 5) ?? 20
   const top = Math.ceil(max / step) * step
@@ -117,7 +122,9 @@ function chart({ title, note, note2, groups, legend, unit, file, foot }) {
       // In a stacked bar, the client's own cost is written at the bottom of the grey DeepSeek
       // part, just above the coloured part it measures (two lines when the grey part has room).
       // When the grey part is too thin for the text, it goes just inside the top of the coloured part, in white.
-      if (b.inner) {
+      if (b.inner && innerBelow) {
+        out.push(`<text x="${cx}" y="${y(0) + 34}" font-size="11" fill="${C.MUTED}" text-anchor="middle">${ZH ? '主 Agent ' : 'client '}${unit(b.inner.value, true)}<tspan dx="6" font-weight="600" fill="${changeColor(b.inner.change)}">${b.inner.change}</tspan></text>`)
+      } else if (b.inner) {
         const lines = b.inner.change ? 2 : 1
         const inGrey = y(b.parts[0].v) - y(acc) >= 16 * lines + 10
         const first = inGrey ? y(b.parts[0].v) - 8 - 15 * (lines - 1) : y(b.parts[0].v) + 18
@@ -126,8 +133,19 @@ function chart({ title, note, note2, groups, legend, unit, file, foot }) {
         if (lines === 2) out.push(`<text x="${cx}" y="${first + 15}" font-size="11" font-weight="600" fill="${inGrey ? changeColor(b.inner.change) : '#FFFFFF'}" text-anchor="middle">${b.inner.change}</text>`)
       }
     })
-    out.push(`<text x="${L + gi * gw + gw / 2}" y="${y(0) + 40}" font-size="13.5" font-weight="600" fill="${C.FG}" text-anchor="middle">${esc(g.name)}</text>`)
+    out.push(`<text x="${L + gi * gw + gw / 2}" y="${y(0) + (innerBelow ? 58 : 40)}" font-size="13.5" font-weight="600" fill="${C.FG}" text-anchor="middle">${esc(g.name)}</text>`)
   })
+  // A section label (the model) under each run of groups that share it, with a rule above it.
+  for (let i = 0; i < groups.length;) {
+    let j = i
+    while (j + 1 < groups.length && groups[j + 1].section === groups[i].section) j++
+    if (groups[i].section) {
+      const x0 = L + i * gw + 12, x1 = L + (j + 1) * gw - 12
+      out.push(`<line x1="${x0}" x2="${x1}" y1="${y(0) + 70}" y2="${y(0) + 70}" stroke="${C.GRID}" stroke-width="2"/>`,
+        `<text x="${(x0 + x1) / 2}" y="${y(0) + 90}" font-size="13.5" font-weight="600" fill="${C.FG}" text-anchor="middle">${esc(groups[i].section)}</text>`)
+    }
+    i = j + 1
+  }
   let lx = 20
   for (const it of legend) {
     out.push(`<rect x="${lx}" y="${H - 34}" width="12" height="12" rx="2" fill="${it.color}"/>`, `<text x="${lx + 18}" y="${H - 24}" font-size="12.5" fill="${C.FG}">${esc(it.name)}</text>`)
@@ -185,4 +203,30 @@ const quotaGroups = ['medium', 'large'].map((size) => ({
   }),
 }))
 if (!ASTRA) chart({ title: T.quotaTitle, note: T.quotaNote.replace('$RATE', `$${DOLLARS_PER_PERCENT.toFixed(3)}`), note2: ZH ? '每根柱子是 3 次的平均值；≈ 表示含估算。绿色百分比 = 比自己做省多少。' : 'Each bar is the mean of 3 runs; ≈ marks estimates. Green % = less than working alone.', groups: quotaGroups, file: `natural-codex-quota${RELEASE ? '-release' : ''}`, unit: (v) => `${v.toFixed(1)}%`, legend: methodsFor('codex').map((m) => ({ name: name(m), color: m.color })) })
+if (COMBINED) {
+  const alone = METHODS[0], handed = { key: 'B', label: 'nreview', color: '#2563EB', zh: '转交（0.6.0）', en: 'Handed over (0.6.0)' }
+  const panels = [
+    { client: 'claude', model: ZH ? 'Claude Code · Opus 5.5 high' : 'Claude Code · Opus 5.5 high', own: mainCost },
+    { client: 'codex', model: ZH ? 'Codex · GPT-6.1 Sol high' : 'Codex · GPT-6.1 Sol high', own: mainCost },
+    { client: 'codex', model: ZH ? 'Codex · GPT-6 Astra high（按标价估算）' : 'Codex · GPT-6 Astra high (priced estimate)', own: (r) => costAt(r.gpt, ASTRA_PRICE) },
+  ]
+  const groups = panels.flatMap((pnl) => ['medium', 'large'].map((size) => {
+    const base = pick(pnl.client, size, alone), list = pick(pnl.client, size, handed)
+    const tot = (l) => mean(l.map((r) => pnl.own(r) + dsCost(r)))
+    const own = mean(list.map(pnl.own)), baseOwn = mean(base.map(pnl.own))
+    return {
+      name: T[size], section: pnl.model,
+      bars: [
+        { name: name(alone), label: mean(base.map(pnl.own)), parts: [{ v: baseOwn, color: alone.color }] },
+        { name: name(handed), label: tot(list), change: change(tot(list), baseOwn), inner: { value: own, change: change(own, baseOwn) }, parts: [{ v: own, color: handed.color }, { v: mean(list.map(dsCost)), color: C.DS }] },
+      ],
+    }
+  }))
+  chart({
+    title: ZH ? '自己做 vs 转交 DeepSeek Harness（0.6.0）：每个任务花多少钱（美元）' : 'Working alone vs handing over to DeepSeek Harness (0.6.0): cost per task (USD)',
+    note: ZH ? '彩色 = 主 Agent，灰色 = DeepSeek（按高峰价）；“自己做”不用 DeepSeek，所以没有灰色。柱顶 = 合计；柱下“主 Agent” = 不含 DeepSeek。' : 'Colour = client model, grey = DeepSeek (peak price); working alone has no grey. Top = total; “client” under a bar = without DeepSeek.', note2: ZH ? '每根柱子是 3 次运行的平均值；Astra 一组用 Sol 实测的 token 数按 Astra 标价换算。绿色 = 比自己做省多少，红色 = 贵多少。' : 'Each bar is the mean of 3 runs; the Astra pair prices the tokens measured with Sol at Astra list prices. Green = less than working alone, red = more.',
+    groups, file: 'natural-combined', width: 1400, height: 580, innerBelow: true, unit: (v) => `$${v.toFixed(2)}`,
+    legend: [{ name: name(alone), color: alone.color }, { name: name(handed), color: handed.color }, { name: T.ds, color: C.DS }],
+  })
+}
 console.log(`charts written to ${OUT}; $ per 1% of the Codex window: ${DOLLARS_PER_PERCENT.toFixed(4)} (from ${alone.length} runs alone)`)

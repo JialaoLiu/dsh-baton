@@ -73,3 +73,8 @@ With the check fixed, the hand-over costs about half of working alone on the lar
 - Evidence chain diagram from Codex nevidence large rep 2: `charts/evidence-chain.zh.png` (`evidence-chain.mjs`).
 - 00:58: Claude Code switched to parallel runs (5 at once: nlean chain, n059 B medium, n059 B large, n059 A medium, n059 A large). Cost per run is read from each run's own transcript, Harness session and folder, so running side by side does not mix them. Codex stays one run at a time, because the Plus 5-hour window is one number for the whole account and parallel Codex runs would share it.
 - 01:05: everything switched to parallel to finish tonight. Claude nlean reps 2–4 (medium and large, 6 at once; the half-done nlean medium rep 1 was stopped and is not counted). Codex: n059 A/B large reps 3–4, nevidence large reps 3–4 and medium reps 2–3, all at once, next to the still-running serial n059 medium reps 2–3. The 5-hour window is shared by parallel Codex runs, so for these runs the window share is estimated from GPT cost with the ratio measured on the serial runs (about $0.08 per 1%), as the user agreed.
+
+### 2026-10-26 02:33–03:05: gap-fill batch stopped (not counted)
+- Started to fill Codex lean and Claude evidence cells. The DeepSeek account ran out of balance during the batch, so these runs are marked `valid: false` (`invalid_reason` in the rows) and left out of every chart; the last two were stopped.
+- The 0.6.0 (review table) runs had finished before (all 12 by 02:30) and are unaffected.
+- Charts: one combined chart (`charts/natural-combined[.zh]`) compares working alone with 0.6.0 for Claude Code, Codex (Sol) and Codex priced as Astra, with the model named under each pair. The Codex desktop run was not done.
