@@ -30,7 +30,7 @@ const codeModeYield = () => {
   const ms = (waitSeconds() + 20) * 1000
   return `Required when you call tools from a script cell ("Script running with cell ID …"): the script that calls dsh_wait must start with the line // @exec: {"yield_time_ms": ${ms}}, never a shorter value; if the cell still yields, resume it with wait and yield_time_ms ${ms} (or the largest value wait accepts), never a short value such as 30000 or 55000.`
 }
-const NO_POLL = 'While waiting, make no other calls: no dsh_status, dsh_session_activity or dsh_read_session, and do not list or read the target folder or files to check progress. The final dsh_wait result carries the reply of the run; check files only after the run ends, if needed.'
+const NO_POLL = 'While waiting, make no other calls (no dsh_status, dsh_session_activity or dsh_read_session) and do not list or read the target folder to check progress.'
 const ARCHIVED = 'Sessions not in dsh_list_sessions are archived or gone: do not look for them on disk.'
 // What to do when a run stops to ask a person (dsh_wait, wait_command and the instructions say it).
 const ASKED = 'If the user told you to decide such questions yourself, choose by your own judgment of the question and the task, call dsh_answer with reason (one sentence on why), then tell the user what you chose and why. Otherwise relay the questions to the user and start with your own advice, on a line of its own: "My recommendation: <option>, because <reason>", the reason drawn from your own judgment of the question and the task (harness_suggested only shows what the asking model would pick; it is never a reason by itself, and your pick may differ). Then list the options, wait for the user\'s decision and submit it with dsh_answer. Never answer on the user\'s behalf without that permission.'
@@ -49,6 +49,17 @@ const nodeMode = process.versions.electron ? 'ELECTRON_RUN_AS_NODE=1 ' : ''
 const waitCommand = (runId) =>
   /^[\w.-]+$/.test(runId ?? '') ? `${nodeMode}${quote(stableNodePath())} ${quote(path.join(core.ROOT, 'src', 'cli.mjs'))} wait ${runId}` : undefined
 
+// The result of a run that ended, kept short: the client already knows what it sent, and a
+// completed run's event log is only the work behind final_text (dsh_status still has it).
+// A run that did not complete keeps its last events, to show where it stopped.
+function ended({ recent_events, message_preview, backend, ...st }) {
+  const out = { ...st, ...(st.state !== 'completed' && recent_events?.length ? { recent_events: recent_events.slice(-5) } : {}) }
+  // decided_for_user first, so a client that skims to final_text still meets it.
+  return st.decided_for_user
+    ? { hint: `${DECIDED_HINT} ${core.ENDED_HINT}`, decided_for_user: st.decided_for_user, ...out }
+    : { ...out, hint: core.ENDED_HINT }
+}
+
 // Wait in short chunks, reporting progress between them (clients that support it can
 // show it or reset their timer). An unfinished wait returns only the state, not the run's
 // recent events, so the client has nothing to summarise and simply waits again.
@@ -61,8 +72,7 @@ async function waitInChunks({ run_id }, progress) {
     const t0 = Date.now()
     const st = await core.api.wait({ run_id, timeout_s: Math.max(1, Math.min(WAIT_CHUNK_S, left)) })
     if (st.needs_input) return { ...st, ...(st.question ? { relay: core.relayText(st.question) } : {}), hint: NEEDS_INPUT_HINT(st) }
-    // First in the result, so a client that skims to final_text still meets it.
-    if (!st.timed_out) return st.decided_for_user ? { hint: DECIDED_HINT, decided_for_user: st.decided_for_user, ...st } : st
+    if (!st.timed_out) return ended(st)
     // Never spin: a chunk that came back early still takes a moment before the next one.
     if (Date.now() - t0 < 500) await new Promise((r) => setTimeout(r, 500))
     if (Date.now() >= deadline) {
@@ -78,6 +88,11 @@ async function waitInChunks({ run_id }, progress) {
   }
 }
 
+// Long event texts are cut in results: the client rarely needs them whole (dsh_read_session has them).
+const clip = (st) => (Array.isArray(st?.recent_events)
+  ? { ...st, recent_events: st.recent_events.map((e) => Object.fromEntries(Object.entries(e).map(([k, v]) => [k, typeof v === 'string' && v.length > 300 ? `${v.slice(0, 300)}…` : v]))) }
+  : st)
+
 // MCP tool annotations. Every tool only talks to the local Harness (no open world).
 const hints = (readOnlyHint, destructiveHint, idempotentHint) => ({ readOnlyHint, destructiveHint, idempotentHint, openWorldHint: false })
 const READ = hints(true, false, true)
@@ -88,36 +103,37 @@ const TOOLS = [
   {
     name: 'dsh_list_workspaces',
     annotations: annotations('List workspaces'),
-    description: 'List the workspaces (project folders) in the DeepSeek Harness sidebar; dsh_list_sessions lists the sessions inside them and dsh_create_workspace adds one. Returns id, path, title and session_count for each; the id is the workspace_id for dsh_send and dsh_rename_workspace. Read-only. Needs the dsh-baton-host plugin.',
+    description: 'List the DeepSeek Harness workspaces (project folders): id, path, title and session_count. The id is the workspace_id for dsh_send. Read-only. Needs the dsh-baton-host plugin.',
     inputSchema: { type: 'object', properties: {} },
     run: () => core.api.workspaces(),
   },
   {
     name: 'dsh_create_workspace',
+    hidden: true, // not in tools/list; reachable directly or through dsh_call
     annotations: annotations('Create workspace', EDIT),
-    description: 'Add a folder to the DeepSeek Harness sidebar as a workspace without starting a session; dsh_list_workspaces only lists existing ones, and dsh_send with a cwd registers the folder by itself. Creates the folder unless create_dir is false. Idempotent: an already registered folder returns its existing workspace. Returns id, path, title and created (false when it already existed). Needs the dsh-baton-host plugin.',
+    description: 'Register a folder as a Harness workspace without starting a session (dsh_send with cwd does this too). Creates the folder unless create_dir is false; an already registered folder returns its workspace. Returns id, path, title and created. Needs the dsh-baton-host plugin.',
     inputSchema: { type: 'object', required: ['path'], properties: { path: str('Absolute folder path (~ allowed)'), title: str('Sidebar title; defaults to the folder name'), create_dir: { type: 'boolean', description: 'Create the folder if missing', default: true } } },
     run: (a) => core.api.create_workspace(a),
   },
   {
     name: 'dsh_list_sessions',
     annotations: annotations('List sessions'),
-    description: `List saved DeepSeek Harness sessions (conversations), newest first, to find a session_id; dsh_list_runs lists only the messages sent through dsh_send. Returns session_id, title, cwd, updated_at, running and bridge_runs (active dsh-baton run ids) for each. There is no paging: the list stops at limit, so to see older sessions raise limit or narrow it with cwd or query. Read-only. ${ARCHIVED}`,
+    description: `List Harness sessions, newest first, to find a session_id: session_id, title, cwd, updated_at, running and bridge_runs. No paging: raise limit or narrow it with cwd or query. Read-only. ${ARCHIVED}`,
     inputSchema: { type: 'object', properties: { cwd: str('Only sessions of this workspace folder'), query: str('Case-insensitive text to match in title, folder or session id'), limit: int('Max sessions returned', 20), include_subagents: { type: 'boolean', description: 'Also list sub-agent sessions', default: false } } },
     run: (a) => core.api.list_sessions(a),
   },
   {
     name: 'dsh_read_session',
     annotations: annotations('Read session'),
-    description: 'Read what was said in one session (its past messages), to catch up before continuing it; dsh_session_activity shows what it is doing now and dsh_status follows one run. Returns title, cwd, total_messages and the last messages, each with role (user or assistant), time, text and the names of tools the assistant called (tool output is not included). Read-only.',
+    description: 'Read the last messages of a session (role, time, text and the names of tools called; no tool output), to catch up before continuing it. Read-only.',
     inputSchema: { type: 'object', required: ['session_id'], properties: { session_id: str('Session id from dsh_list_sessions, e.g. session-…'), last: int('How many of the most recent messages to return; total_messages tells how many there are', 10) } },
     run: (a) => core.api.read_session(a),
   },
   {
     name: 'dsh_send',
     annotations: annotations('Send message', hints(false, false, false)),
-    description: 'Send a message to a DeepSeek Harness session and return at once with a run_id, without waiting for the reply; dsh_wait then waits for it. With session_id it continues that existing session (same context, no new session); with cwd or workspace_id it starts a new session there (a cwd that is not a workspace yet is registered in the sidebar first). The turn runs in the background. If the session is already working, mode followup queues the message after the current turn and steer adds it to the running turn; each message gets its own run_id. Leave mode out to do what the user set in Harness (Settings, sending while busy: queue or steer); followup when that setting cannot be read. The result says which mode was used and why (mode_source: explicit, harness or default). A queued message can still be edited, removed or turned into a steer with dsh_update_queued. The message is delivered verbatim as a user message, with no prefix or label added: write it in the language the user works in, self-contained (Harness does not see this conversation), and say who is asking only if it matters. Then wait for the reply with dsh_wait (or the wait_command it returns, where offered).',
-    inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: "followup queues after the current turn; steer injects into a running turn. Omit to follow Harness's busy-send setting" } } },
+    description: 'Send a message to a Harness session and return at once with a run_id; then wait for the reply with dsh_wait (or the wait_command it returns, where offered). session_id continues that session; cwd or workspace_id starts a new one (a new cwd is registered first). If the session is busy, mode followup queues the message and steer adds it to the running turn; leave mode out to follow the Harness setting. The message arrives verbatim as a user message: make it self-contained (Harness does not see this conversation), in the user\'s language.',
+    inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: "followup queues after the current turn; steer injects into a running turn. Omit to follow Harness's busy-send setting" }, checks: { type: 'array', items: { type: 'string' }, description: 'Shell commands that prove the task is done, e.g. npm test or a script that checks each requirement. dsh-baton runs them in the folder when the run ends and returns exit codes and the last output lines as evidence.' } } },
     run: async (a) => {
       const st = await core.api.send({ ...a, sender: core.senderOf(core.setting('SENDER') || clientName) })
       // Codex has no wake-on-exit for shell commands: offered wait_command, it runs it in a
@@ -133,21 +149,21 @@ const TOOLS = [
   {
     name: 'dsh_status',
     annotations: annotations('Run status'),
-    description: 'Look once at one run sent with dsh_send, without waiting; dsh_wait waits for it to end and dsh_session_activity covers the whole session. Returns state (queued/running/waiting/completed/failed/cancelled, or interrupted when a Harness restart cut it short), session_id, recent events (text, tool calls), final reply, waiting_on when the turn is over but sub-agents or background jobs are still working, and human_interjections when someone typed in the Harness UI during the run (its result then reflects that input too). A one-off look, never a way to wait: to wait for the reply use dsh_wait, and if dsh_wait timed out, call dsh_wait again.',
-    inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send'), tail: int('How many recent events', 20) } },
-    run: (a) => core.api.status(a),
+    description: 'Look once at a run without waiting: state (queued/running/waiting/completed/failed/cancelled/interrupted), recent events, final reply, waiting_on (sub-agents or jobs still working) and human_interjections. Never a way to wait: use dsh_wait.',
+    inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send'), tail: int('How many recent events', 5) } },
+    run: async (a) => clip(await core.api.status({ tail: 5, ...a })),
   },
   {
     name: 'dsh_wait',
     annotations: annotations('Wait for run'),
-    description: () => `Wait for a run sent with dsh_send to end and return its final status and reply; dsh_status only looks once.${isCodex() ? '' : ' Prefer the background wait_command from dsh_send when your client can run background shell commands and wake you when they exit: it costs no turns while waiting.'} It also returns at once when the run stops to ask a person: needs_input is answer (the questions are in question; show the user relay with its first line filled in with your own pick and reason, harness_suggested being only the asker's pick, then reply with dsh_answer) or harness-ui (an approval only a person can give in Harness). Each call waits up to ${waitSeconds()} s (set by the server to stay under this client's tool timeout); if the run is still going it returns timed_out: true with just the state: then call dsh_wait again with the same run_id, without summarising progress.${isCodex() ? ` ${NO_POLL} ${codeModeYield()}` : ''} Sends progress notifications while waiting when the client asks for them.`,
+    description: () => `Wait for a run sent with dsh_send to end and return its state and final reply.${isCodex() ? '' : ' Prefer the background wait_command from dsh_send if your client wakes you when a background command exits: it costs no turns.'} It also returns at once when the run stops to ask a person: needs_input answer (question and relay; reply with dsh_answer) or harness-ui (an approval only a person can give in Harness). Each call waits up to ${waitSeconds()} s; if it returns timed_out: true, call dsh_wait again with the same run_id, without a progress note.${isCodex() ? ` ${NO_POLL} ${codeModeYield()}` : ''}`,
     inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send') } },
     run: (a, { progress }) => waitInChunks(a, progress),
   },
   {
     name: 'dsh_answer',
     annotations: annotations('Answer question', hints(false, false, false)),
-    description: `Answer the questions a run sent with dsh_send is waiting on (Harness's ask_user_question, shown in dsh_wait / dsh_status as question); dsh_send sends a new message instead, and dsh_update_queued changes one still in the queue. Per question: choose option numbers or labels, text for a free-text answer (with a single choice it replaces the option), or skip. When the user let you decide, pass reason. Several questions can be answered in one call or one at a time: the answer reaches Harness once every question has one (submitted: true; until then remaining lists the rest). The run then continues; wait for it again. Whoever answers first wins: if the user answers in the Harness window, this call reports there is no open question. ${ASKED}`,
+    description: 'Answer the questions a waiting run asked (question in dsh_wait or dsh_status). Per question: option numbers or labels in choose, text for a free answer, or skip. Pass reason when the user let you decide. The answer reaches Harness once every question has one (submitted: true; remaining lists the rest); then wait for the run again. If the user already answered in Harness, it reports that there is no open question.',
     inputSchema: {
       type: 'object', required: ['run_id', 'answers'], properties: {
         run_id: str('Run id that is waiting (needs_input: answer)'),
@@ -176,43 +192,48 @@ const TOOLS = [
   },
   {
     name: 'dsh_rename_session',
+    hidden: true, // not in tools/list; reachable directly or through dsh_call
     annotations: annotations('Rename session', EDIT),
-    description: 'Set the title of one DeepSeek Harness session (a conversation); dsh_rename_workspace renames a workspace (project folder) instead. Only the title changes; the conversation and any running turn are untouched. Can be called again at any time to change it back or to something else. Returns session_id and the saved title.',
+    description: 'Set the title of a Harness session; nothing else changes. Returns session_id and title.',
     inputSchema: { type: 'object', required: ['session_id', 'title'], properties: { session_id: str('Session id from dsh_list_sessions'), title: str('New title; surrounding spaces are trimmed and it must not be empty') } },
     run: (a) => core.api.rename_session(a),
   },
   {
     name: 'dsh_rename_workspace',
+    hidden: true, // not in tools/list; reachable directly or through dsh_call
     annotations: annotations('Rename workspace', EDIT),
-    description: 'Set the sidebar title of a DeepSeek Harness workspace (project folder); dsh_rename_session renames a single session instead. The folder on disk is not moved or renamed. Identify it by workspace_id or path. Can be called again to change it back. Returns id, path and the saved title.',
+    description: 'Set the sidebar title of a workspace, by workspace_id or path; the folder is not renamed. Returns id, path and title.',
     inputSchema: { type: 'object', required: ['title'], properties: { workspace_id: str('Workspace id from dsh_list_workspaces'), path: str('Workspace folder, used when workspace_id is not given'), title: str('New title; surrounding spaces are trimmed and it must not be empty') } },
     run: (a) => core.api.rename_workspace(a),
   },
   {
     name: 'dsh_session_activity',
+    hidden: true, // not in tools/list; reachable directly or through dsh_call
     annotations: annotations('Session activity'),
-    description: 'Show what one session is doing right now, across all its work; dsh_status follows a single run and dsh_read_session shows past messages. Returns busy, activity (its running turn, sub-agents at any depth, background jobs and reminders) and bridge_runs (active dsh-baton runs). Read-only. Check it before dsh_send to a session that might be busy, or before dsh_cancel.',
+    description: 'What a session is doing now: busy, activity (running turn, sub-agents, background jobs, reminders) and bridge_runs. Read-only. Check it before dsh_send to a busy session or before dsh_cancel.',
     inputSchema: { type: 'object', required: ['session_id'], properties: { session_id: str('Session id from dsh_list_sessions') } },
     run: (a) => core.api.activity(a),
   },
   {
     name: 'dsh_cancel',
     annotations: annotations('Cancel session work', hints(false, true, true)),
-    description: 'Stop everything a session is doing (running turn, sub-agents, background jobs, reminders), by run_id or session_id; the session itself is kept, and this is the only tool that stops work. It retries a few times until the session is quiet, then returns session_id, run (when run_id was given), attempts, still_busy, activity (whatever is still going), queued_runs and removed_from_queue. Harness also drops the messages still waiting in the session queue: their runs end as cancelled and are listed in removed_from_queue; to drop just one queued message, use dsh_update_queued instead. Safe to repeat: on an idle session it does nothing and returns still_busy: false. Use dsh_session_activity first to see what would be stopped.',
+    description: 'Stop everything a session is doing (turn, sub-agents, background jobs, reminders), by run_id or session_id; the session is kept. Messages queued in it are dropped too (removed_from_queue); to drop one queued message use dsh_update_queued. Safe to repeat. Returns still_busy, activity and removed_from_queue.',
     inputSchema: { type: 'object', properties: { run_id: str('Run id from dsh_send; stops the session that run belongs to'), session_id: str('Session id, to stop work dsh-baton did not start') } },
     run: (a) => core.api.cancel(a),
   },
   {
     name: 'dsh_update_queued',
+    hidden: true, // not in tools/list; reachable directly or through dsh_call
     annotations: annotations('Change queued message', hints(false, true, false)),
-    description: 'Change one message sent with dsh_send that is still waiting in Harness\'s queue behind a running turn; dsh_send sends a new one and dsh_cancel stops the whole session. action edit replaces its text with message, remove deletes it (its run ends as cancelled), steer moves it into the running turn now. Only for a run whose state is queued: once its message has reached the conversation it can no longer be changed, and the error says so. Returns the run (with message_preview after an edit) and the action taken.',
+    description: 'Change a dsh_send message still queued behind a running turn: edit replaces its text, remove deletes it, steer sends it into the running turn now. Only while its run is queued.',
     inputSchema: { type: 'object', required: ['run_id', 'action'], properties: { run_id: str('Run id from dsh_send of the queued message'), action: { type: 'string', enum: ['edit', 'remove', 'steer'], description: 'edit replaces the text, remove deletes the message, steer sends it into the running turn now' }, message: str('New text for action edit (plain text, not empty)') } },
     run: (a) => core.api.update_queued(a),
   },
   {
     name: 'dsh_list_runs',
+    hidden: true, // not in tools/list; reachable directly or through dsh_call
     annotations: annotations('List runs'),
-    description: 'List the runs sent through dsh_send (the latest 100 are kept), newest first, to recover a lost run_id or review past hand-overs (session_id narrows it to one session); dsh_list_sessions lists Harness sessions instead. Returns run_id, session_id, state, started_at, ended_at, message_preview, final_text and error for each; dsh_status shows one run in detail. Read-only.',
+    description: 'List the runs sent with dsh_send, newest first (the last 100 are kept), to recover a run_id: run_id, session_id, state, times, message_preview, final_text and error. Read-only.',
     inputSchema: { type: 'object', properties: { session_id: str('Only runs sent to this session'), limit: int('Max runs returned', 10) } },
     run: (a) => core.api.list_runs(a),
   },
@@ -230,7 +251,7 @@ const catalog = () => TOOLS.filter((t) => t.name !== 'dsh_call').map((t) => ({
 TOOLS.push({
   name: 'dsh_call',
   annotations: annotations('Call dsh-baton tool by name', hints(false, true, false)),
-  description: 'Backup entry that calls any dsh-baton tool by name, for when this conversation\'s tool list is out of date: dsh-baton was updated without a restart and a tool it now has (named in the update note) is not among your tools. Normally call the dsh_* tools directly; this runs the same code with the same arguments and returns exactly what the named tool returns, so it can do whatever that tool does (including sending, cancelling or answering). With a name that does not exist it changes nothing and returns the list of available tools with their input schemas.',
+  description: 'Call a dsh-baton tool by name, for a tool this conversation does not list (dsh-baton was updated without a restart; the update note names it). Runs the same code as a direct call, so it can do whatever that tool does. An unknown name changes nothing and returns the tools with their input schemas.',
   inputSchema: {
     type: 'object', required: ['name'], properties: {
       name: str('Tool name, e.g. dsh_send or a tool added by an update'),
@@ -260,13 +281,13 @@ async function handle(req) {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: {} },
         serverInfo: SERVER,
-        instructions: `Hands tasks to a local DeepSeek Harness and passes the results back. Typical flow: dsh_list_workspaces (or dsh_create_workspace) to pick a folder, dsh_list_sessions to find a session, dsh_send {session_id, message} to continue it (or {cwd, message} to start one), then wait for the reply: ${isCodex() ? 'call dsh_wait with the run_id until it returns the final state (not dsh_status)' : 'run the wait_command it returns as a background shell command if your client wakes you when one exits, otherwise call dsh_wait'}. Then dsh_read_session to read the conversation, dsh_session_activity to see what a session is doing, dsh_update_queued to edit or withdraw a message still waiting in its queue, and dsh_cancel to stop it; dsh_list_runs recovers a lost run_id. A run that stops to ask the user something ends the wait at once with needs_input and the questions; answer with dsh_answer. ${ASKED} ${ARCHIVED} If a note says dsh-baton was updated and names a tool you do not have, call it through dsh_call {name, arguments}.`,
+        instructions: `Hands tasks to a local DeepSeek Harness and passes the results back. To hand over a task, call dsh_send {cwd, message, checks} directly (no need to list anything first): message is the full, explicit spec, checks are commands that prove each requirement is met. To continue a session, dsh_send {session_id, message}. Then wait for the reply: ${isCodex() ? 'call dsh_wait with the run_id until it returns the final state (not dsh_status)' : 'run the wait_command it returns as a background shell command if your client wakes you when one exits, otherwise call dsh_wait'}. A run that stops to ask the user something ends the wait with needs_input and the questions; answer with dsh_answer. ${ASKED} ${ARCHIVED} If a note says dsh-baton was updated and names a tool you do not have, call it through dsh_call {name, arguments}.`,
       }
     }
     case 'ping':
       return {}
     case 'tools/list':
-      return { tools: TOOLS.map(({ run, ...t }) => ({ ...t, description: typeof t.description === 'function' ? t.description() : t.description })) }
+      return { tools: TOOLS.filter((t) => !t.hidden).map(({ run, hidden, ...t }) => ({ ...t, description: typeof t.description === 'function' ? t.description() : t.description })) }
     case 'tools/call': {
       const tool = TOOLS.find((t) => t.name === req.params?.name)
       if (!tool) throw Object.assign(new Error(`Unknown tool: ${req.params?.name}`), { code: -32602 })
@@ -276,7 +297,8 @@ async function handle(req) {
         const progress = token === undefined ? undefined : (done, message) =>
           send({ jsonrpc: '2.0', method: 'notifications/progress', params: { progressToken: token, progress: done, message } })
         const result = await tool.run(req.params.arguments || {}, { progress })
-        const content = [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        // Compact JSON: indentation is paid for again on every later request of the conversation.
+        const content = [{ type: 'text', text: JSON.stringify(result) }]
         // Said once per server process, the first time a call finds the versions apart.
         const warning = !versionWarned && core.versionWarning()
         if (warning) { versionWarned = true; content.push({ type: 'text', text: `Note for the user: ${warning}` }) }

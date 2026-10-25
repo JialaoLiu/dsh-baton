@@ -35,13 +35,15 @@ test('initialize, tools/list and an unreachable-host tool call', async () => {
   assert.equal(byId[1].result.serverInfo.name, 'dsh-baton')
   assert.equal(byId[1].result.protocolVersion, '2025-06-18')
   const names = byId[2].result.tools.map((t) => t.name)
-  for (const n of ['dsh_send', 'dsh_wait', 'dsh_cancel', 'dsh_session_activity', 'dsh_rename_session', 'dsh_create_workspace', 'dsh_update_queued', 'dsh_answer']) assert.ok(names.includes(n), n)
+  for (const n of ['dsh_send', 'dsh_wait', 'dsh_cancel', 'dsh_answer', 'dsh_status', 'dsh_call']) assert.ok(names.includes(n), n)
+  // Rarely used tools stay out of the list (a shorter list costs every request less); dsh_call reaches them.
+  for (const n of ['dsh_session_activity', 'dsh_rename_session', 'dsh_create_workspace', 'dsh_update_queued', 'dsh_list_runs']) assert.ok(!names.includes(n), n)
+  assert.ok(byId[2].result.tools.find((t) => t.name === 'dsh_send').inputSchema.properties.checks)
   const ann = Object.fromEntries(byId[2].result.tools.map((t) => [t.name, t.annotations]))
   for (const [n, a] of Object.entries(ann)) assert.ok(a?.title && a.openWorldHint === false, n)
   assert.equal(ann.dsh_list_sessions.readOnlyHint, true)
   assert.deepEqual([ann.dsh_send.readOnlyHint, ann.dsh_send.idempotentHint], [false, false])
   assert.deepEqual([ann.dsh_cancel.destructiveHint, ann.dsh_cancel.idempotentHint], [true, true])
-  assert.deepEqual([ann.dsh_update_queued.readOnlyHint, ann.dsh_update_queued.idempotentHint], [false, false])
   assert.equal(byId[2].result.tools.find((t) => t.name === 'dsh_send').inputSchema.properties.mode.default, undefined)
   assert.equal(byId[3].result.isError, true)
   assert.match(byId[3].result.content[0].text, /not reachable/)
@@ -101,6 +103,42 @@ test('dsh_wait waits in short chunks, reports progress, and returns before the c
   const progress = reply.msgs.filter((m) => m.method === 'notifications/progress')
   assert.ok(progress.length >= 1, 'sent progress notifications')
   assert.equal(progress[0].params.progressToken, 'p1')
+})
+
+// One dsh_wait against a fake host whose run has already ended with the given result.
+async function waitFor(result) {
+  const net = await import('node:net')
+  const fs = await import('node:fs')
+  const { socketEndpoint } = await import('../host/lib/socket.js')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-e-'))
+  const sock = path.join(dir, 'h.sock')
+  const server = net.createServer((c) => c.on('data', (d) => {
+    const req = JSON.parse(String(d).split('\n')[0])
+    c.end(JSON.stringify({ id: req.id, result }) + '\n')
+  }))
+  await new Promise((r) => server.listen(socketEndpoint(sock), r))
+  const child = spawn(process.execPath, [SERVER], { env: { ...process.env, DSH_BATON_BACKEND: 'host', DSH_BATON_SOCKET: sock } })
+  let out = ''
+  child.stdout.on('data', (d) => { out += d })
+  child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'dsh_wait', arguments: { run_id: 'hrun-x' } } }) + '\n')
+  await new Promise((resolve) => { const tick = setInterval(() => { if (out.includes('"id":1')) { clearInterval(tick); resolve() } }, 50) })
+  child.stdin.end(); server.close(); fs.rmSync(dir, { recursive: true, force: true })
+  const text = out.split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((m) => m.id === 1).result.content[0].text
+  return { text, result: JSON.parse(text) }
+}
+
+test('a finished run comes back short: no event log once completed, the last 5 events when it failed', async () => {
+  const events = Array.from({ length: 12 }, (_, i) => ({ type: 'tool_call', name: `step${i}` }))
+  const base = { run_id: 'hrun-x', session_id: 's1', message_preview: 'the task', backend: 'host', final_text: 'done', recent_events: events }
+  const ok = await waitFor({ ...base, state: 'completed' })
+  assert.equal(ok.result.final_text, 'done')
+  assert.equal(ok.result.recent_events, undefined)
+  assert.equal(ok.result.message_preview, undefined)
+  assert.match(ok.result.hint, /evidence is produced by dsh-baton/)
+  assert.ok(!ok.text.includes('\n'), 'compact JSON')
+  const failed = await waitFor({ ...base, state: 'failed', error: 'boom' })
+  assert.deepEqual(failed.result.recent_events.map((e) => e.name), ['step7', 'step8', 'step9', 'step10', 'step11'])
+  assert.equal(failed.result.error, 'boom')
 })
 
 async function sendAs(clientName) {

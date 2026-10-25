@@ -9,6 +9,7 @@ import net from 'node:net'
 import { spawn, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { setting, batonHome, socketEndpoint, hostEndpoints } from '../host/lib/socket.js'
+import * as evidence from './evidence.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 export const ROOT = path.resolve(HERE, '..')
@@ -526,6 +527,10 @@ async function useHost() {
   return up
 }
 
+// Said with a finished run's reply: review from the evidence dsh-baton produced, read code only
+// where it points, and send every fix back in one message.
+export const ENDED_HINT = 'evidence is produced by dsh-baton (files changed, checks it ran), not by the Harness reply: trust it over final_text. If a check failed, a requirement has no check, or a file the task needs is missing from evidence.changes, send all fixes back in one message to the same session; read code only for those items.'
+
 // The asking model marks its favourite option in the label ("(Recommended)", "（推荐）").
 // Clients relaying the question tended to repeat that mark as their own advice, so the
 // label is cleaned and the mark moves to harness_suggested: what the asker suggests, kept
@@ -586,6 +591,23 @@ const shaped = (st) => {
   return Array.isArray(st.answers) ? { ...out, answers: st.answers.map((a) => (Array.isArray(a?.selected) ? { ...a, selected: a.selected.map(cleanLabel) } : a)) } : out
 }
 
+// The folder a run works in: given with dsh_send, or that of its workspace or session.
+async function runFolder(a, st) {
+  if (a.cwd) return path.resolve(a.cwd.replace(/^~(?=$|[\\/])/, os.homedir()))
+  if (st?.cwd) return st.cwd
+  try {
+    if (a.workspace_id) return (await api.workspaces()).find((w) => w.id === a.workspace_id)?.path
+    const sid = a.session_id ?? st?.session_id
+    if (sid) return (await api.list_sessions({ query: sid, limit: 5 })).find((x) => x.session_id === sid)?.cwd
+  } catch { /* no folder, no evidence */ }
+  return undefined
+}
+const withEvidence = (st) => {
+  if (!st || !ENDED.has(st.state) || !st.run_id) return st
+  const ev = evidence.collect(config.batonHome, st.run_id)
+  return ev ? { ...st, evidence: ev } : st
+}
+
 const tag = (backend, value) => (Array.isArray(value) ? value.map((v) => ({ ...v, backend })) : { ...value, backend })
 
 export const api = {
@@ -603,16 +625,18 @@ export const api = {
   async read_session(a) {
     return (await useHost()) ? tag('host', await hostCall('read_session', a)) : tag('headless', readSession(a))
   },
-  async send(a) {
-    if (await useHost()) return tag('host', await hostCall('send', a))
-    return tag('headless', await waitForSessionId(startRun(a)))
+  // checks stay here: dsh-baton runs them itself when the run ends (see evidence.mjs).
+  async send({ checks, ...a }) {
+    const st = (await useHost()) ? tag('host', await hostCall('send', a)) : tag('headless', await waitForSessionId(startRun(a)))
+    evidence.prepare(config.batonHome, { run_id: st.run_id, cwd: await runFolder(a, st), checks })
+    return st
   },
   async status({ run_id, tail = 20 }) {
-    return shaped(isHostRun(run_id) ? tag('host', await hostCall('status', { run_id, tail })) : tag('headless', runStatus(run_id, { tail })))
+    return withEvidence(shaped(isHostRun(run_id) ? tag('host', await hostCall('status', { run_id, tail })) : tag('headless', runStatus(run_id, { tail }))))
   },
   async wait({ run_id, timeout_s = 300 }) {
-    if (isHostRun(run_id)) return shaped(tag('host', await hostCall('wait', { run_id, timeout_s }, { timeoutMs: (timeout_s + 15) * 1000 })))
-    return tag('headless', await waitRun(run_id, { timeout_s }))
+    if (isHostRun(run_id)) return withEvidence(shaped(tag('host', await hostCall('wait', { run_id, timeout_s }, { timeoutMs: (timeout_s + 15) * 1000 }))))
+    return withEvidence(tag('headless', await waitRun(run_id, { timeout_s })))
   },
   async cancel({ run_id, session_id }) {
     if (run_id && !isHostRun(run_id)) return tag('headless', cancelRun(run_id))
