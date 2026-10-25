@@ -4,6 +4,7 @@ import readline from 'node:readline'
 import path from 'node:path'
 import * as core from './core.mjs'
 import { stableNodePath } from './setup.mjs'
+import { conversationFolder, within } from './folder.mjs'
 
 const SERVER = { name: 'dsh-baton', version: core.VERSION }
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
@@ -132,10 +133,17 @@ const TOOLS = [
   {
     name: 'dsh_send',
     annotations: annotations('Send message', hints(false, false, false)),
-    description: 'Send a message to a Harness session and return at once with a run_id; then wait for the reply with dsh_wait (or the wait_command it returns, where offered). session_id continues that session; cwd or workspace_id starts a new one (a new cwd is registered first). If the session is busy, mode followup queues the message and steer adds it to the running turn; leave mode out to follow the Harness setting. The message arrives verbatim as a user message: make it self-contained (Harness does not see this conversation), in the user\'s language.',
-    inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: "followup queues after the current turn; steer injects into a running turn. Omit to follow Harness's busy-send setting" }, checks: { type: 'array', items: { type: 'string' }, description: 'The project\'s own test commands, e.g. npm test (ask Harness in the message to write tests for each requirement). Do not write check scripts yourself. dsh-baton runs them in the folder when the run ends and returns exit codes and the last output lines as evidence.' } } },
-    run: async (a) => {
-      const st = await core.api.send({ ...a, sender: core.senderOf(core.setting('SENDER') || clientName) })
+    description: 'Send a message to a Harness session and return at once with a run_id; then wait for the reply with dsh_wait (or the wait_command it returns, where offered). session_id continues that session; without it a new session starts in cwd or workspace_id, or, with neither, in the folder this conversation works in (a new cwd is registered first). If the session is busy, mode followup queues the message and steer adds it to the running turn; leave mode out to follow the Harness setting. The message arrives verbatim as a user message: make it self-contained (Harness does not see this conversation), in the user\'s language.',
+    inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session; leave out to use the folder this conversation works in'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: "followup queues after the current turn; steer injects into a running turn. Omit to follow Harness's busy-send setting" }, checks: { type: 'array', items: { type: 'string' }, description: 'The project\'s own test commands, e.g. npm test (ask Harness in the message to write tests for each requirement). Do not write check scripts yourself. dsh-baton runs them in the folder when the run ends and returns exit codes and the last output lines as evidence.' } } },
+    run: async (a, { meta } = {}) => {
+      // A new session goes to this conversation's folder unless the call names another one;
+      // a different folder is allowed but said back, so a wrong guess does not go unnoticed.
+      const here = a.session_id ? undefined : conversationFolder(meta, isCodex())
+      const args = here && !a.cwd && !a.workspace_id ? { ...a, cwd: here } : a
+      const folder = here && a.cwd && !within(a.cwd, here)
+        ? { folder_note: `This conversation works in ${here}; the new session was started in ${a.cwd} as asked. If that was not intended, cancel it and send again without cwd.` }
+        : args !== a ? { cwd: here } : {}
+      const st = { ...(await core.api.send({ ...args, sender: core.senderOf(core.setting('SENDER') || clientName) })), ...folder }
       // Codex has no wake-on-exit for shell commands: offered wait_command, it runs it in a
       // terminal and polls that, so it gets dsh_wait only.
       if (isCodex()) return { ...st, hint: `Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${NO_POLL} ${codeModeYield()}` }
@@ -281,7 +289,7 @@ async function handle(req) {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: {} },
         serverInfo: SERVER,
-        instructions: `Hands tasks to a local DeepSeek Harness and passes the results back. To hand over a task, call dsh_send {cwd, message, checks} directly (no need to list anything first): message is the full, explicit spec (ask for tests that cover each requirement), checks are the project's own test commands such as npm test; do not write check scripts yourself. To continue a session, dsh_send {session_id, message}. Then wait for the reply: ${isCodex() ? 'call dsh_wait with the run_id until it returns the final state (not dsh_status)' : 'run the wait_command it returns as a background shell command if your client wakes you when one exits, otherwise call dsh_wait'}. A run that stops to ask the user something ends the wait with needs_input and the questions; answer with dsh_answer. ${ASKED} ${ARCHIVED} If a note says dsh-baton was updated and names a tool you do not have, call it through dsh_call {name, arguments}.`,
+        instructions: `Hands tasks to a local DeepSeek Harness and passes the results back. To hand over a task, call dsh_send {message, checks} directly (no need to list anything first; the new session starts in the folder this conversation works in, or pass cwd for another folder): message is the full, explicit spec (ask for tests that cover each requirement), checks are the project's own test commands such as npm test; do not write check scripts yourself. To continue a session, dsh_send {session_id, message}. Then wait for the reply: ${isCodex() ? 'call dsh_wait with the run_id until it returns the final state (not dsh_status)' : 'run the wait_command it returns as a background shell command if your client wakes you when one exits, otherwise call dsh_wait'}. A run that stops to ask the user something ends the wait with needs_input and the questions; answer with dsh_answer. ${ASKED} ${ARCHIVED} If a note says dsh-baton was updated and names a tool you do not have, call it through dsh_call {name, arguments}.`,
       }
     }
     case 'ping':
@@ -296,7 +304,7 @@ async function handle(req) {
         const token = req.params?._meta?.progressToken
         const progress = token === undefined ? undefined : (done, message) =>
           send({ jsonrpc: '2.0', method: 'notifications/progress', params: { progressToken: token, progress: done, message } })
-        const result = await tool.run(req.params.arguments || {}, { progress })
+        const result = await tool.run(req.params.arguments || {}, { progress, meta: req.params?._meta })
         // Compact JSON: indentation is paid for again on every later request of the conversation.
         const content = [{ type: 'text', text: JSON.stringify(result) }]
         // Said once per server process, the first time a call finds the versions apart.
