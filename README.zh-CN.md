@@ -79,9 +79,9 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 
 ## Token 用量实测
 
-**一句话：大活、长活交给它**。一次性做一个跨很多文件的功能、一次大重构、一整个小应用，这种时候最省：Claude Code 自己的花费少 65–81%，Codex 在 ChatGPT Plus 一个 5 小时额度里能多做 2 到 5 倍的任务（GPT-6 Astra 做大号任务时是 5 倍）。
+**一句话：大活、长活交给它**。一次性做一个跨很多文件的功能、一次大重构、一整个小应用，这种时候最省：Claude Code 自己的花费少 65–81%，Codex 在 ChatGPT Plus 一个 5 小时额度里能多做 2 到 5 倍的任务（GPT-6 Astra 做中号任务时是 5 倍）。
 
-**说实话**：中小任务，Codex 用 GPT-6.1 Sol 自己做，总价反而比转交更便宜。转交值得的场景是：你想让 Claude 或 GPT 负责规划和把关，让更便宜的模型去动手写，又不想老是撞上 5 小时额度上限。
+**说实话**：小任务，Codex 用 GPT-6.1 Sol 自己做，总价反而比转交更便宜；中号任务两者基本持平。转交值得的场景是：你想让 Claude 或 GPT 负责规划和把关，让更便宜的模型去动手写，又不想老是撞上 5 小时额度上限。
 
 **适合谁**：大多数人用 Claude 或 ChatGPT 走的是订阅套餐（Plus、Pro、Max 5x 之类），而 DeepSeek 是充值后按用量扣费，所以每次转交都是套餐之外多花的钱。如果你的套餐额度本来就够用，就不用折腾这套流程，省一点是一点。如果你像我一样，经常跑又长又杂、要反复修改的大任务，老是撞上额度上限，那花一点 DeepSeek 的钱，就能让你已经付费的套餐多干很多活。
 
@@ -93,23 +93,27 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 
 | 客户端 · 模型 | 任务 | 自己做 | 转交，只算客户端 | 转交，含 DeepSeek |
 |---|---|---|---|---|
-| Claude Code · Opus 5.5 high | 中号 | $1.07 | $0.37（−65%） | $0.55（−49%） |
-| Claude Code · Opus 5.5 high | 大号 | $2.13 | $0.41（−81%） | $0.70（−67%） |
-| Codex · GPT-6.1 Sol high | 中号 | $0.17 | $0.09（−49%） | $0.29（+73%） |
-| Codex · GPT-6.1 Sol high | 大号 | $0.41 | $0.10（−75%） | $0.41（−2%） |
-| Codex · GPT-6 Astra high | 中号 | $0.79 | $0.56（−29%） | $0.75（−6%） |
-| Codex · GPT-6 Astra high | 大号 | $2.27 | $0.48（−79%） | $0.78（−65%） |
+| Claude Code · Opus 5.5 high | 小号 | $1.07 | $0.37（−65%） | $0.55（−49%） |
+| Claude Code · Opus 5.5 high | 中号 | $2.13 | $0.41（−81%） | $0.70（−67%） |
+| Codex · GPT-6.1 Sol high | 小号 | $0.17 | $0.09（−49%） | $0.29（+73%） |
+| Codex · GPT-6.1 Sol high | 中号 | $0.41 | $0.10（−75%） | $0.41（−2%） |
+| Codex · GPT-6 Astra high | 小号 | $0.79 | $0.56（−29%） | $0.75（−6%） |
+| Codex · GPT-6 Astra high | 中号 | $2.27 | $0.48（−79%） | $0.78（−65%） |
 
-每个任务占 ChatGPT Plus 5 小时额度：Sol 中号 1.9% → 0.8%，Sol 大号 4.3% → 1.0%，Astra 中号 7% → 3.5%，Astra 大号 22% → 4%。
+<p align="center">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-quota-combined.zh.svg" width="80%" alt="Codex 每个任务占 ChatGPT Plus 5 小时额度，自己做与用 0.6.0 转交：GPT-6.1 Sol 和 GPT-6 Astra">
+</p>
+
+每个任务占 ChatGPT Plus 5 小时额度：Sol 小号 1.9% → 0.8%，Sol 中号 4.3% → 1.0%，Astra 小号 7% → 3.5%，Astra 中号 22% → 4%。
 
 <details>
 <summary>测了什么、怎么测的</summary>
 
-- **两个任务，用普通用户的口吻提**（原文如下，可以直接点开看）：
-  - 中号：用 Node 写一个命令行任务管理工具，零依赖，分模块，带测试。[需求原文](docs/benchmarks/token-usage-2026-10/natural/medium.md) · [验收脚本](docs/benchmarks/token-usage-2026-10/checks/natural-medium.mjs)
-  - 大号：一个任务管理网页应用，Node 服务器加前端页面，REST 接口、统计、测试和 README。[需求原文](docs/benchmarks/token-usage-2026-10/natural/large.md) · [验收脚本](docs/benchmarks/token-usage-2026-10/checks/natural-large.mjs)
+- **两个任务，用普通用户的口吻提**。小号任务 Claude Code 或 Codex 自己做大约 7–8 分钟；中号任务是一个带服务器和页面的小应用。比这更长的大活没有测。原文如下，可以直接点开看：
+  - 小号：用 Node 写一个命令行任务管理工具，零依赖，分模块，带测试。[需求原文](docs/benchmarks/token-usage-2026-10/natural/medium.md) · [验收脚本](docs/benchmarks/token-usage-2026-10/checks/natural-medium.mjs)
+  - 中号：一个任务管理网页应用，Node 服务器加前端页面，REST 接口、统计、测试和 README。[需求原文](docs/benchmarks/token-usage-2026-10/natural/large.md) · [验收脚本](docs/benchmarks/token-usage-2026-10/checks/natural-large.mjs)
 - **转交组唯一的区别**，是在需求末尾多一句：交给 DeepSeek Harness 去做。
-- 两组用同一个模型、同样的推理强度，每格跑 3 次（Astra 各 1 次，中号转交跑了 2 次）；每次都用同一套验收脚本检查，模型看不到这个脚本。转交组 12 次全部一次通过。
+- 两组用同一个模型、同样的推理强度，每格跑 3 次（Astra 各 1 次，小号转交跑了 2 次）；每次都用同一套验收脚本检查，模型看不到这个脚本。转交组 12 次全部一次通过。
 - 价格按标价算。DeepSeek 按高峰价，是最保守的算法；实际 DeepSeek 账单大约是这个数的 58%。
 - 每一次运行、原始数据和脚本：[运行日志](docs/benchmarks/token-usage-2026-10/LOG.md)、[完整报告](docs/benchmarks/token-usage-2026-10.md)。
 

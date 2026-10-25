@@ -25,7 +25,7 @@
 <text x="234.00000000000003" y="467.9637333333334" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">−65%</text>
 <text x="127.33333333333334" y="508" font-size="12" fill="#0F172A" text-anchor="middle">自己做</text>
 <text x="234.00000000000003" y="508" font-size="12" fill="#0F172A" text-anchor="middle">转交（0.6.0）</text>
-<text x="180.66666666666669" y="534" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">中号任务</text>
+<text x="180.66666666666669" y="534" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">小号任务</text>
 <path d="M301.33333333333337,490 V179.3668 Q301.33333333333337,175.3668 305.33333333333337,175.3668 H392.00000000000006 Q396.00000000000006,175.3668 396.00000000000006,179.3668 V490 Z" fill="#C27803"/>
 <text x="348.6666666666667" y="167.3668" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">$2.13</text>
 <rect x="408.00000000000006" y="428.68853333333334" width="94.66666666666667" height="61.31146666666666" fill="#2563EB"/>
@@ -37,7 +37,7 @@
 <text x="455.33333333333337" y="478.68853333333334" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">−81%</text>
 <text x="348.6666666666667" y="508" font-size="12" fill="#0F172A" text-anchor="middle">自己做</text>
 <text x="455.33333333333337" y="508" font-size="12" fill="#0F172A" text-anchor="middle">转交（0.6.0）</text>
-<text x="402.00000000000006" y="534" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">大号任务</text>
+<text x="402.00000000000006" y="534" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">中号任务</text>
 <text x="810.0000000000001" y="98" font-size="15" font-weight="600" fill="#0F172A" text-anchor="middle">Codex · GPT-6.1 Sol high</text>
 <line x1="588.6666666666667" x2="1031.3333333333335" y1="490" y2="490" stroke="#E2E7EF"/>
 <text x="580.6666666666667" y="494" font-size="11.5" fill="#5B6577" text-anchor="end">$0.00</text>
@@ -62,7 +62,7 @@
 <text x="752.6666666666667" y="418.6401146666667" font-size="12" font-weight="700" fill="#067647" text-anchor="middle">−49%</text>
 <text x="646.0000000000001" y="508" font-size="12" fill="#0F172A" text-anchor="middle">自己做</text>
 <text x="752.6666666666667" y="508" font-size="12" fill="#0F172A" text-anchor="middle">转交（0.6.0）</text>
-<text x="699.3333333333334" y="534" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">中号任务</text>
+<text x="699.3333333333334" y="534" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">小号任务</text>
 <path d="M820.0000000000001,490 V187.899296 Q820.0000000000001,183.899296 824.0000000000001,183.899296 H910.6666666666667 Q914.6666666666667,183.899296 914.6666666666667,187.899296 V490 Z" fill="#C27803"/>
 <text x="867.3333333333335" y="175.899296" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">$0.41</text>
 <rect x="926.6666666666667" y="413.29386933333336" width="94.66666666666667" height="76.70613066666664" fill="#2563EB"/>
@@ -74,7 +74,7 @@
 <text x="974.0000000000001" y="405.29386933333336" font-size="12" font-weight="700" fill="#067647" text-anchor="middle">−75%</text>
 <text x="867.3333333333335" y="508" font-size="12" fill="#0F172A" text-anchor="middle">自己做</text>
 <text x="974.0000000000001" y="508" font-size="12" fill="#0F172A" text-anchor="middle">转交（0.6.0）</text>
-<text x="920.6666666666667" y="534" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">大号任务</text>
+<text x="920.6666666666667" y="534" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">中号任务</text>
 <text x="1328.6666666666667" y="98" font-size="15" font-weight="600" fill="#0F172A" text-anchor="middle">Codex · GPT-6 Astra high</text>
 <line x1="1107.3333333333335" x2="1550.0000000000002" y1="490" y2="490" stroke="#E2E7EF"/>
 <text x="1099.3333333333335" y="494" font-size="11.5" fill="#5B6577" text-anchor="end">$0.00</text>
@@ -101,7 +101,7 @@
 <text x="1271.3333333333335" y="470.54594333333335" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">−29%</text>
 <text x="1164.6666666666667" y="508" font-size="12" fill="#0F172A" text-anchor="middle">自己做</text>
 <text x="1271.3333333333335" y="508" font-size="12" fill="#0F172A" text-anchor="middle">转交（0.6.0）</text>
-<text x="1218.0000000000002" y="534" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">中号任务</text>
+<text x="1218.0000000000002" y="534" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">小号任务</text>
 <text x="1218.0000000000002" y="553" font-size="12" fill="#5B6577" text-anchor="middle">转交为 2 次平均</text>
 <path d="M1338.6666666666667,490 V214.53012 Q1338.6666666666667,210.53012 1342.6666666666667,210.53012 H1429.3333333333335 Q1433.3333333333335,210.53012 1433.3333333333335,214.53012 V490 Z" fill="#C27803"/>
 <text x="1386" y="202.53012" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">$2.27</text>
@@ -114,7 +114,7 @@
 <text x="1492.6666666666667" y="480.69467333333336" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">−79%</text>
 <text x="1386" y="508" font-size="12" fill="#0F172A" text-anchor="middle">自己做</text>
 <text x="1492.6666666666667" y="508" font-size="12" fill="#0F172A" text-anchor="middle">转交（0.6.0）</text>
-<text x="1439.3333333333335" y="534" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">大号任务</text>
+<text x="1439.3333333333335" y="534" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">中号任务</text>
 <text x="1439.3333333333335" y="553" font-size="12" fill="#5B6577" text-anchor="middle">各 1 次</text>
 <rect x="24" y="602" width="13" height="13" rx="2" fill="#C27803"/>
 <text x="44" y="613" font-size="13" fill="#0F172A">自己做</text>

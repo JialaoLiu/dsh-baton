@@ -25,7 +25,7 @@
 <text x="311" y="293.8752078389333" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−49%</text>
 <text x="311" y="337.0283733333333" font-size="12" font-weight="600" fill="#FFFFFF" text-anchor="middle">$0.37</text>
 <text x="311" y="352.0283733333333" font-size="11" font-weight="600" fill="#FFFFFF" text-anchor="middle">−65%</text>
-<text x="274" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
+<text x="274" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Small task</text>
 <text x="665" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
 <path d="M633,358 V139.20568 Q633,135.20568 637,135.20568 H693 Q697,135.20568 697,139.20568 V358 Z" fill="#C27803"/>
 <text x="665" y="127.20568" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">$2.13</text>
@@ -36,7 +36,7 @@
 <text x="739" y="277.67837035413334" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−67%</text>
 <text x="739" y="332.58485333333334" font-size="12" font-weight="600" fill="#FFFFFF" text-anchor="middle">$0.41</text>
 <text x="739" y="347.58485333333334" font-size="11" font-weight="600" fill="#FFFFFF" text-anchor="middle">−81%</text>
-<text x="702" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Large task</text>
+<text x="702" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
 <rect x="20" y="416" width="12" height="12" rx="2" fill="#C27803"/>
 <text x="38" y="426" font-size="12.5" fill="#0F172A">Alone</text>
 <rect x="90.4" y="416" width="12" height="12" rx="2" fill="#2563EB"/>

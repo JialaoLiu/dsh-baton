@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<rect width="1200" height="600" fill="#FFFFFF"/>
+<text x="24" y="38" font-size="20" font-weight="600" fill="#0F172A">Codex: share of the ChatGPT Plus 5-hour window per task</text>
+<text x="24" y="66" font-size="13.5" fill="#5B6577">Lower is better. DeepSeek does not use this window. ≈ = ran alongside another Codex run, estimated from cost (about $0.10 per 1%); the rest measured.</text>
+<text x="323" y="98" font-size="15" font-weight="600" fill="#0F172A" text-anchor="middle">Codex · GPT-6.1 Sol high</text>
+<line x1="66" x2="580" y1="470" y2="470" stroke="#E2E7EF"/>
+<text x="58" y="474" font-size="11.5" fill="#5B6577" text-anchor="end">0%</text>
+<line x1="66" x2="580" y1="400" y2="400" stroke="#E2E7EF"/>
+<text x="58" y="404" font-size="11.5" fill="#5B6577" text-anchor="end">1%</text>
+<line x1="66" x2="580" y1="330" y2="330" stroke="#E2E7EF"/>
+<text x="58" y="334" font-size="11.5" fill="#5B6577" text-anchor="end">2%</text>
+<line x1="66" x2="580" y1="260" y2="260" stroke="#E2E7EF"/>
+<text x="58" y="264" font-size="11.5" fill="#5B6577" text-anchor="end">3%</text>
+<line x1="66" x2="580" y1="190" y2="190" stroke="#E2E7EF"/>
+<text x="58" y="194" font-size="11.5" fill="#5B6577" text-anchor="end">4%</text>
+<line x1="66" x2="580" y1="120" y2="120" stroke="#E2E7EF"/>
+<text x="58" y="124" font-size="11.5" fill="#5B6577" text-anchor="end">5%</text>
+<path d="M84.5,470 V338.7174622673585 Q84.5,334.7174622673585 88.5,334.7174622673585 H184.5 Q188.5,334.7174622673585 188.5,338.7174622673585 V470 Z" fill="#C27803"/>
+<text x="136.5" y="326.7174622673585" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">≈1.9%</text>
+<text x="136.5" y="488" font-size="12" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M200.5,470 V415.4090144850551 Q200.5,411.4090144850551 204.5,411.4090144850551 H300.5 Q304.5,411.4090144850551 304.5,415.4090144850551 V470 Z" fill="#2563EB"/>
+<text x="252.5" y="387.4090144850551" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">≈0.8%</text>
+<text x="252.5" y="488" font-size="12" fill="#0F172A" text-anchor="middle">Handed over</text>
+<text x="252.5" y="403.4090144850551" font-size="12.5" font-weight="600" fill="#067647" text-anchor="middle">−57%</text>
+<text x="194.5" y="514" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">Small task</text>
+<path d="M341.5,470 V173.7053769333803 Q341.5,169.7053769333803 345.5,169.7053769333803 H441.5 Q445.5,169.7053769333803 445.5,173.7053769333803 V470 Z" fill="#C27803"/>
+<text x="393.5" y="161.7053769333803" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">≈4.3%</text>
+<text x="393.5" y="488" font-size="12" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M457.5,470 V403.06729917275095 Q457.5,399.06729917275095 461.5,399.06729917275095 H557.5 Q561.5,399.06729917275095 561.5,403.06729917275095 V470 Z" fill="#2563EB"/>
+<text x="509.5" y="375.06729917275095" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">≈1.0%</text>
+<text x="509.5" y="488" font-size="12" fill="#0F172A" text-anchor="middle">Handed over</text>
+<text x="509.5" y="391.06729917275095" font-size="12.5" font-weight="600" fill="#067647" text-anchor="middle">−76%</text>
+<text x="451.5" y="514" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
+<text x="913" y="98" font-size="15" font-weight="600" fill="#0F172A" text-anchor="middle">Codex · GPT-6 Astra high</text>
+<line x1="656" x2="1170" y1="470" y2="470" stroke="#E2E7EF"/>
+<text x="648" y="474" font-size="11.5" fill="#5B6577" text-anchor="end">0%</text>
+<line x1="656" x2="1170" y1="400" y2="400" stroke="#E2E7EF"/>
+<text x="648" y="404" font-size="11.5" fill="#5B6577" text-anchor="end">5%</text>
+<line x1="656" x2="1170" y1="330" y2="330" stroke="#E2E7EF"/>
+<text x="648" y="334" font-size="11.5" fill="#5B6577" text-anchor="end">10%</text>
+<line x1="656" x2="1170" y1="260" y2="260" stroke="#E2E7EF"/>
+<text x="648" y="264" font-size="11.5" fill="#5B6577" text-anchor="end">15%</text>
+<line x1="656" x2="1170" y1="190" y2="190" stroke="#E2E7EF"/>
+<text x="648" y="194" font-size="11.5" fill="#5B6577" text-anchor="end">20%</text>
+<line x1="656" x2="1170" y1="120" y2="120" stroke="#E2E7EF"/>
+<text x="648" y="124" font-size="11.5" fill="#5B6577" text-anchor="end">25%</text>
+<path d="M674.5,470 V376 Q674.5,372 678.5,372 H774.5 Q778.5,372 778.5,376 V470 Z" fill="#C27803"/>
+<text x="726.5" y="364" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">7.0%</text>
+<text x="726.5" y="488" font-size="12" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M790.5,470 V425 Q790.5,421 794.5,421 H890.5 Q894.5,421 894.5,425 V470 Z" fill="#2563EB"/>
+<text x="842.5" y="397" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">3.5%</text>
+<text x="842.5" y="488" font-size="12" fill="#0F172A" text-anchor="middle">Handed over</text>
+<text x="842.5" y="413" font-size="12.5" font-weight="600" fill="#067647" text-anchor="middle">−50%</text>
+<text x="784.5" y="514" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">Small task</text>
+<text x="784.5" y="533" font-size="12" fill="#5B6577" text-anchor="middle">hand-over: mean of 2</text>
+<path d="M931.5,470 V166 Q931.5,162 935.5,162 H1031.5 Q1035.5,162 1035.5,166 V470 Z" fill="#C27803"/>
+<text x="983.5" y="154" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">22.0%</text>
+<text x="983.5" y="488" font-size="12" fill="#0F172A" text-anchor="middle">Alone</text>
+<path d="M1047.5,470 V418 Q1047.5,414 1051.5,414 H1147.5 Q1151.5,414 1151.5,418 V470 Z" fill="#2563EB"/>
+<text x="1099.5" y="390" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">4.0%</text>
+<text x="1099.5" y="488" font-size="12" fill="#0F172A" text-anchor="middle">Handed over</text>
+<text x="1099.5" y="406" font-size="12.5" font-weight="600" fill="#067647" text-anchor="middle">−82%</text>
+<text x="1041.5" y="514" font-size="14" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
+<text x="1041.5" y="533" font-size="12" fill="#5B6577" text-anchor="middle">1 run each</text>
+<rect x="24" y="562" width="13" height="13" rx="2" fill="#C27803"/>
+<text x="44" y="573" font-size="13" fill="#0F172A">Alone</text>
+<rect x="101.80000000000001" y="562" width="13" height="13" rx="2" fill="#2563EB"/>
+<text x="121.80000000000001" y="573" font-size="13" fill="#0F172A">Handed over (0.6.0)</text>
+</svg>

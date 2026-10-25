@@ -1,46 +1,48 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="940" height="450" viewBox="0 0 940 450" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
 <rect width="940" height="450" fill="#FFFFFF"/>
 <text x="20" y="30" font-size="17" font-weight="600" fill="#0F172A">Codex Plus: 5-hour window used per task (%)</text>
-<text x="20" y="53" font-size="12.5" fill="#5B6577">Runs that overlapped are estimated from GPT cost (about $0.113 per 1%); runs alone are measured.</text>
+<text x="20" y="53" font-size="12.5" fill="#5B6577">Runs that overlapped are estimated from GPT cost (about $0.102 per 1%); runs alone are measured.</text>
 <text x="20" y="72" font-size="12.5" fill="#5B6577">Each bar is the mean of 3 runs; ≈ marks estimates. Green % = less than working alone.</text>
 <line x1="60" x2="916" y1="358" y2="358" stroke="#E2E7EF"/>
 <text x="52" y="362" font-size="11.5" fill="#5B6577" text-anchor="end">0.0%</text>
-<line x1="60" x2="916" y1="292.5" y2="292.5" stroke="#E2E7EF"/>
-<text x="52" y="296.5" font-size="11.5" fill="#5B6577" text-anchor="end">1.0%</text>
-<line x1="60" x2="916" y1="227" y2="227" stroke="#E2E7EF"/>
-<text x="52" y="231" font-size="11.5" fill="#5B6577" text-anchor="end">2.0%</text>
-<line x1="60" x2="916" y1="161.5" y2="161.5" stroke="#E2E7EF"/>
-<text x="52" y="165.5" font-size="11.5" fill="#5B6577" text-anchor="end">3.0%</text>
+<line x1="60" x2="916" y1="305.6" y2="305.6" stroke="#E2E7EF"/>
+<text x="52" y="309.6" font-size="11.5" fill="#5B6577" text-anchor="end">1.0%</text>
+<line x1="60" x2="916" y1="253.2" y2="253.2" stroke="#E2E7EF"/>
+<text x="52" y="257.2" font-size="11.5" fill="#5B6577" text-anchor="end">2.0%</text>
+<line x1="60" x2="916" y1="200.8" y2="200.8" stroke="#E2E7EF"/>
+<text x="52" y="204.8" font-size="11.5" fill="#5B6577" text-anchor="end">3.0%</text>
+<line x1="60" x2="916" y1="148.39999999999998" y2="148.39999999999998" stroke="#E2E7EF"/>
+<text x="52" y="152.39999999999998" font-size="11.5" fill="#5B6577" text-anchor="end">4.0%</text>
 <line x1="60" x2="916" y1="96" y2="96" stroke="#E2E7EF"/>
-<text x="52" y="100" font-size="11.5" fill="#5B6577" text-anchor="end">4.0%</text>
+<text x="52" y="100" font-size="11.5" fill="#5B6577" text-anchor="end">5.0%</text>
 <text x="163" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
-<path d="M131,358 V239.15944806225227 Q131,235.15944806225227 135,235.15944806225227 H191 Q195,235.15944806225227 195,239.15944806225227 V358 Z" fill="#C27803"/>
-<text x="163" y="227.15944806225227" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">1.9%≈</text>
+<path d="M131,358 V260.7313574687083 Q131,256.7313574687083 135,256.7313574687083 H191 Q195,256.7313574687083 195,260.7313574687083 V358 Z" fill="#C27803"/>
+<text x="163" y="248.73135746870832" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">1.9%≈</text>
 <text x="237" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Evidence</text>
-<path d="M205,358 V310.19413381218584 Q205,306.19413381218584 209,306.19413381218584 H265 Q269,306.19413381218584 269,310.19413381218584 V358 Z" fill="#0E9F6E"/>
-<text x="237" y="284.19413381218584" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.8%≈</text>
-<text x="237" y="299.19413381218584" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−58%</text>
+<path d="M205,358 V318.02613873203404 Q205,314.02613873203404 209,314.02613873203404 H265 Q269,314.02613873203404 269,318.02613873203404 V358 Z" fill="#0E9F6E"/>
+<text x="237" y="292.02613873203404" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.8%≈</text>
+<text x="237" y="307.02613873203404" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−57%</text>
 <text x="311" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Lean evidence</text>
 <text x="311" y="350" font-size="11" fill="#5B6577" text-anchor="middle">not run</text>
 <text x="385" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Review table</text>
-<path d="M353,358 V312.40661770067953 Q353,308.40661770067953 357,308.40661770067953 H413 Q417,308.40661770067953 417,312.40661770067953 V358 Z" fill="#C0267A"/>
-<text x="385" y="286.40661770067953" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.8%≈</text>
-<text x="385" y="301.40661770067953" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−60%</text>
-<text x="274" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
+<path d="M353,358 V318.1404622716698 Q353,314.1404622716698 357,314.1404622716698 H413 Q417,314.1404622716698 417,318.1404622716698 V358 Z" fill="#C0267A"/>
+<text x="385" y="292.1404622716698" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.8%≈</text>
+<text x="385" y="307.1404622716698" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−57%</text>
+<text x="274" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Small task</text>
 <text x="591" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Alone</text>
-<path d="M559,358 V101.57087937089615 Q559,97.57087937089615 563,97.57087937089615 H619 Q623,97.57087937089615 623,101.57087937089615 V358 Z" fill="#C27803"/>
-<text x="591" y="89.57087937089615" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">4.0%≈</text>
+<path d="M559,358 V137.20802501870185 Q559,133.20802501870185 563,133.20802501870185 H619 Q623,133.20802501870185 623,137.20802501870185 V358 Z" fill="#C27803"/>
+<text x="591" y="125.20802501870185" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">4.3%≈</text>
 <text x="665" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Evidence</text>
-<path d="M633,358 V311.683106843452 Q633,307.683106843452 637,307.683106843452 H693 Q697,307.683106843452 697,311.683106843452 V358 Z" fill="#0E9F6E"/>
-<text x="665" y="285.683106843452" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.8%≈</text>
-<text x="665" y="300.683106843452" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−81%</text>
+<path d="M633,358 V319.34296097350034 Q633,315.34296097350034 637,315.34296097350034 H693 Q697,315.34296097350034 697,319.34296097350034 V358 Z" fill="#0E9F6E"/>
+<text x="665" y="293.34296097350034" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.8%≈</text>
+<text x="665" y="308.34296097350034" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−81%</text>
 <text x="739" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Lean evidence</text>
 <text x="739" y="350" font-size="11" fill="#5B6577" text-anchor="middle">not run</text>
 <text x="813" y="375" font-size="11.5" fill="#0F172A" text-anchor="middle">Review table</text>
-<path d="M781,358 V301.96017444096765 Q781,297.96017444096765 785,297.96017444096765 H841 Q845,297.96017444096765 845,301.96017444096765 V358 Z" fill="#C0267A"/>
-<text x="813" y="275.96017444096765" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">0.9%≈</text>
-<text x="813" y="290.96017444096765" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−77%</text>
-<text x="702" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Large task</text>
+<path d="M781,358 V308.90180680931644 Q781,304.90180680931644 785,304.90180680931644 H841 Q845,304.90180680931644 845,308.90180680931644 V358 Z" fill="#C0267A"/>
+<text x="813" y="282.90180680931644" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">1.0%≈</text>
+<text x="813" y="297.90180680931644" font-size="11.5" font-weight="600" fill="#067647" text-anchor="middle">−76%</text>
+<text x="702" y="398" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="middle">Medium task</text>
 <rect x="20" y="416" width="12" height="12" rx="2" fill="#C27803"/>
 <text x="38" y="426" font-size="12.5" fill="#0F172A">Alone</text>
 <rect x="90.4" y="416" width="12" height="12" rx="2" fill="#0E9F6E"/>

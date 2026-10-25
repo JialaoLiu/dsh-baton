@@ -10,7 +10,7 @@ A commenter asked whether handing work to Harness through dsh-baton actually sav
 
 Every run passed the same hidden acceptance check, so these are costs per accepted task.
 
-**Update, 2026-10-26: a second round with plain-language requests led to dsh-baton 0.6.0.** See [Round 2](#round-2-plain-language-requests-and-060). In short, with 0.6.0 Claude Code spends 65–81% less of its own model on medium and large tasks, Codex (GPT-6.1 Sol) 49–75% less, and a ChatGPT Plus 5-hour window covers 2 to 4 times as many tasks. For small and medium tasks Sol on its own is still cheaper in total once DeepSeek is counted.
+**Update, 2026-10-26: a second round with plain-language requests led to dsh-baton 0.6.0.** See [Round 2](#round-2-plain-language-requests-and-060). In short, with 0.6.0 Claude Code spends 65–81% less of its own model on the small and medium tasks of that round, Codex (GPT-6.1 Sol) 49–75% less, and a ChatGPT Plus 5-hour window covers 2 to 4 times as many tasks. For small tasks Sol on its own is still cheaper in total once DeepSeek is counted, and at medium size it is about even.
 
 ![Codex cost per accepted task](token-usage-2026-10/charts/cost-codex.png)
 ![Claude Code cost per accepted task](token-usage-2026-10/charts/cost-claude.png)
@@ -173,13 +173,15 @@ That is 1 of 9 Codex arm B attempts. Claude Code handed over every time.
 
 ## Round 2: plain-language requests and 0.6.0
 
+Task sizes: these two tasks were first called medium and large. After the runs they were renamed small and medium, because the smaller one took the client only about 7–8 minutes on its own; the file names and the raw data keep the old names (`natural/medium.md` is the small task, `natural/large.md` the medium one). Round 1's sizes are different tasks and keep their names.
+
 Round 1 gave the client a precise spec. Users do not write those, so round 2 used plain requests, the way a user talks, and let the client turn them into a spec: [natural/medium.md](token-usage-2026-10/natural/medium.md) (a command-line task manager with modules and tests) and [natural/large.md](token-usage-2026-10/natural/large.md) (a small web app: Node server, REST API, page, tests). The hand-over arm adds only "交给 DeepSeek Harness 去做。" at the end. The checks test behaviour, not exact output: [checks/natural-medium.mjs](token-usage-2026-10/checks/natural-medium.mjs), [checks/natural-large.mjs](token-usage-2026-10/checks/natural-large.mjs). Same models as round 1, three runs per cell (Astra: one), list prices, DeepSeek V4.1 Flash 1017 at its peak price. The live log of every batch is [LOG.md](token-usage-2026-10/LOG.md); problems found are in [bugs.yml](token-usage-2026-10/bugs.yml).
 
 Builds compared, all from the same request: working alone; the 0.5.9 hand-over; **evidence** (dsh-baton runs the client's checks itself and reports the files changed); **lean evidence** (evidence, with wording that keeps the client from writing its own check scripts); **review table** (lean evidence, plus a read-only Harness sub-agent that checks every requirement and ends with a table). The review-table build is 0.6.0.
 
 Cost per task: the client's own model, and the total with DeepSeek. Reworks are the extra rounds the hidden check asked for, per run.
 
-| Claude Code · Opus 5.5 high | Runs | Medium: client | Medium: total | Reworks | Runs | Large: client | Large: total | Reworks |
+| Claude Code · Opus 5.5 high | Runs | Small: client | Small: total | Reworks | Runs | Medium: client | Medium: total | Reworks |
 |---|---|---|---|---|---|---|---|---|
 | Alone | 3 | $1.07 | $1.07 | 0, 0, 0 | 2 | $2.13 | $2.13 | 0, 0 |
 | 0.5.9 hand-over | 4 | $0.36 | $0.49 | 0, 0, 0, 0 | 3 | $0.47 | $0.63 | 0, 0, 0 |
@@ -187,31 +189,33 @@ Cost per task: the client's own model, and the total with DeepSeek. Reworks are 
 | Lean evidence | 3 | $0.40 | $0.54 | 0, 0, 0 | 3 | $0.55 | $0.77 | 1, 0, 0 |
 | **Review table (0.6.0)** | 3 | **$0.37** | **$0.55** | 0, 0, 0 | 3 | **$0.41** | **$0.70** | 0, 0, 0 |
 
-| Codex · GPT-6.1 Sol high | Runs | Medium: client | Medium: total | Reworks | Runs | Large: client | Large: total | Reworks |
+| Codex · GPT-6.1 Sol high | Runs | Small: client | Small: total | Reworks | Runs | Medium: client | Medium: total | Reworks |
 |---|---|---|---|---|---|---|---|---|
 | Alone | 3 | $0.17 | $0.17 | 0, 0, 0 | 3 | $0.41 | $0.41 | 0, 0, 0 |
 | 0.5.9 hand-over | 3 | $0.21 | $0.54 | 1, 0, 1 | 3 | $0.14 | $0.35 | 0, 0, 0 |
 | Evidence | 3 | $0.08 | $0.23 | 0, 0, 0 | 3 | $0.09 | $0.31 | 0, 0, 0 |
 | **Review table (0.6.0)** | 3 | **$0.09** | **$0.29** | 0, 0, 0 | 3 | **$0.10** | **$0.41** | 0, 0, 0 |
 
-Codex with GPT-6 Astra high, each run on its own: medium alone $0.79 and 7% of the Plus 5-hour window; handed over to 0.6.0 (mean of 2 runs, $0.45 and $0.67) $0.56 for Codex, $0.75 with DeepSeek, 3.5% of the window. Large alone $2.27 and 22%; handed over $0.48 for Codex, $0.78 with DeepSeek, 4%. The dearer medium run had two more waits and lost the provider's prompt cache after one of them.
+Codex with GPT-6 Astra high, each run on its own: small alone $0.79 and 7% of the Plus 5-hour window; handed over to 0.6.0 (mean of 2 runs, $0.45 and $0.67) $0.56 for Codex, $0.75 with DeepSeek, 3.5% of the window. Medium alone $2.27 and 22%; handed over $0.48 for Codex, $0.78 with DeepSeek, 4%. The dearer small run had two more waits and lost the provider's prompt cache after one of them.
 
-Plus 5-hour window per task with Sol: medium 1.9% alone vs 0.8% with 0.6.0, large 4.3% vs 1.0%. Runs that overlapped another Codex run share the account-wide window, so their share is estimated from GPT cost at the ratio measured on runs that ran alone (about $0.10 per 1%; Astra measured $0.11–0.15 per 1%, so the window tracks list price).
+Plus 5-hour window per task with Sol: small 1.9% alone vs 0.8% with 0.6.0, medium 4.3% vs 1.0%. Runs that overlapped another Codex run share the account-wide window, so their share is estimated from GPT cost at the ratio measured on runs that ran alone (about $0.10 per 1%; Astra measured $0.11–0.15 per 1%, so the window tracks list price).
 
 ![Working alone vs 0.6.0](token-usage-2026-10/charts/natural-combined.png)
+
+![Codex 5-hour window, working alone vs 0.6.0](token-usage-2026-10/charts/natural-quota-combined.png)
 
 **What changed between builds, and why 0.6.0 is the review-table build.**
 - Evidence cut Codex's own cost most: fewer and shorter waits, no reading the folder. On Claude Code it cost more than 0.5.9, because Claude wrote its own check scripts and reproduced failures before sending fixes. The lean wording stopped that (no script was written in six runs).
 - The review table kept Codex near the evidence build and brought Claude Code to its lowest large-task cost ($0.41), and all 12 runs passed the hidden check the first time. The client read the table and the evidence instead of the code. The DeepSeek share rises by about a third for the extra review.
 - The review still catches things: in one evidence run all checks passed and Codex sent back a wrong number in the README on its own; in the Windows check of 0.6.0-next.0 the Harness review found and fixed a prototype-key validation bug.
-- A courier build (a cheap sub-agent of the client relays the hand-over) cost more for Codex, whose main thread polled the sub-agent (65 sleep calls in one large run). It was dropped.
+- A courier build (a cheap sub-agent of the client relays the hand-over) cost more for Codex, whose main thread polled the sub-agent (65 sleep calls in one medium run). It was dropped.
 
 **Not counted, and why** (all kept in the raw data with `valid: false` or left out by date):
-- Large runs that ended before the large check was fixed (bug 7): the check guessed field names (`due`, `text`) the request never named and showed only the fallback's error, so every build got one or two false reworks.
+- Medium runs that ended before the medium check was fixed (bug 7): the check guessed field names (`due`, `text`) the request never named and showed only the fallback's error, so every build got one or two false reworks.
 - A batch run while the DeepSeek balance ran out: Codex retried and did work itself, using about 17% of the window.
-- The Astra large hand-over, stopped at 99% of the window before it ended.
+- The Astra medium hand-over, stopped at 99% of the window before it ended.
 
-**Limits.** Three runs per cell (one for Astra); medium and large tasks only; one kind of project, built from an empty folder; the page of the large task was not tested in a browser. Codex desktop overhead was not measured: one test conversation in the Codex app sent about 12k more input tokens per request than the CLI, mostly cached.
+**Limits.** Three runs per cell (one for Astra); small and medium tasks only; one kind of project, built from an empty folder; the page of the medium task was not tested in a browser. Codex desktop overhead was not measured: one test conversation in the Codex app sent about 12k more input tokens per request than the CLI, mostly cached.
 
 ## Reproduce and check
 

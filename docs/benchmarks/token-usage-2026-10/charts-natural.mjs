@@ -29,11 +29,13 @@ const rows = fs.readdirSync(path.join(HERE, 'results')).filter((f) => /-n\w+\.js
   .flatMap((f) => fs.readFileSync(path.join(HERE, 'results', f), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)))
   .filter((r) => r.tasks === 'natural' && r.valid !== false)
 
-// Large runs that ended before the large check was fixed (bug 7, 2026-10-25 23:45 local) are left out.
+// Large runs (shown as the medium task) that ended before the large check was fixed (bug 7, 2026-10-25 23:45 local) are left out.
 const CHECK_FIXED = Date.parse('2026-10-25T13:15:00Z')
 const valid = (r) => r.size !== 'large' || Date.parse(r.at) > CHECK_FIXED
 
 const home = (p) => p.replace(/^~/, os.homedir())
+// Rollouts moved out of ~/.codex after the runs: DSHB_ROLLOUTS names the folder they were archived to (flat).
+const rollout = (p) => (fs.existsSync(home(p)) || !process.env.DSHB_ROLLOUTS ? home(p) : path.join(process.env.DSHB_ROLLOUTS, path.basename(p)))
 const ASTRA_PRICE = { input: 10, cached: 1, output: 50 }
 const costAt = (g, p) => ((g.input_tokens - g.cached_input_tokens) * p.input + g.cached_input_tokens * p.cached + g.output_tokens * p.output) / 1e6
 const solCost = (g) => costAt(g, PRICE.sol)
@@ -43,7 +45,7 @@ const lastUsage = (file) => {
 }
 // Codex courier runs: the sub-agent has its own rollout, started from the main thread; priced at Sol rates (upper bound).
 function courierCost(r) {
-  const dir = path.dirname(home(r.rollout))
+  const dir = path.dirname(rollout(r.rollout))
   return fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl') && !f.includes(r.thread))
     .map((f) => path.join(dir, f)).filter((f) => { const head = fs.readFileSync(f, 'utf8').slice(0, 20000); return head.includes(r.thread) && head.includes(r.dir) })
     .reduce((a, f) => { const u = lastUsage(f); return a + (u ? solCost(u) : 0) }, 0)
@@ -52,7 +54,7 @@ function courierCost(r) {
 const mainCost = (r) => (r.gpt ? (/astra/.test(r.model) ? costAt(r.gpt, ASTRA_PRICE) : solCost(r.gpt)) + (r.courier ? courierCost(r) : 0) : r.cost_usd)
 const dsCost = (r) => (r.harness ? (r.harness.deepseek.inputTokens * PRICE.deepseek.miss + r.harness.deepseek.cacheReadTokens * PRICE.deepseek.hit + r.harness.deepseek.outputTokens * PRICE.deepseek.output) / 1e6 : 0)
 function measuredQuota(r) {
-  const seen = fs.readFileSync(home(r.rollout), 'utf8').split('\n').filter((l) => l.includes('"token_count"') && l.includes('used_percent'))
+  const seen = fs.readFileSync(rollout(r.rollout), 'utf8').split('\n').filter((l) => l.includes('"token_count"') && l.includes('used_percent'))
     .map((l) => JSON.parse(l).payload.rate_limits?.primary?.used_percent).filter((v) => typeof v === 'number')
   return seen.length ? seen.at(-1) - seen[0] : null
 }
@@ -60,7 +62,8 @@ const span = (r) => [Date.parse(r.at) - r.wall_s * 1000, Date.parse(r.at)]
 const codexRows = rows.filter((r) => r.client === 'codex' && r.rollout)
 // Back-to-back runs touch at the ends (start is derived from wall_s), so only a real overlap counts.
 const overlapped = (r) => { const [a, b] = span(r); return codexRows.some((o) => o !== r && Math.min(b, span(o)[1]) - Math.max(a, span(o)[0]) > 120_000) }
-const alone = codexRows.filter((r) => !overlapped(r) && measuredQuota(r) !== null && valid(r))
+// The ratio is taken from Sol runs: the estimated runs are all Sol, and every Astra run ran alone.
+const alone = codexRows.filter((r) => !overlapped(r) && !/astra/.test(r.model ?? '') && measuredQuota(r) !== null && valid(r))
 export const DOLLARS_PER_PERCENT = alone.reduce((a, r) => a + mainCost(r), 0) / alone.reduce((a, r) => a + measuredQuota(r), 0)
 const quota = (r) => (overlapped(r) ? { v: mainCost(r) / DOLLARS_PER_PERCENT, estimated: true } : { v: measuredQuota(r), estimated: false })
 
@@ -77,8 +80,8 @@ const METHODS = [
 ]
 if (RELEASE) METHODS.splice(1, METHODS.length - 1, { key: 'B', label: 'nreview', color: '#2563EB', zh: '转交（0.6.0）', en: 'Handed over (0.6.0)' })
 const T = ZH
-  ? { medium: '中号任务', large: '大号任务', ds: 'DeepSeek 费用（按高峰价，不占主 Agent 额度）', title: (c) => `${c}：主 Agent 每个任务花多少钱（按标价，美元）`, note: '只算主 Agent 自己的花费（占订阅额度的部分），不含 DeepSeek。', totalTitle: (c) => `${c}：加上 DeepSeek 的总价（美元）`, totalNote: '彩色 = 主 Agent，灰色 = DeepSeek（按高峰价）；“自己做”不用 DeepSeek，所以没有灰色。柱顶 = 合计，两段交界处 = 只算主 Agent。', note2: '每根柱子是跑 3 次的平均值。绿色百分比 = 比自己做省多少，红色 = 比自己做贵多少。', quotaTitle: 'Codex Plus：每个任务占用的 5 小时额度（%）', quotaNote: '同时跑的几次按 GPT 花费估算（约每 1% 对应 $RATE），单独跑的为实测。' }
-  : { medium: 'Medium task', large: 'Large task', ds: 'DeepSeek cost (peak price, not the client’s quota)', title: (c) => `${c}: the client’s own cost per task (list price, USD)`, note: 'Only the client model (the part that uses the subscription quota), without DeepSeek.', totalTitle: (c) => `${c}: total with DeepSeek (USD)`, totalNote: 'Colour = client model, grey = DeepSeek (peak price); working alone uses no DeepSeek, so it has no grey. Top = total; where the two meet = the client alone.', note2: 'Each bar is the mean of 3 runs. Green % = cheaper than working alone, red % = dearer.', quotaTitle: 'Codex Plus: 5-hour window used per task (%)', quotaNote: 'Runs that overlapped are estimated from GPT cost (about $RATE per 1%); runs alone are measured.' }
+  ? { medium: '小号任务', large: '中号任务', ds: 'DeepSeek 费用（按高峰价，不占主 Agent 额度）', title: (c) => `${c}：主 Agent 每个任务花多少钱（按标价，美元）`, note: '只算主 Agent 自己的花费（占订阅额度的部分），不含 DeepSeek。', totalTitle: (c) => `${c}：加上 DeepSeek 的总价（美元）`, totalNote: '彩色 = 主 Agent，灰色 = DeepSeek（按高峰价）；“自己做”不用 DeepSeek，所以没有灰色。柱顶 = 合计，两段交界处 = 只算主 Agent。', note2: '每根柱子是跑 3 次的平均值。绿色百分比 = 比自己做省多少，红色 = 比自己做贵多少。', quotaTitle: 'Codex Plus：每个任务占用的 5 小时额度（%）', quotaNote: '同时跑的几次按 GPT 花费估算（约每 1% 对应 $RATE），单独跑的为实测。' }
+  : { medium: 'Small task', large: 'Medium task', ds: 'DeepSeek cost (peak price, not the client’s quota)', title: (c) => `${c}: the client’s own cost per task (list price, USD)`, note: 'Only the client model (the part that uses the subscription quota), without DeepSeek.', totalTitle: (c) => `${c}: total with DeepSeek (USD)`, totalNote: 'Colour = client model, grey = DeepSeek (peak price); working alone uses no DeepSeek, so it has no grey. Top = total; where the two meet = the client alone.', note2: 'Each bar is the mean of 3 runs. Green % = cheaper than working alone, red % = dearer.', quotaTitle: 'Codex Plus: 5-hour window used per task (%)', quotaNote: 'Runs that overlapped are estimated from GPT cost (about $RATE per 1%); runs alone are measured.' }
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
 const FONT = `font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif"`
 const textW = (s, px) => [...s].reduce((w, ch) => w + (/[　-鿿＀-￯]/.test(ch) ? px : px * 0.56), 0)
@@ -281,6 +284,60 @@ if (COMBINED) {
   }
   out.push('</svg>')
   const svg = path.join(OUT, `natural-combined${ZH ? '.zh' : ''}.svg`)
+  fs.writeFileSync(svg, out.join('\n') + '\n')
+  spawnSync('rsvg-convert', ['-z', '2', '-o', svg.replace(/\.svg$/, '.png'), svg])
+}
+// Codex only: share of the ChatGPT Plus 5-hour window per task, working alone vs 0.6.0, one panel
+// per model with its own y-axis. Runs that overlapped another Codex run are estimated (≈).
+if (COMBINED) {
+  const cell = (size, label, sub) => {
+    const q = (m) => pick('codex', size, m).map(quota).filter((x) => x.v !== null)
+    const a = q({ ...METHODS[0], label: label ?? METHODS[0].label }), b = q({ key: 'B', label: label ?? 'nreview' })
+    return { size, sub, alone: mean(a.map((x) => x.v)), handed: mean(b.map((x) => x.v)), estA: a.some((x) => x.estimated), estB: b.some((x) => x.estimated) }
+  }
+  const panels = [
+    { title: 'Codex · GPT-6.1 Sol high', cells: [cell('medium'), cell('large')] },
+    { title: 'Codex · GPT-6 Astra high', cells: [cell('medium', 'nastra', ZH ? '转交为 2 次平均' : 'hand-over: mean of 2'), cell('large', 'nastra', ZH ? '各 1 次' : '1 run each')] },
+  ]
+  const W = 1200, H = 600, TOP = 120, BOT = 130, GAP = 76, LEFT = 66
+  const pw = (W - LEFT - 30 - GAP) / 2
+  const out = [`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" ${FONT}>`, `<rect width="${W}" height="${H}" fill="${C.BG}"/>`,
+    `<text x="24" y="38" font-size="20" font-weight="600" fill="${C.FG}">${esc(ZH ? 'Codex：每个任务占 ChatGPT Plus 5 小时额度的多少' : 'Codex: share of the ChatGPT Plus 5-hour window per task')}</text>`,
+    `<text x="24" y="66" font-size="13.5" fill="${C.MUTED}">${esc(ZH ? `越低越好。DeepSeek 不占这个额度。≈ = 和别的 Codex 任务同时跑，按花费估算（约每 1% $${DOLLARS_PER_PERCENT.toFixed(2)}）；其余为实测。` : `Lower is better. DeepSeek does not use this window. ≈ = ran alongside another Codex run, estimated from cost (about $${DOLLARS_PER_PERCENT.toFixed(2)} per 1%); the rest measured.`)}</text>`]
+  const pct = (v, b) => `${v < b ? '−' : '+'}${Math.round(Math.abs(v / b - 1) * 100)}%`
+  let x = LEFT
+  for (const pnl of panels) {
+    const max = Math.max(...pnl.cells.flatMap((c) => [c.alone, c.handed]))
+    const step = [0.5, 1, 2, 5, 10].find((st) => max / st <= 5) ?? 20
+    const top = Math.ceil(max * 1.12 / step) * step
+    const y = (v) => TOP + (H - TOP - BOT) * (1 - v / top)
+    out.push(`<text x="${x + pw / 2}" y="${TOP - 22}" font-size="15" font-weight="600" fill="${C.FG}" text-anchor="middle">${esc(pnl.title)}</text>`)
+    for (let v = 0; v <= top + 1e-9; v += step) {
+      out.push(`<line x1="${x}" x2="${x + pw}" y1="${y(v)}" y2="${y(v)}" stroke="${C.GRID}"/>`, `<text x="${x - 8}" y="${y(v) + 4}" font-size="11.5" fill="${C.MUTED}" text-anchor="end">${v}%</text>`)
+    }
+    const gw = pw / pnl.cells.length
+    pnl.cells.forEach((c, gi) => {
+      const bw = Math.min(104, gw / 2 - 16), cx0 = x + gi * gw + gw / 2
+      const bars = [[cx0 - bw - 6, c.alone, c.estA, METHODS[0].color, name(METHODS[0]), ''], [cx0 + 6, c.handed, c.estB, '#2563EB', ZH ? '转交（0.6.0）' : 'Handed over', pct(c.handed, c.alone)]]
+      for (const [bx, v, est, fill, label, ch] of bars) {
+        const y1 = y(v), y0 = y(0)
+        out.push(`<path d="M${bx},${y0} V${y1 + 4} Q${bx},${y1} ${bx + 4},${y1} H${bx + bw - 4} Q${bx + bw},${y1} ${bx + bw},${y1 + 4} V${y0} Z" fill="${fill}"/>`,
+          `<text x="${bx + bw / 2}" y="${y1 - (ch ? 24 : 8)}" font-size="14" font-weight="600" fill="${C.FG}" text-anchor="middle">${est ? '≈' : ''}${v.toFixed(1)}%</text>`,
+          `<text x="${bx + bw / 2}" y="${y0 + 18}" font-size="12" fill="${C.FG}" text-anchor="middle">${esc(label)}</text>`)
+        if (ch) out.push(`<text x="${bx + bw / 2}" y="${y1 - 8}" font-size="12.5" font-weight="600" fill="${ch.startsWith('+') ? '#B42318' : '#067647'}" text-anchor="middle">${ch}</text>`)
+      }
+      out.push(`<text x="${cx0}" y="${y(0) + 44}" font-size="14" font-weight="600" fill="${C.FG}" text-anchor="middle">${esc(T[c.size])}</text>`)
+      if (c.sub) out.push(`<text x="${cx0}" y="${y(0) + 63}" font-size="12" fill="${C.MUTED}" text-anchor="middle">${esc(c.sub)}</text>`)
+    })
+    x += pw + GAP
+  }
+  let lx = 24
+  for (const it of [{ name: name(METHODS[0]), color: METHODS[0].color }, { name: ZH ? '转交（0.6.0）' : 'Handed over (0.6.0)', color: '#2563EB' }]) {
+    out.push(`<rect x="${lx}" y="${H - 38}" width="13" height="13" rx="2" fill="${it.color}"/>`, `<text x="${lx + 20}" y="${H - 27}" font-size="13" fill="${C.FG}">${esc(it.name)}</text>`)
+    lx += 40 + textW(it.name, 13.5)
+  }
+  out.push('</svg>')
+  const svg = path.join(OUT, `natural-quota-combined${ZH ? '.zh' : ''}.svg`)
   fs.writeFileSync(svg, out.join('\n') + '\n')
   spawnSync('rsvg-convert', ['-z', '2', '-o', svg.replace(/\.svg$/, '.png'), svg])
 }
