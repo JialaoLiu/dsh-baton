@@ -1,5 +1,6 @@
-// A new session without cwd starts in the folder the client's conversation works in:
-// Codex's thread cwd (from its rollout file) or, for other clients, the server's folder.
+// dsh_send: a new session without cwd starts in the folder the client's conversation works in
+// (Codex's thread cwd from its rollout file, or the server's folder), and a hand-over with
+// checks asks Harness for a sub-agent review table.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -73,4 +74,13 @@ test('Codex: no cwd means the thread cwd from its rollout, not the server folder
   const none = await sendFrom({ clientName: 'codex-mcp-client', cwd: codexHome, args: { message: 'hi' }, meta: { 'x-codex-turn-metadata': { thread_id: 'nope' } }, env: { CODEX_HOME: codexHome } })
   assert.equal(none.host.cwd, undefined)
   fs.rmSync(codexHome, { recursive: true, force: true })
+})
+
+test('a hand-over with checks asks for a sub-agent review table; a plain message is sent verbatim', async () => {
+  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
+  const handover = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'build it', checks: ['npm test'] } })
+  assert.match(handover.host.message, /^build it\n\n---\nWhen the work is done, start a read-only sub-agent/)
+  const plain = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'what changed?', session_id: 's1' } })
+  assert.equal(plain.host.message, 'what changed?')
+  fs.rmSync(project, { recursive: true, force: true })
 })

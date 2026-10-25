@@ -529,7 +529,9 @@ async function useHost() {
 
 // Said with a finished run's reply: review from the evidence dsh-baton produced, read code only
 // where it points, and send every fix back in one message.
-export const ENDED_HINT = 'evidence is produced by dsh-baton (files changed, checks it ran), not by the Harness reply: trust it over final_text. If a check failed, a requirement has no check, or a file the task needs is missing from evidence.changes, send all fixes back in one message to the same session, quoting the failing output; do not reproduce failures or write test scripts yourself. If every check passed, read code only for requirements no check covers.'
+export const REVIEW_REQUEST = '\n\n---\nWhen the work is done, start a read-only sub-agent to check it against every requirement above, then end your final reply with its table: requirement | met (yes / no / unclear) | evidence (file:line or test name). Fix anything marked no before replying.'
+
+export const ENDED_HINT = 'evidence is produced by dsh-baton (files changed, checks it ran), not by the Harness reply: trust it over final_text. If a check failed, a requirement has no check, or a file the task needs is missing from evidence.changes, send all fixes back in one message to the same session, quoting the failing output; do not reproduce failures or write test scripts yourself. If every check passed and final_text ends with a review table whose rows are all met, accept it without reading code; read code only for rows marked no or unclear.'
 
 // The asking model marks its favourite option in the label ("(Recommended)", "（推荐）").
 // Clients relaying the question tended to repeat that mark as their own advice, so the
@@ -626,7 +628,11 @@ export const api = {
     return (await useHost()) ? tag('host', await hostCall('read_session', a)) : tag('headless', readSession(a))
   },
   // checks stay here: dsh-baton runs them itself when the run ends (see evidence.mjs).
+  // A hand-over (a message with checks) also asks Harness to have a read-only sub-agent
+  // review the work against the spec and end with a table, so the client can decide from
+  // that table and the evidence instead of reading the code itself.
   async send({ checks, ...a }) {
+    if (Array.isArray(checks) && checks.length && typeof a.message === 'string') a = { ...a, message: `${a.message}${REVIEW_REQUEST}` }
     const st = (await useHost()) ? tag('host', await hostCall('send', a)) : tag('headless', await waitForSessionId(startRun(a)))
     evidence.prepare(config.batonHome, { run_id: st.run_id, cwd: await runFolder(a, st), checks })
     return st
