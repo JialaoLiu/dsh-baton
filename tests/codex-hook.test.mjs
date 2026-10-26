@@ -16,10 +16,11 @@ test('setup adds the hook once, replaces it, and removes only its own lines', ()
   const user = 'model = "x"\n\n[mcp_servers.a]\ncommand = "n"\n\n[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ntype = "command"\ncommand = "my-own-hook"\n'
   const once = hook.editCodexHook(user, hook.hookCommand('/r', '/n'))
   assert.equal(once.match(/codex-stop-hook/g).length, 2) // the marker comment and the command
-  assert.match(once, /command = "\\"\/n\\" \\"\/r\/src\/cli\.mjs\\" codex-stop-hook"\ntimeout = 86400\n$/)
+  assert.equal(hook.hookCommand('/r', '/n'), `"/n" "${path.join('/r', 'src', 'cli.mjs')}" codex-stop-hook`)
+  assert.ok(once.endsWith(`command = ${JSON.stringify(hook.hookCommand('/r', '/n'))}\ntimeout = 86400\n`))
   const twice = hook.editCodexHook(once, hook.hookCommand('/r2', '/n'))
   assert.equal(twice.match(/cli\.mjs/g).length, 1)
-  assert.match(twice, /\/r2\/src/)
+  assert.ok(twice.includes(JSON.stringify(hook.hookCommand('/r2', '/n'))))
   assert.equal(hook.editCodexHook(twice, null), user)
   // Found by its command too, when the marker line was lost.
   const noMark = once.replace(/^# dsh-baton.*\n/m, '')
