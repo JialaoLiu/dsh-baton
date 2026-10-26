@@ -31,10 +31,8 @@ test('the hook counts as active only once it has run since the config last chang
   const cfg = path.join(home, 'config.toml')
   fs.writeFileSync(cfg, hook.editCodexHook('', hook.hookCommand('/r', '/n')))
   assert.equal(hook.hookActive(cfg), false) // never ran: not trusted yet, perhaps
-  assert.equal(hook.hookUntrusted(cfg), true)
   await hook.runHook({ session_id: 't0' }, { shape: (s) => s, wait: async () => ({}) })
   assert.equal(hook.hookActive(cfg), true)
-  assert.equal(hook.hookUntrusted(cfg), false)
   const later = new Date(Date.now() + 5000)
   fs.utimesSync(cfg, later, later) // config edited after: the hook needs trusting again
   assert.equal(hook.hookActive(cfg), false)
@@ -107,6 +105,74 @@ test('Codex with the hook active is told to end its turn; the run is remembered 
   assert.match(sent.hint, /End your turn now/)
   assert.doesNotMatch(sent.hint, /yield_time_ms/)
   assert.equal(JSON.parse(fs.readFileSync(path.join(home, 'codex-hook', 'pending.json'), 'utf8'))['hrun-h'].thread, 'thread-9')
+  fs.rmSync(codexHome, { recursive: true, force: true })
+})
+
+test('trusted or not: Codex\'s trust record, and what the hook last ran as', async () => {
+  const { codexHookStatus, codexHookCommand } = await import('../src/register.mjs')
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-trust-'))
+  const env = { ...process.env, CODEX_HOME: codexHome, DSH_BATON_HOME: home }
+  const cfg = path.join(codexHome, 'config.toml')
+  const node = process.execPath
+  const cli = path.join(path.dirname(SERVER), 'cli.mjs')
+  const cmd = codexHookCommand(node, SERVER)
+  assert.deepEqual(codexHookStatus(env), { codex: true, installed: false, trusted: false })
+  const other = '[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ntype = "command"\ncommand = "mine"\n'
+  fs.writeFileSync(cfg, hook.editCodexHook(other, cmd))
+  assert.equal(codexHookStatus(env).trusted, false) // installed, never trusted
+  // Ours is the second Stop group: Codex keys its trust record by that place.
+  fs.appendFileSync(cfg, `\n[hooks.state."${cfg}:stop:0:0"]\ntrusted_hash = "sha256:a"\n`)
+  assert.equal(codexHookStatus(env).trusted, false)
+  fs.appendFileSync(cfg, `\n[hooks.state."${cfg}:stop:1:0"]\ntrusted_hash = "sha256:b"\n`)
+  fs.rmSync(path.join(home, 'codex-hook', 'alive'), { force: true })
+  assert.equal(codexHookStatus(env).trusted, true) // trusted, no turn ended since
+  await hook.runHook({ session_id: 'none' }, { shape: (s) => s, wait: async () => ({}), self: { node: fs.realpathSync(node), cli: fs.realpathSync(cli) } })
+  assert.equal(codexHookStatus(env).trusted, true) // and it ran as exactly this hook
+  // Rewritten since (another node): the old trust record no longer covers it.
+  fs.writeFileSync(cfg, fs.readFileSync(cfg, 'utf8').replace(JSON.stringify(cmd), JSON.stringify(codexHookCommand('/other/node', SERVER))))
+  assert.equal(codexHookStatus(env).trusted, false)
+  assert.deepEqual(codexHookStatus({ CODEX_HOME: path.join(codexHome, 'nope') }), { codex: false, installed: false, trusted: false })
+  fs.rmSync(codexHome, { recursive: true, force: true })
+})
+
+test('the trust note is given once per conversation', () => {
+  assert.equal(hook.noteOnce('c1'), true)
+  assert.equal(hook.noteOnce('c1'), false)
+  assert.equal(hook.noteOnce('c2'), true)
+  assert.equal(hook.noteOnce(null), false)
+})
+
+test('Codex with the hook not trusted yet: dsh_wait, and the user is told once per conversation', async () => {
+  const net = await import('node:net')
+  const { socketEndpoint } = await import('../host/lib/socket.js')
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-codex-'))
+  const cfg = path.join(codexHome, 'config.toml')
+  fs.writeFileSync(cfg, hook.editCodexHook('', hook.hookCommand('/r', '/n')))
+  const later = new Date(Date.now() + 60_000)
+  fs.utimesSync(cfg, later, later) // not run since: not active
+  const sock = path.join(home, 'u.sock')
+  let n = 0
+  const server = net.createServer((c) => c.on('data', (d) => {
+    const req = JSON.parse(String(d).split('\n')[0])
+    c.end(JSON.stringify({ id: req.id, result: { run_id: `hrun-u${++n}`, state: 'queued' } }) + '\n')
+  }))
+  await new Promise((r) => server.listen(socketEndpoint(sock), r))
+  const child = spawn(process.execPath, [SERVER], { env: { ...process.env, CODEX_HOME: codexHome, DSH_BATON_BACKEND: 'host', DSH_BATON_SOCKET: sock } })
+  let out = ''
+  child.stdout.on('data', (d) => { out += d })
+  const send = (id, threadId) => ({ id, method: 'tools/call', params: { name: 'dsh_send', arguments: { session_id: 's1', message: 'hi' }, _meta: { threadId } } })
+  for (const m of [
+    { id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: 'codex-mcp-client', version: '1' } } },
+    send(2, 'thread-u1'), send(3, 'thread-u1'), send(4, 'thread-u2'),
+  ]) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n')
+  await new Promise((resolve) => { const tick = setInterval(() => { if (out.includes('"id":4')) { clearInterval(tick); resolve() } }, 50) })
+  child.stdin.end(); server.close()
+  const replies = Object.fromEntries(out.split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((m) => m.id > 1).map((m) => [m.id, JSON.parse(m.result.content[0].text)]))
+  assert.match(replies[2].note_for_user, /Settings → Hooks/)
+  assert.match(replies[2].hint, /^First, start your reply to the user with note_for_user/)
+  assert.match(replies[2].hint, /dsh_wait/)
+  assert.equal(replies[3].note_for_user, undefined) // same conversation: once is enough
+  assert.ok(replies[4].note_for_user) // a new conversation is told again
   fs.rmSync(codexHome, { recursive: true, force: true })
 })
 

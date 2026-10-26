@@ -7,7 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import * as core from './core.mjs'
-import { codexConfigPath, stableNodePath, codexHookCommand, HOOK_TIMEOUT_S } from './register.mjs'
+import { codexConfigPath, stableNodePath, codexHookCommand, codexHookStatus, HOOK_TIMEOUT_S } from './register.mjs'
 
 export { editCodexHook, HOOK_TIMEOUT_S } from './register.mjs'
 
@@ -57,13 +57,26 @@ export function hookActive(configFile = codexConfigPath()) {
   }
 }
 
-// The hook is in Codex's config but has never run: most likely the user has not trusted it yet.
-export function hookUntrusted(configFile = codexConfigPath()) {
+// The hook is in Codex's config but the user has not trusted it (see codexHookStatus).
+export function hookUntrusted() {
   try {
-    return fs.readFileSync(configFile, 'utf8').includes('codex-stop-hook') && !fs.existsSync(aliveFile())
+    const st = codexHookStatus()
+    return st.installed && !st.trusted
   } catch {
     return false
   }
+}
+
+// Each Codex conversation is told about trusting the hook once.
+const notedFile = () => path.join(dir(), 'trust-noted.json')
+export function noteOnce(thread) {
+  if (!thread) return false
+  let seen = []
+  try { seen = JSON.parse(fs.readFileSync(notedFile(), 'utf8')) } catch { /* none yet */ }
+  if (seen.includes(thread)) return false
+  fs.mkdirSync(dir(), { recursive: true, mode: 0o700 })
+  fs.writeFileSync(notedFile(), JSON.stringify([...seen.slice(-199), thread]))
+  return true
 }
 
 // What the model is told when the run ends: the same result dsh_wait returns.
@@ -71,11 +84,17 @@ function reasonFor(runId, result) {
   return `dsh-baton: the Harness run ${runId} you handed over with dsh_send has ${result.needs_input ? 'stopped to ask a question' : `ended (${result.state})`}. This is its result, as dsh_wait would return it; act on it now (follow its hint):\n${JSON.stringify(result)}`
 }
 
+// The node and cli.mjs this hook process runs as (what Codex trusted).
+function ranAs() {
+  const real = (p) => { try { return fs.realpathSync(p) } catch { return p } }
+  return { node: real(process.execPath), cli: real(process.argv[1] ?? '') }
+}
+
 // One Stop-hook call. input is the JSON Codex writes to stdin; shape(st) turns a run's
 // state into what dsh_wait returns. Returns the JSON to print, or null to let the turn end.
-export async function runHook(input, { shape, wait = core.api.wait, now = Date.now, chunk_s = 10 } = {}) {
+export async function runHook(input, { shape, wait = core.api.wait, now = Date.now, chunk_s = 10, self = ranAs() } = {}) {
   fs.mkdirSync(dir(), { recursive: true, mode: 0o700 })
-  fs.writeFileSync(aliveFile(), String(now()))
+  fs.writeFileSync(aliveFile(), JSON.stringify({ at: now(), ...self }))
   const thread = input?.session_id
   if (!thread) return null
   const deadline = now() + (HOOK_TIMEOUT_S - 60) * 1000

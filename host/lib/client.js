@@ -54,6 +54,8 @@ window.__ModuleLoader__.load({
       notInstalled: '未安装',
       notRegistered: '未注册',
       and: '和',
+      hookTitle: 'Codex 还差一步',
+      hookText: '打开 Codex → Settings → Hooks → 信任 dsh-baton。信任后，Codex 等 DeepSeek 时不再消耗额度。',
     }
     const en = {
       sentFrom: 'Sent by {name} from another chat',
@@ -74,6 +76,8 @@ window.__ModuleLoader__.load({
       notInstalled: 'not installed',
       notRegistered: 'not registered',
       and: 'and',
+      hookTitle: 'One more step for Codex',
+      hookText: 'Open Codex → Settings → Hooks → trust dsh-baton. Once trusted, Codex no longer uses your quota while it waits for DeepSeek.',
     }
 
     // --- Plugins page ------------------------------------------------------------
@@ -94,7 +98,12 @@ window.__ModuleLoader__.load({
             if (res.ok) next = (await res.json()).registration
           } catch { /* not served yet */ }
           if (stopped) return
-          if (next && next.state !== 'pending') return setReg(next)
+          if (next && next.state !== 'pending') {
+            setReg(next)
+            // Waiting for the user to trust the Codex hook: look again, so the note goes once they do.
+            if (untrusted(next)) setTimeout(poll, 4000)
+            return
+          }
           if (++tries >= 30) return setReg({ state: 'unknown' })
           setTimeout(poll, 700)
         }
@@ -102,6 +111,30 @@ window.__ModuleLoader__.load({
         return () => { stopped = true }
       }, [])
       return reg
+    }
+
+    const untrusted = (reg) => Boolean(reg?.codexHook?.installed && !reg.codexHook.trusted)
+
+    // Codex runs dsh-baton's Stop hook only once the user trusts it in Codex; until then
+    // Codex spends model requests while it waits. Shown until they do, in Harness's accent.
+    function TrustNote({ reg, t }) {
+      if (!untrusted(reg)) return null
+      const accent = 'var(--dsw-alias-state-business-primary)'
+      return h('div', {
+        role: 'note', 'data-dsh-baton-trust': '',
+        style: {
+          display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 8, padding: '10px 12px', borderRadius: 8,
+          background: `color-mix(in srgb, ${accent} 7%, transparent)`,
+          border: `1px solid color-mix(in srgb, ${accent} 22%, transparent)`,
+          color: 'var(--dsw-alias-label-secondary)', fontSize: 13, lineHeight: '20px', textAlign: 'start',
+        },
+      },
+      h('svg', { width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, style: { flex: 'none', marginTop: 2, color: accent } },
+        h('path', { d: 'M8 1.75 2.75 3.9v3.6c0 3.1 2.2 5.6 5.25 6.75 3.05-1.15 5.25-3.65 5.25-6.75V3.9z', stroke: 'currentColor', strokeWidth: 1.3, strokeLinejoin: 'round' }),
+        h('path', { d: 'm5.6 8.1 1.7 1.7 3.2-3.4', stroke: 'currentColor', strokeWidth: 1.3, strokeLinecap: 'round', strokeLinejoin: 'round' })),
+      h('div', null,
+        h('div', { style: { color: 'var(--dsw-alias-label-primary)', fontWeight: 600 } }, t('hookTitle')),
+        h('div', null, t('hookText'))))
     }
 
     // What to tell the user: [title or null, text]. null while the host is still working.
@@ -122,16 +155,18 @@ window.__ModuleLoader__.load({
     // Shown once, right after "Enable now".
     function wrapActivation(t) {
       return function DshBatonActivation({ onDismiss }) {
-        const [title, text] = describe(useRegistration(), t)
+        const reg = useRegistration()
+        const [title, text] = describe(reg, t)
         if (ui?.Modal && ui?.Button) {
           return h(ui.Modal, {
             open: true, title: title ?? t('readyTitle'), closeLabel: t('ok'), onClose: onDismiss,
             footer: h(ui.Button, { variant: 'primary', 'data-modal-autofocus': true, onClick: onDismiss }, t('ok')),
-          }, h('p', null, text))
+          }, h('p', null, text), h(TrustNote, { reg, t }))
         }
         return h('div', { role: 'status', style: { margin: '12px 0', padding: 12, borderRadius: 8, border: '1px solid var(--dsw-alias-border-l3)', color: 'var(--dsw-alias-label-primary)' } },
           title ? h('strong', null, title) : null,
           h('p', { style: { margin: '6px 0' } }, text),
+          h(TrustNote, { reg, t }),
           h('button', { type: 'button', onClick: onDismiss }, t('ok')))
       }
     }
@@ -147,7 +182,8 @@ window.__ModuleLoader__.load({
         return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 4, color: 'var(--dsw-alias-label-secondary)' } },
           h('strong', { style: { color: 'var(--dsw-alias-label-primary)' } }, t('status')),
           rows.length ? h('span', null, rows.join(' · ')) : null,
-          h('span', null, text))
+          h('span', null, text),
+          h(TrustNote, { reg, t }))
       }
     }
 

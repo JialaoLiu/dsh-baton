@@ -5,7 +5,7 @@ import path from 'node:path'
 import * as core from './core.mjs'
 import { stableNodePath } from './setup.mjs'
 import { conversationFolder, within } from './folder.mjs'
-import { threadOf, remember, delivered, hookActive, hookUntrusted } from './codex-hook.mjs'
+import { threadOf, remember, delivered, hookActive, hookUntrusted, noteOnce } from './codex-hook.mjs'
 
 const SERVER = { name: 'dsh-baton', version: core.VERSION }
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
@@ -32,6 +32,9 @@ const codeModeYield = () => {
   const ms = (waitSeconds() + 20) * 1000
   return `Required when you call tools from a script cell ("Script running with cell ID …"): the script that calls dsh_wait must start with the line // @exec: {"yield_time_ms": ${ms}}, never a shorter value; if the cell still yields, resume it with wait and yield_time_ms ${ms} (or the largest value wait accepts), never a short value such as 30000 or 55000.`
 }
+// Said to the user (in their language) the first time a Codex conversation hands over
+// while dsh-baton's Stop hook is waiting to be trusted.
+const TRUST_NOTE = 'One step left: in Codex, open Settings → Hooks and trust dsh-baton. After that, Codex no longer uses your quota while it waits for DeepSeek Harness.'
 const NO_POLL = 'While waiting, make no other calls (no dsh_status, dsh_session_activity or dsh_read_session) and do not list or read the target folder to check progress.'
 const ARCHIVED = 'Sessions not in dsh_list_sessions are archived or gone: do not look for them on disk.'
 // A shell command that blocks until a run ends and prints its reply. Run in the
@@ -136,8 +139,10 @@ const TOOLS = [
           remember(thread, st.run_id)
           return { ...st, hint: `Run started. End your turn now: reply to the user in one short line (in their language) that the task is with DeepSeek Harness. Do not call dsh_wait, dsh_status or any other tool, and do not read the target folder. When the run ends or stops to ask something, dsh-baton continues this conversation by itself with the result (the same as dsh_wait returns). If the conversation is ever resumed without it, call dsh_wait with this run_id.` }
         }
-        const trust = hookUntrusted() ? ' Also tell the user once, in their language: in Codex Settings → Hooks, trust the dsh-baton hook, and Codex will wait for DeepSeek Harness without using model requests (no more dsh_wait).' : ''
-        return { ...st, hint: `Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${NO_POLL} ${codeModeYield()}${trust}` }
+        // Not trusted yet: the user is told once per conversation, until they trust it.
+        const note = thread && hookUntrusted() && noteOnce(thread) ? { note_for_user: TRUST_NOTE } : null
+        const relay = note ? 'First, start your reply to the user with note_for_user, in their language, on a line of its own. ' : ''
+        return { ...st, ...note, hint: `${relay}Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${NO_POLL} ${codeModeYield()}` }
       }
       return {
         ...st,

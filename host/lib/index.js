@@ -921,11 +921,15 @@ export function apply(ctx) {
   // entry that is already right is left untouched. The Plugins page reads the outcome from
   // GET /dsh-baton/status (lib/client.js). DSH_BATON_AUTO_REGISTER=0 turns it off.
   let registration = { state: 'pending' }
+  // Whether Codex's Stop hook is trusted yet: read on each status request, so the Plugins
+  // page notices the user trusting it in Codex.
+  let hookStatus = null
   if (setting('AUTO_REGISTER') !== '0') {
     setImmediate(guard('register', async () => {
       const root = serverRoot()
       if (!root) { registration = { state: 'done', ok: false, error: 'no-server', clients: [] }; return }
-      const { autoRegister, harnessRuntime } = await import(pathToFileURL(path.join(root, 'src', 'register.mjs')).href)
+      const { autoRegister, harnessRuntime, codexHookStatus } = await import(pathToFileURL(path.join(root, 'src', 'register.mjs')).href)
+      hookStatus = codexHookStatus ?? null
       // Inside the desktop app, its own binary can stand in for a missing Node.js.
       const fallback = process.versions.electron && harnessRuntime ? harnessRuntime(process.execPath) : null
       const result = autoRegister({ root, harnessDir: harnessDir(), fallback })
@@ -948,7 +952,9 @@ export function apply(ctx) {
         handler: (request, response) => {
           const { state, ok, error, version, runtime, clients = [] } = registration
           response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
-          response.end(JSON.stringify({ version: VERSION, registration: { state, ok, error, version, runtime, clients: clients.map(({ id, label, state }) => ({ id, label, state })) } }))
+          let codexHook = null
+          try { codexHook = hookStatus?.() ?? null } catch { /* config unreadable: say nothing */ }
+          response.end(JSON.stringify({ version: VERSION, registration: { state, ok, error, version, runtime, clients: clients.map(({ id, label, state }) => ({ id, label, state })), codexHook } }))
         },
       }), 'dsh-baton-host status route')
     })
