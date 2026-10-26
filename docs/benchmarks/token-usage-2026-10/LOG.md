@@ -138,6 +138,9 @@ With the check fixed, the hand-over costs about half of working alone on the med
 | Large task, Astra high, one run each | Lines | Time | GPT $ | DeepSeek $ | Total $ | 5-hour window | Check |
 |---|---|---|---|---|---|---|---|
 | Alone | 843 | 21 min | 4.37 | – | 4.37 | 43 points | 11/11 |
-| Handed over (0.6.0) | 5,300 | 49 min | 1.18 | 0.73 | 1.91 | 11 points | 11/11 |
+| Handed over v1 (0.6.0, client only forwarded) | 5,300 | 49 min | 1.18 | 0.73 | 1.91 | 11 points | 11/11 |
+| Handed over v2 (0.6.1, guidance + Stop hook) | pending | | | | | | |
 
 - The two builds are not the same size: the brief sets no size and each side chose its own. Per 1,000 lines the hand-over costs much less, but the plain comparison is per finished task: −73% GPT cost, −56% total, −74% of the window. Blind scoring with `natural/xl-rubric.md` still to do.
+- v1, as it happened: Codex sent one real `dsh_send` (about 1,100 characters), mostly the user's words reworded plus "verify it yourself, performance, README, no emoji". No modules or file ownership, no level-of-detail target, no parallel sessions, no review of screenshots afterwards. It waited with `dsh_wait` (11 wakes, about $0.49 / 5 points of the window).
+- v2 (prepared 2026-10-26): same brief `natural/xl-B-harness.md`, same model and effort, new Codex conversation, folder reset to `56163d4` (v1's files on `/Volumes/LJL4T/dshb-bench-evidence/xl-handover-astra-2026-10-26/`). Two changes from v1: `dsh_send`'s description now says, for a large task, to write a concrete spec first, split independent parts into parallel sessions, and review results and send specific fixes; and the Codex Stop hook is trusted, so Codex ends its turn after `dsh_send` and is woken once per run instead of every 270 s. Wake count and wait cost are read from the rollout separately, so the two effects can be told apart.
