@@ -5,7 +5,7 @@ import path from 'node:path'
 import * as core from './core.mjs'
 import { stableNodePath } from './setup.mjs'
 import { conversationFolder, within } from './folder.mjs'
-import { threadOf, remember, delivered, hookActive, hookUntrusted } from './codex-hook.mjs'
+import { threadOf, remember, delivered, hookActive, hookUntrusted, noteOnce } from './codex-hook.mjs'
 
 const SERVER = { name: 'dsh-baton', version: core.VERSION }
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
@@ -32,6 +32,9 @@ const codeModeYield = () => {
   const ms = (waitSeconds() + 20) * 1000
   return `Required when you call tools from a script cell ("Script running with cell ID …"): the script that calls dsh_wait must start with the line // @exec: {"yield_time_ms": ${ms}}, never a shorter value; if the cell still yields, resume it with wait and yield_time_ms ${ms} (or the largest value wait accepts), never a short value such as 30000 or 55000.`
 }
+// Said to the user (in their language) the first time a Codex conversation hands over
+// while dsh-baton's Stop hook is waiting to be trusted.
+const TRUST_NOTE = 'One step left: in Codex, open Settings → Hooks and trust dsh-baton. After that, Codex no longer uses your quota while it waits for DeepSeek Harness.'
 const NO_POLL = 'While waiting, make no other calls (no dsh_status, dsh_session_activity or dsh_read_session) and do not list or read the target folder to check progress.'
 const ARCHIVED = 'Sessions not in dsh_list_sessions are archived or gone: do not look for them on disk.'
 // A shell command that blocks until a run ends and prints its reply. Run in the
@@ -115,7 +118,7 @@ const TOOLS = [
   {
     name: 'dsh_send',
     annotations: annotations('Send message', hints(false, false, false)),
-    description: 'Send a message to a Harness session and return at once with a run_id; then wait for the reply with dsh_wait (or the wait_command it returns, where offered). session_id continues that session; without it a new session starts in cwd or workspace_id, or, with neither, in the folder this conversation works in (a new cwd is registered first). If the session is busy, mode followup queues the message and steer adds it to the running turn; leave mode out to follow the Harness setting. The message arrives verbatim as a user message (with checks, a short request for a sub-agent review table is appended): make it self-contained (Harness does not see this conversation), in the user\'s language. For a large task, first turn the request into a concrete spec (goal, modules and the files each owns, level of detail, acceptance criteria) instead of passing the user\'s words on; send independent parts to separate sessions in parallel, each owning its own files. When a run comes back, check its screenshots or test results and send back specific fixes for what falls short.',
+    description: 'Send a message to a Harness session and return at once with a run_id; then wait for the reply with dsh_wait (or the wait_command it returns, where offered). session_id continues that session; without it a new session starts in cwd or workspace_id, or, with neither, in the folder this conversation works in (a new cwd is registered first). If the session is busy, mode followup queues the message and steer adds it to the running turn; leave mode out to follow the Harness setting. The message arrives verbatim as a user message (with checks, a short request for a sub-agent review table is appended): make it self-contained (Harness does not see this conversation), in the user\'s language. For a large task, first turn the request into a concrete spec (goal, modules and the files each owns, level of detail, acceptance criteria) instead of passing the user\'s words on; send independent parts to separate sessions in parallel, each owning its own files. Review once all parallel parts are back: check their screenshots or test results together, then send back specific fixes for what falls short.',
     inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session; leave out to use the folder this conversation works in'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: "followup queues after the current turn; steer injects into a running turn. Omit to follow Harness's busy-send setting" }, checks: { type: 'array', items: { type: 'string' }, description: 'The project\'s own test commands, e.g. npm test (ask Harness in the message to write tests for each requirement). Do not write check scripts yourself. dsh-baton runs them in the folder when the run ends and returns exit codes and the last output lines as evidence.' } } },
     run: async (a, { meta } = {}) => {
       // A new session goes to this conversation's folder unless the call names another one;
@@ -134,10 +137,12 @@ const TOOLS = [
         const thread = threadOf(meta)
         if (thread && hookActive()) {
           remember(thread, st.run_id)
-          return { ...st, hint: `Run started. End your turn now: reply to the user in one short line (in their language) that the task is with DeepSeek Harness. Do not call dsh_wait, dsh_status or any other tool, and do not read the target folder. When the run ends or stops to ask something, dsh-baton continues this conversation by itself with the result (the same as dsh_wait returns). If the conversation is ever resumed without it, call dsh_wait with this run_id.` }
+          return { ...st, hint: `Run started. End your turn now: reply to the user in one short line (in their language) that the task is with DeepSeek Harness. Do not call dsh_wait, dsh_status or any other tool, and do not read the target folder. When all the runs you started end (or one stops to ask something or fails), dsh-baton continues this conversation by itself with their results together (as dsh_wait returns them), so you review them in one go. If the conversation is ever resumed without it, call dsh_wait with this run_id.` }
         }
-        const trust = hookUntrusted() ? ' Also tell the user once, in their language: in Codex Settings → Hooks, trust the dsh-baton hook, and Codex will wait for DeepSeek Harness without using model requests (no more dsh_wait).' : ''
-        return { ...st, hint: `Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${NO_POLL} ${codeModeYield()}${trust}` }
+        // Not trusted yet: the user is told once per conversation, until they trust it.
+        const note = thread && hookUntrusted() && noteOnce(thread) ? { note_for_user: TRUST_NOTE } : null
+        const relay = note ? 'First, start your reply to the user with note_for_user, in their language, on a line of its own. ' : ''
+        return { ...st, ...note, hint: `${relay}Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${NO_POLL} ${codeModeYield()}` }
       }
       return {
         ...st,

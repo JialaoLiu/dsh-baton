@@ -316,3 +316,35 @@ function addCodexHook(codex, env, fallback) {
     return 'failed'
   }
 }
+
+// Where the Stop hook notes each run (codex-hook.mjs): when, and the node and cli.mjs it
+// ran as, so a hook rewritten since can be told from the one Codex trusted.
+export const hookAliveFile = (env = process.env, home = os.homedir()) => path.join(batonHome(env, home), 'codex-hook', 'alive')
+
+// Whether Codex is set up with our Stop hook and the user has trusted it. Codex keeps its
+// trust next to the hooks, as [hooks.state."<config file>:stop:<group>:<hook>"] with the
+// hash of the hook it trusted. That hash is Codex's own, so a hook rewritten after it was
+// trusted is caught another way: Codex runs only trusted hooks, and each run notes what it
+// ran as. A trust record with no run noted yet (trusted, no turn ended since) counts.
+export function codexHookStatus(env = process.env, home = os.homedir()) {
+  const file = codexConfigPath(env, home)
+  if (!fs.existsSync(path.dirname(file))) return { codex: false, installed: false, trusted: false }
+  const lines = (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '').split(/\r?\n/)
+  const at = lines.findIndex((l) => /^command = .*codex-stop-hook/.test(l))
+  if (at < 0) return { codex: true, installed: false, trusted: false }
+  const before = lines.slice(0, at)
+  const group = before.filter((l) => l.trim() === '[[hooks.Stop]]').length - 1
+  const hook = before.slice(before.lastIndexOf('[[hooks.Stop]]')).filter((l) => l.trim() === '[[hooks.Stop.hooks]]').length - 1
+  const key = new RegExp(`^\\[hooks\\.state\\.".*:stop:${group}:${hook}"\\]`)
+  const s = lines.findIndex((l) => key.test(l))
+  const recorded = s >= 0 && lines.slice(s + 1).find((l) => /^\s*(\[|trusted_hash\s*=)/.test(l))?.trim().startsWith('trusted_hash')
+  if (!recorded) return { codex: true, installed: true, trusted: false }
+  let ran = null
+  try { ran = JSON.parse(fs.readFileSync(hookAliveFile(env, home), 'utf8')) } catch { /* not run yet, or noted before 0.6.1 */ }
+  if (!ran?.cli) return { codex: true, installed: true, trusted: true }
+  const real = (p) => { try { return fs.realpathSync(p) } catch { return p } }
+  let command = null
+  try { command = JSON.parse(lines[at].replace(/^command = /, '')) } catch { /* not ours to read */ }
+  const m = command?.match(/^"(.+?)" "(.+?)" codex-stop-hook$/)
+  return { codex: true, installed: true, trusted: !m || (real(m[1]) === ran.node && real(m[2]) === ran.cli) }
+}
