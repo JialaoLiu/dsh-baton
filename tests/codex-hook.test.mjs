@@ -72,6 +72,43 @@ test('a question is passed on once; if nobody answers, the turn ends instead of 
   assert.match(done.reason, /ended \(completed\)/)
 })
 
+test('runs handed over together wake Codex once, when the last one ends, with every result', async () => {
+  for (const id of ['b1', 'b2', 'b3']) hook.remember('tb', `hrun-${id}`)
+  const endsAt = { 'hrun-b1': 1, 'hrun-b2': 3, 'hrun-b3': 5 } // in rounds of waiting
+  const calls = {}
+  const wait = async ({ run_id }) => {
+    calls[run_id] = (calls[run_id] ?? 0) + 1
+    return calls[run_id] < endsAt[run_id] ? { run_id, timed_out: true, state: 'running' } : { run_id, state: 'completed', final_text: `done ${run_id}` }
+  }
+  const out = await hook.runHook({ session_id: 'tb' }, { shape: (s) => s, wait, chunk_s: 0 })
+  assert.equal(out.decision, 'block')
+  assert.match(out.reason, /3 Harness runs you handed over with dsh_send have come back/)
+  for (const id of ['b1', 'b2', 'b3']) assert.match(out.reason, new RegExp(`"final_text":"done hrun-${id}"`))
+  assert.doesNotMatch(out.reason, /Still running/)
+  assert.equal(calls['hrun-b1'], 1) // an ended run is not asked again while the others finish
+  // All three handed back: the next Stop lets the turn end.
+  assert.equal(await hook.runHook({ session_id: 'tb', stop_hook_active: true }, { shape: (s) => s, wait: async () => assert.fail('no wait') }), null)
+})
+
+test('a run that asks a question or fails wakes Codex at once; the rest keep waiting', async () => {
+  for (const id of ['q1', 'q2', 'q3']) hook.remember('tq', `hrun-${id}`)
+  const states = {
+    'hrun-q1': { state: 'completed', final_text: 'ok' },
+    'hrun-q2': { state: 'waiting', needs_input: 'answer', question: { count: 1, questions: [{ id: 'x', question: 'Red or blue?' }] } },
+    'hrun-q3': { timed_out: true, state: 'running' },
+  }
+  const wait = async ({ run_id }) => ({ run_id, ...states[run_id] })
+  const first = await hook.runHook({ session_id: 'tq' }, { shape: (s) => s, wait, chunk_s: 0 })
+  assert.match(first.reason, /2 Harness runs/)
+  assert.match(first.reason, /Red or blue\?/)
+  assert.match(first.reason, /Still running, not reviewed yet: hrun-q3/)
+  // The question is answered elsewhere; q3 fails next: that wakes it too, alone.
+  states['hrun-q3'] = { state: 'failed', error: 'boom' }
+  const second = await hook.runHook({ session_id: 'tq', stop_hook_active: true }, { shape: (s) => s, wait, chunk_s: 0 })
+  assert.match(second.reason, /hrun-q3 you handed over with dsh_send has ended \(failed\)/)
+  assert.doesNotMatch(second.reason, /hrun-q1/) // already handed back
+})
+
 test('a result the model already got with dsh_wait is not delivered again', async () => {
   hook.remember('t3', 'hrun-w')
   hook.delivered('hrun-w', { state: 'completed' })

@@ -80,9 +80,18 @@ export function noteOnce(thread) {
   return true
 }
 
-// What the model is told when the run ends: the same result dsh_wait returns.
-function reasonFor(runId, result) {
-  return `dsh-baton: the Harness run ${runId} you handed over with dsh_send has ${result.needs_input ? 'stopped to ask a question' : `ended (${result.state})`}. This is its result, as dsh_wait would return it; act on it now (follow its hint):\n${JSON.stringify(result)}`
+// What the model is told: each run's result as dsh_wait returns it, and which runs of the
+// same batch are still going (when one came back early to ask something or failed).
+function reasonFor(results, running) {
+  const one = results.length === 1 ? results[0] : null
+  const what = one
+    ? `the Harness run ${one.run_id} you handed over with dsh_send has ${one.needs_input ? 'stopped to ask a question' : `ended (${one.state})`}`
+    : `${results.length} Harness runs you handed over with dsh_send have come back`
+  const still = running.length
+    ? ` Still running, not reviewed yet: ${running.join(', ')}; dsh-baton brings them back when they end, so do not wait for them yourself: deal with what is here, then end your turn.`
+    : ''
+  const body = one ? JSON.stringify(one) : JSON.stringify(results)
+  return `dsh-baton: ${what}.${still} ${one ? 'This is its result' : 'These are their results'}, as dsh_wait would return ${one ? 'it' : 'them'}; act on ${one ? 'it' : 'them'} now (follow the hints):\n${body}`
 }
 
 // The node and cli.mjs this hook process runs as (what Codex trusted).
@@ -93,33 +102,45 @@ function ranAs() {
 
 // One Stop-hook call. input is the JSON Codex writes to stdin; shape(st) turns a run's
 // state into what dsh_wait returns. Returns the JSON to print, or null to let the turn end.
+//
+// The runs this conversation handed over wait as one batch: Codex is woken once, when the
+// last of them ends, with all their results, so it reviews the parallel parts together.
+// A run that stops to ask a question or fails wakes it at once (with whatever else has
+// ended by then); the rest keep waiting for the next Stop.
 export async function runHook(input, { shape, wait = core.api.wait, now = Date.now, chunk_s = 10, self = ranAs() } = {}) {
   fs.mkdirSync(dir(), { recursive: true, mode: 0o700 })
   fs.writeFileSync(aliveFile(), JSON.stringify({ at: now(), ...self }))
   const thread = input?.session_id
   if (!thread) return null
   const deadline = now() + (HOOK_TIMEOUT_S - 60) * 1000
+  const ended = new Map() // run_id -> state, held until the batch is handed back
   for (;;) {
     const mine = Object.entries(readPending()).filter(([, v]) => v.thread === thread)
-    if (!mine.length) return null
-    let open = 0
+    if (!mine.length && !ended.size) return null
+    const running = []
+    let urgent = false
     for (const [runId, entry] of mine) {
+      if (ended.has(runId)) continue
       let st
       try {
         st = await wait({ run_id: runId, timeout_s: chunk_s })
       } catch (e) {
         // Harness not answering (quit or restarting): keep waiting, it may come back.
         await new Promise((r) => setTimeout(r, chunk_s * 1000))
-        open++
+        running.push(runId)
         continue
       }
-      if (st.timed_out) { open++; continue }
-      // A question already passed on: the turn ends so the user (or the model) can answer.
+      if (st.timed_out) { running.push(runId); continue }
+      // A question already passed on: it waits for an answer, not for this hook.
       if (st.needs_input && entry.delivered === questionKey(st)) continue
-      delivered(runId, st)
-      return { decision: 'block', reason: reasonFor(runId, shape(st)) }
+      ended.set(runId, st)
+      if (st.needs_input || st.state !== 'completed') urgent = true
     }
-    if (!open) return null
+    if (ended.size && (urgent || !running.length)) {
+      for (const [runId, st] of ended) delivered(runId, st)
+      return { decision: 'block', reason: reasonFor([...ended].map(([run_id, st]) => ({ run_id, ...shape(st) })), running) }
+    }
+    if (!running.length) return null
     if (now() > deadline) return null
   }
 }
