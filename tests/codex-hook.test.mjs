@@ -27,18 +27,22 @@ test('setup adds the hook once, replaces it, and removes only its own lines', ()
   assert.equal(hook.editCodexHook(noMark, null), user)
 })
 
-test('the hook counts as active only once it has run since the config last changed', async () => {
-  const cfg = path.join(home, 'config.toml')
-  fs.writeFileSync(cfg, hook.editCodexHook('', hook.hookCommand('/r', '/n')))
-  assert.equal(hook.hookActive(cfg), false) // never ran: not trusted yet, perhaps
-  await hook.runHook({ session_id: 't0' }, { shape: (s) => s, wait: async () => ({}) })
-  assert.equal(hook.hookActive(cfg), true)
+test('the hook counts as active once trusted, whatever else Codex changes in its config', async () => {
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-active-'))
+  const env = { ...process.env, CODEX_HOME: codexHome }
+  const cfg = path.join(codexHome, 'config.toml')
+  fs.writeFileSync(cfg, hook.editCodexHook('localeOverride = "en-US"\n', hook.hookCommand('/r', '/n')))
+  assert.equal(hook.hookActive(env), false) // not trusted yet
+  fs.appendFileSync(cfg, `\n[hooks.state."${cfg}:stop:0:0"]\ntrusted_hash = "sha256:a"\n`)
+  assert.equal(hook.hookActive(env), true)
+  // Codex saves one of its own settings: the hook stays trusted (it once fell back to dsh_wait here).
+  fs.writeFileSync(cfg, fs.readFileSync(cfg, 'utf8').replace('en-US', 'zh-CN'))
   const later = new Date(Date.now() + 5000)
-  fs.utimesSync(cfg, later, later) // config edited after: the hook needs trusting again
-  assert.equal(hook.hookActive(cfg), false)
+  fs.utimesSync(cfg, later, later)
+  assert.equal(hook.hookActive(env), true)
   fs.writeFileSync(cfg, 'model = "x"\n')
-  await hook.runHook({ session_id: 't0' }, { shape: (s) => s, wait: async () => ({}) })
-  assert.equal(hook.hookActive(cfg), false) // not installed
+  assert.equal(hook.hookActive(env), false) // not installed
+  fs.rmSync(codexHome, { recursive: true, force: true })
 })
 
 test('one hook call: nothing pending ends the turn; a finished run comes back once', async () => {
@@ -84,8 +88,9 @@ test('Codex with the hook active is told to end its turn; the run is remembered 
   const net = await import('node:net')
   const { socketEndpoint } = await import('../host/lib/socket.js')
   const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-codex-'))
-  fs.writeFileSync(path.join(codexHome, 'config.toml'), hook.editCodexHook('', hook.hookCommand('/r', '/n')))
-  await hook.runHook({ session_id: 'warm' }, { shape: (s) => s, wait: async () => ({}) }) // the hook has fired
+  const trusted = path.join(codexHome, 'config.toml')
+  fs.writeFileSync(trusted, `${hook.editCodexHook('', hook.hookCommand('/r', '/n'))}\n[hooks.state."${trusted}:stop:0:0"]\ntrusted_hash = "sha256:a"\n`)
+  fs.rmSync(path.join(home, 'codex-hook', 'alive'), { force: true }) // trusted, not run as anything else
   const sock = path.join(home, 'h.sock')
   const server = net.createServer((c) => c.on('data', (d) => {
     const req = JSON.parse(String(d).split('\n')[0])

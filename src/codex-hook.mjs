@@ -46,12 +46,13 @@ export function delivered(runId, st) {
 
 const questionKey = (st) => `${st.needs_input}:${JSON.stringify(st.question?.questions?.map((q) => q.id ?? q.question) ?? st.waiting_on ?? null)}`
 
-// The hook is in Codex's config and has run since that config last changed: an edited
-// hook needs trusting again and does not run until then.
-export function hookActive(configFile = codexConfigPath()) {
+// The hook is in Codex's config and the user has trusted it (see codexHookStatus).
+// Not "has run since the config last changed": Codex rewrites its config for its own
+// settings (the app language, say), which says nothing about the hook.
+export function hookActive(env = process.env) {
   try {
-    if (!fs.readFileSync(configFile, 'utf8').includes('codex-stop-hook')) return false
-    return fs.statSync(aliveFile()).mtimeMs >= fs.statSync(configFile).mtimeMs
+    const st = codexHookStatus(env)
+    return st.installed && st.trusted
   } catch {
     return false
   }
