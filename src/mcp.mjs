@@ -5,7 +5,7 @@ import path from 'node:path'
 import * as core from './core.mjs'
 import { stableNodePath } from './setup.mjs'
 import { conversationFolder, within } from './folder.mjs'
-import { threadOf, remember, delivered, hookActive } from './codex-hook.mjs'
+import { threadOf, remember, delivered, hookActive, hookUntrusted } from './codex-hook.mjs'
 
 const SERVER = { name: 'dsh-baton', version: core.VERSION }
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
@@ -136,7 +136,8 @@ const TOOLS = [
           remember(thread, st.run_id)
           return { ...st, hint: `Run started. End your turn now: reply to the user in one short line (in their language) that the task is with DeepSeek Harness. Do not call dsh_wait, dsh_status or any other tool, and do not read the target folder. When the run ends or stops to ask something, dsh-baton continues this conversation by itself with the result (the same as dsh_wait returns). If the conversation is ever resumed without it, call dsh_wait with this run_id.` }
         }
-        return { ...st, hint: `Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${NO_POLL} ${codeModeYield()}` }
+        const trust = hookUntrusted() ? ' Also tell the user once, in their language: in Codex Settings → Hooks, trust the dsh-baton hook, and Codex will wait for DeepSeek Harness without using model requests (no more dsh_wait).' : ''
+        return { ...st, hint: `Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${NO_POLL} ${codeModeYield()}${trust}` }
       }
       return {
         ...st,

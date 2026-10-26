@@ -7,17 +7,15 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import * as core from './core.mjs'
-import { codexConfigPath, stableNodePath } from './register.mjs'
+import { codexConfigPath, stableNodePath, codexHookCommand, HOOK_TIMEOUT_S } from './register.mjs'
+
+export { editCodexHook, HOOK_TIMEOUT_S } from './register.mjs'
 
 const dir = () => path.join(core.config.batonHome, 'codex-hook')
 const pendingFile = () => path.join(dir(), 'pending.json')
 // Touched every time Codex runs the hook, so the server knows the hook is installed,
 // trusted and firing (an untrusted or edited hook never runs).
 const aliveFile = () => path.join(dir(), 'alive')
-
-const MARK = '# dsh-baton: wakes Codex when a Harness run ends (dsh-baton codex-stop-hook)'
-// How long one hook call may wait; Codex kills the hook after the timeout in its config.
-export const HOOK_TIMEOUT_S = 24 * 3600
 
 function readPending() {
   try { return JSON.parse(fs.readFileSync(pendingFile(), 'utf8')) } catch { return {} }
@@ -54,6 +52,15 @@ export function hookActive(configFile = codexConfigPath()) {
   try {
     if (!fs.readFileSync(configFile, 'utf8').includes('codex-stop-hook')) return false
     return fs.statSync(aliveFile()).mtimeMs >= fs.statSync(configFile).mtimeMs
+  } catch {
+    return false
+  }
+}
+
+// The hook is in Codex's config but has never run: most likely the user has not trusted it yet.
+export function hookUntrusted(configFile = codexConfigPath()) {
+  try {
+    return fs.readFileSync(configFile, 'utf8').includes('codex-stop-hook') && !fs.existsSync(aliveFile())
   } catch {
     return false
   }
@@ -97,26 +104,7 @@ export async function runHook(input, { shape, wait = core.api.wait, now = Date.n
   }
 }
 
-// The hook entry for Codex's config.toml, marked so setup can find and replace it.
+// The hook entry for Codex's config.toml (see register.mjs, which also writes it).
 export function hookCommand(root = core.ROOT, node = stableNodePath()) {
-  return `"${node}" "${path.join(root, 'src', 'cli.mjs')}" codex-stop-hook`
-}
-
-// Our block is the marker line and the fixed lines setup writes after it.
-const OWN_LINE = /^(\[\[hooks\.Stop\]\]|\[\[hooks\.Stop\.hooks\]\]|type = "command"|command = .*codex-stop-hook.*|timeout = \d+)$/
-
-export function editCodexHook(text, command) {
-  const lines = text.split(/\r?\n/)
-  const kept = []
-  for (let i = 0; i < lines.length; i++) {
-    // Found by the marker, or by its command when another edit dropped the marker line.
-    const ours = lines[i] === MARK || (lines[i] === '[[hooks.Stop]]' && lines.slice(i, i + 5).some((l) => /^command = .*codex-stop-hook/.test(l)))
-    if (!ours) { kept.push(lines[i]); continue }
-    if (kept.at(-1) === '') kept.pop() // the blank line setup put before the block
-    if (lines[i] !== MARK) i--
-    while (i + 1 < lines.length && OWN_LINE.test(lines[i + 1])) i++
-  }
-  let out = kept.join('\n').replace(/\s+$/, '')
-  if (command) out += `${out ? '\n\n' : ''}${MARK}\n[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ntype = "command"\ncommand = ${JSON.stringify(command)}\ntimeout = ${HOOK_TIMEOUT_S}`
-  return `${out}\n`
+  return codexHookCommand(node, path.join(root, 'src', 'server.mjs'))
 }

@@ -50,6 +50,8 @@ Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in) and Claude Code or Codex. N
 
 Switched on, the plugin registers dsh-baton for Claude Code and Codex, for every folder, and Harness says so.
 
+**Codex only, once:** open Codex **Settings → Hooks** and **Trust** the dsh-baton hook (from 0.6.1). It lets Codex end its turn after handing a task over and be woken when the run ends, so waiting uses no model requests. Until you trust it, Codex waits with `dsh_wait` as before, and the first hand-over reminds you.
+
 **2. Check:** in a **new** Claude Code or Codex conversation, ask it to call `dsh_list_workspaces`. It lists your Harness workspaces.
 
 That is all. If Harness says it could not register, run `npx -y dsh-baton-mcp setup` in a terminal (this needs Node.js ≥ 22.15); it does the same registration. Updating, removing and Windows details are [further down](#install-details).
@@ -66,7 +68,8 @@ That is all. If Harness says it could not register, run `npx -y dsh-baton-mcp se
 
 **How each client waits** (nothing to configure):
 - **Claude Code** waits for a run in the background (the `wait_command` that `dsh_send` returns) and is woken once, when the run ends.
-- **Codex** waits inside `dsh_wait`, up to 270 s per call, just under its 300 s tool timeout. An unfinished wait returns only the state, so Codex calls again without summarising. Codex gets no `wait_command`: its terminal cannot wake it, so it would poll.
+- **Codex** with the dsh-baton Stop hook trusted (from 0.6.1): after `dsh_send` it ends its turn; the hook waits for the run outside the model and, when the run ends or asks something, continues the same conversation with the result. One model request per run instead of one every 270 s.
+- **Codex** without the hook waits inside `dsh_wait`, up to 270 s per call, just under its 300 s tool timeout. An unfinished wait returns only the state, so Codex calls again without summarising. Codex gets no `wait_command`: its terminal cannot wake it, so it would poll.
 - Codex asks you to approve MCP tool calls: approve the `dsh-baton` tools. For unattended `codex exec` runs, add `--approve-for-me`.
 
 **How a hand-over is checked** (from 0.6.0)
@@ -195,6 +198,8 @@ When the plugin is unreachable, the MCP server falls back to Harness's `dsh head
 <summary>What the plugin does, updating, removing, upgrading from dsh-bridge, installing from source, Windows</summary>
 
 **What the plugin does when switched on.** It copies the MCP server to `~/.dsh-baton/app`, a folder that stays put, and writes the MCP entry into `~/.claude.json` and `~/.codex/config.toml` directly, keeping a `*.bak-dsh-baton` backup of each. It starts the server with your own Node.js ≥ 22.15 when it finds one on `PATH`; without one, with Harness's own runtime (the Harness app in Node mode, `ELECTRON_RUN_AS_NODE=1`), so nothing else has to be installed. Either way it works with only the desktop apps installed, when `claude` / `codex` are not on your `PATH`. It runs again on each Harness start: an entry that is already right, or a working one that starts another copy of dsh-baton, is left alone. In Harness, the source switches to the npm registry ("Official npm registry", 「npm 官方源」) by itself once you type the package name, and no restart is needed. To turn the registration off, set `DSH_BATON_AUTO_REGISTER=0` for Harness.
+
+**The Codex Stop hook.** With the Codex entry, the plugin adds one `[[hooks.Stop]]` block to `~/.codex/config.toml` (marked with a `# dsh-baton` comment) that runs `cli.mjs codex-stop-hook` beside the server, with the same Node.js. Codex runs a new hook only after you trust it in Settings → Hooks; dsh-baton does not trust it for you. The block is left as it is on later starts, so the trust holds; it is rewritten only if the Node.js or server path changes, and then Codex asks again. It is not added when the server runs on Harness's own runtime (there is no Node.js to name). `dsh-baton setup --codex-hook` adds it by hand, `setup --remove` takes it out, and `DSH_BATON_CODEX_HOOK=0` for Harness stops the plugin adding it.
 
 **Updates need no restart.** When a newer version lands in `~/.dsh-baton/app` (a plugin update, `setup`, or a copy by hand), conversations already open in Claude Code and Codex use it from their next `dsh_*` call: the server checks the folder before each call, starts the new version, and says once in that call's result that it was updated. A `dsh_wait` that is already running finishes on the old version first. If the new version cannot start, the old one keeps working and the result says why. A tool added in the new version shows up in Claude Code at once (the server tells the client its tool list changed); Codex keeps the tool list a conversation started with, so it does not show a new tool until the next conversation; from 0.5.9 on it can still use one at once through `dsh_call`, which the update note points to, and the tools it already has run the new code right away. This works from the version after 0.5.8 on; a server started from 0.5.8 or earlier needs one last restart (or `/mcp` reconnect) to pick it up.
 

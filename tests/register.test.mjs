@@ -183,3 +183,29 @@ test('versions compare numerically, a prerelease before its release', () => {
   assert.ok(compareVersions('0.5.0-next.0', '0.5.0') < 0)
   assert.equal(compareVersions(VERSION, VERSION), 0)
 })
+
+test('the Codex Stop hook goes in with the server, once, and only with a real node', () => {
+  const s = sandbox()
+  try {
+    const r = s.run()
+    assert.equal(r.codexHook, 'added')
+    const text = fs.readFileSync(s.codexFile, 'utf8')
+    const cli = path.join(s.app, 'src', 'cli.mjs')
+    assert.ok(text.includes(`command = ${JSON.stringify(`"${process.execPath}" "${cli}" codex-stop-hook`)}`))
+    // Codex adds its trust record; later starts leave the file alone.
+    fs.appendFileSync(s.codexFile, '\n[hooks.state."x:stop:0:0"]\ntrusted_hash = "sha256:1"\n')
+    const trusted = fs.readFileSync(s.codexFile, 'utf8')
+    assert.equal(s.run().codexHook, 'unchanged')
+    assert.equal(fs.readFileSync(s.codexFile, 'utf8'), trusted)
+  } finally { s.done() }
+  const off = sandbox()
+  try {
+    assert.equal(off.run({ env: { PATH: '', DSH_BATON_CODEX_HOOK: '0' } }).codexHook, 'off')
+    assert.doesNotMatch(fs.readFileSync(off.codexFile, 'utf8'), /codex-stop-hook/)
+  } finally { off.done() }
+  const harness = sandbox()
+  try {
+    // On Harness's own runtime there is no node to name in a hook command.
+    assert.equal(harness.run({ find: () => null, fallback: harnessRuntime(process.execPath) }).codexHook, 'skipped')
+  } finally { harness.done() }
+})

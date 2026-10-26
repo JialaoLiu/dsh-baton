@@ -30,8 +30,10 @@ test('the hook counts as active only once it has run since the config last chang
   const cfg = path.join(home, 'config.toml')
   fs.writeFileSync(cfg, hook.editCodexHook('', hook.hookCommand('/r', '/n')))
   assert.equal(hook.hookActive(cfg), false) // never ran: not trusted yet, perhaps
+  assert.equal(hook.hookUntrusted(cfg), true)
   await hook.runHook({ session_id: 't0' }, { shape: (s) => s, wait: async () => ({}) })
   assert.equal(hook.hookActive(cfg), true)
+  assert.equal(hook.hookUntrusted(cfg), false)
   const later = new Date(Date.now() + 5000)
   fs.utimesSync(cfg, later, later) // config edited after: the hook needs trusting again
   assert.equal(hook.hookActive(cfg), false)

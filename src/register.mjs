@@ -87,6 +87,36 @@ export function readCodexEntry(text) {
   return command ? { command, args, ...(Object.keys(env).length ? { env } : {}) } : null
 }
 
+// The Codex Stop hook that wakes Codex when a Harness run ends (src/codex-hook.mjs). Our
+// block is a marker line and the fixed lines written after it.
+const HOOK_MARK = '# dsh-baton: wakes Codex when a Harness run ends (dsh-baton codex-stop-hook)'
+// How long one hook call may wait; Codex kills the hook after the timeout in its config.
+export const HOOK_TIMEOUT_S = 24 * 3600
+const OWN_HOOK_LINE = /^(\[\[hooks\.Stop\]\]|\[\[hooks\.Stop\.hooks\]\]|type = "command"|command = .*codex-stop-hook.*|timeout = \d+)$/
+
+// The hook command for the server at `script`: cli.mjs beside it, run with the same node.
+export const codexHookCommand = (node, script) => `"${node}" "${path.join(path.dirname(script), 'cli.mjs')}" codex-stop-hook`
+
+// Add, replace (command given) or remove (null) the hook. An entry with this very command
+// is left where it is: Codex keys its trust by the hook's place and content, so moving or
+// rewriting it would ask the user to trust it again.
+export function editCodexHook(text, command) {
+  if (command && text.split(/\r?\n/).includes(`command = ${JSON.stringify(command)}`)) return text
+  const lines = text.split(/\r?\n/)
+  const kept = []
+  for (let i = 0; i < lines.length; i++) {
+    // Found by the marker, or by its command when another edit dropped the marker line.
+    const ours = lines[i] === HOOK_MARK || (lines[i] === '[[hooks.Stop]]' && lines.slice(i, i + 5).some((l) => /^command = .*codex-stop-hook/.test(l)))
+    if (!ours) { kept.push(lines[i]); continue }
+    if (kept.at(-1) === '') kept.pop() // the blank line put before the block
+    if (lines[i] !== HOOK_MARK) i--
+    while (i + 1 < lines.length && OWN_HOOK_LINE.test(lines[i + 1])) i++
+  }
+  let out = kept.join('\n').replace(/\s+$/, '')
+  if (command) out += `${out ? '\n\n' : ''}${HOOK_MARK}\n[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ntype = "command"\ncommand = ${JSON.stringify(command)}\ntimeout = ${HOOK_TIMEOUT_S}`
+  return out ? `${out}\n` : ''
+}
+
 // Write only when the content changes, keep one backup, and replace the file atomically.
 export function rewrite(file, edit) {
   const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
@@ -211,7 +241,7 @@ export const harnessRuntime = (exe) => ({ command: exe, env: { ELECTRON_RUN_AS_N
 //     with `fallback` (Harness's own runtime, see harnessRuntime).
 // Never throws: the result says what happened to each client.
 export function autoRegister({ root, home = os.homedir(), env = process.env, node = null, harnessDir = null, fallback = null, find = findNode, app = appDir(batonHome(env, home)) } = {}) {
-  const result = { ok: false, version: versionOf(root), clients: [], error: null, node: null, runtime: null }
+  const result = { ok: false, version: versionOf(root), clients: [], error: null, node: null, runtime: null, codexHook: null }
   try {
     let serverRoot = root
     if (!fs.existsSync(path.join(root, '.git')) && path.resolve(root) !== path.resolve(app)) {
@@ -254,6 +284,7 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
         result.clients.push({ id: c.id, label: c.label, state: 'failed', error: e.message })
       }
     }
+    result.codexHook = addCodexHook(list.find((c) => c.id === 'codex'), env, fallback)
     result.node = launch?.command ?? null
     result.runtime = !launch ? null : launch === fallback ? 'harness' : 'node'
     const present = result.clients.filter((c) => c.state !== 'not-installed')
@@ -264,4 +295,24 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
     result.error = e.message
   }
   return result
+}
+
+// The Codex Stop hook goes in with the server, so Codex waits for runs without model
+// requests (see codex-hook.mjs). It runs cli.mjs beside the server Codex is set up with,
+// with the same node. Codex runs a new hook only once the user trusts it (Settings →
+// Hooks); until then dsh-baton keeps to dsh_wait. Not added when the server runs on
+// Harness's own runtime or a bare command (no node to name), or with DSH_BATON_CODEX_HOOK=0.
+function addCodexHook(codex, env, fallback) {
+  try {
+    if (!codex?.present || env.DSH_BATON_CODEX_HOOK === '0') return 'off'
+    const e = readCodexEntry(fs.existsSync(codex.file) ? fs.readFileSync(codex.file, 'utf8') : '')
+    const script = e?.args?.[0]
+    const usable = e && /[\\/]/.test(e.command) && !e.env?.ELECTRON_RUN_AS_NODE &&
+      (!fallback || path.resolve(e.command) !== path.resolve(fallback.command)) &&
+      script && fs.existsSync(path.join(path.dirname(script), 'cli.mjs'))
+    if (!usable) return 'skipped'
+    return rewrite(codex.file, (t) => editCodexHook(t, codexHookCommand(e.command, script))) === 'updated' ? 'added' : 'unchanged'
+  } catch {
+    return 'failed'
+  }
 }

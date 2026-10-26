@@ -931,7 +931,7 @@ export function apply(ctx) {
       const result = autoRegister({ root, harnessDir: harnessDir(), fallback })
       registration = { state: 'done', ...result }
       const summary = result.clients.map((c) => `${c.label}: ${c.state}${c.error ? ` (${c.error})` : ''}`).join(', ')
-      ctx.logger?.[result.ok ? 'info' : 'error']?.(`dsh-baton-host MCP registration: ${summary || result.error}`)
+      ctx.logger?.[result.ok ? 'info' : 'error']?.(`dsh-baton-host MCP registration: ${summary || result.error}${result.codexHook ? `; Codex Stop hook: ${result.codexHook}` : ''}`)
     }))
   } else {
     registration = { state: 'off' }
