@@ -130,3 +130,14 @@ With the check fixed, the hand-over costs about half of working alone on the med
 ### 2026-10-26 17:42: large task, hand-over group (Codex desktop, GPT-6 Astra high, dsh-baton 0.6.0)
 - Prompt `natural/xl-B-harness.md` (xl.md plus "交给 DeepSeek Harness 去做。"), pasted by the user into a new chat in project dsh-baton-test, starting from commit 56163d4 (vendor only; the alone group's code is only on the drive).
 - Started 17:42:24, rollout 01a1770d-a0d5. dsh_send called within the first minute. 5-hour window 44% at start (same window as the alone group, resets 22:00).
+- Finished 18:31:44 (49 min; the Harness run itself 17:43:37–18:31:17). One Harness run, no rework; Codex called dsh_send 3 times and dsh_wait 13 times. Harness said its own checks passed 45/45.
+- Output: **5,300 lines** in 19 files (src 4,330 incl. a 958-line canvas texture library and 800-line store; index.html 44; README 163; tests/verify.mjs 341; tools 281; package.json 10), not counting vendor, shots/ or tests/report.json.
+- GPT (Astra) input 669,156 (624,128 cached), output 2,082: **$1.18** at list price. DeepSeek (deepseek-flash, 146 requests): 182,536 new input, 42,429,184 cached, 349,033 output: **$0.73** at peak price. Total **$1.91**. 5-hour window 44% → **55% (11 points)**.
+- Hidden check: **11/11 pass**. Evidence (code, rollout, Harness session, host run record, check result and screenshots, SHA256SUMS) in /Volumes/LJL4T/dshb-bench-evidence/xl-handover-astra-2026-10-26.
+
+| Large task, Astra high, one run each | Lines | Time | GPT $ | DeepSeek $ | Total $ | 5-hour window | Check |
+|---|---|---|---|---|---|---|---|
+| Alone | 843 | 21 min | 4.37 | – | 4.37 | 43 points | 11/11 |
+| Handed over (0.6.0) | 5,300 | 49 min | 1.18 | 0.73 | 1.91 | 11 points | 11/11 |
+
+- The two builds are not the same size: the brief sets no size and each side chose its own. Per 1,000 lines the hand-over costs much less, but the plain comparison is per finished task: −73% GPT cost, −56% total, −74% of the window. Blind scoring with `natural/xl-rubric.md` still to do.
