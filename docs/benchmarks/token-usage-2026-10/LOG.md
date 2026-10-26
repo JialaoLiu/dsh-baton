@@ -115,3 +115,10 @@ With the check fixed, the hand-over costs about half of working alone on the med
 - Harness quit, its workspace list backed up (~/.dsh/storages/workspace.json.bak-dshb-*), 81 test workspaces removed (all /private/tmp/dshb-bench/* and /private/tmp/dsh-baton-mac-test), their sessions moved to the Trash; Harness restarted with 12 workspaces.
 - Mac Harness plugin updated: dsh-baton-host 0.5.9 → 0.6.0 (exact version), setup reports "Harness plugin: running (0.6.0)".
 - Claude Code test transcripts (54 folders), Codex CLI test rollouts (61) and /private/tmp/dshb-bench moved to ~/.Trash/dshb-bench-cleanup-20261026, each checked present in the backup first. The Trash is left for the user to empty.
+
+### 2026-10-26 17:05: large task (natural/xl.md), Codex desktop, GPT-6 Astra high
+- Request: `natural/xl.md`, a plain-language brief for a rainy-night street-corner diorama in three.js (vendor/three r184 given). Same brief, hidden check (`checks/natural-xl.mjs`) and blind scoring sheet (`natural/xl-rubric.md`) for both groups; the hand-over group only adds the hand-over line.
+- The brief sets no size. How big each build gets is up to the model, so results are not described as "night-street scale"; the report gives each group's final line count.
+- Check validated: the night-street build passes 11/11, an empty page fails.
+- Alone group: Codex desktop, project dsh-baton-test (/Users/jarvislao/Desktop/StudyFile/Coding/dsh-baton-test), started 17:05:34, rollout 01a176eb-e735. dsh-baton MCP off in ~/.codex/config.toml for this group (backup config.toml.bak-xl-20261026). 5-hour window 0% at start, resets 22:00.
+- At 17:23: 760 lines (index.html, main.js, style.css), window 32%, still running.
