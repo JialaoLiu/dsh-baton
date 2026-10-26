@@ -1,0 +1,19 @@
+thread 01a1775f-9ab7-71c3-9fa6-d75d38f883ae /Users/jarvislao/.codex/sessions/2026/10/26/rollout-2026-10-26T19-11-56-01a1775f-9ab7-71c3-9fa6-d75d38f883ae.jsonl
+[    0.3] ===== PHASE stophookinterrupt
+[    0.3] fake job pid 19814 started (60 s)
+[    0.3] turn/start: This is a tool-behaviour test. Follow exactly, take no other actions. A backgrou
+[    0.3] turn id 01a1775f-9b3e-7011-94bd-3d48d646a004
+[    0.3] evt warning {"threadId": "01a1775f-9ab7-71c3-9fa6-d75d38f883ae", "message": "`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation."}
+[    0.4] evt turn/started {"threadId": "01a1775f-9ab7-71c3-9fa6-d75d38f883ae", "turn": {"id": "01a1775f-9b3e-7011-94bd-3d48d646a004", "rootTurnId": "01a1775f-9b3e-7011-94bd-3d48d646a004", "items": [], "itemsView": "notLoaded", "status": "inProgre
+[    1.7] evt warning {"threadId": "01a1775f-9ab7-71c3-9fa6-d75d38f883ae", "message": "Exceeded skills context budget. All skill descriptions were removed and 23 additional skills were not included in the model-visible skills list."}
+[    1.7] evt item/started {"item": {"type": "userMessage", "id": "01a1775f-a0a4-7e12-9664-2018685872dd", "clientId": null, "content": [{"type": "text", "text": "This is a tool-behaviour test. Follow exactly, take no other actions. A background jo
+[    1.7] evt item/completed {"item": {"type": "userMessage", "id": "01a1775f-a0a4-7e12-9664-2018685872dd", "clientId": null, "content": [{"type": "text", "text": "This is a tool-behaviour test. Follow exactly, take no other actions. A background jo
+[    3.2] evt item/started {"item": {"type": "agentMessage", "id": "msg_0ee13d8b796309cf016adf1257b374819181ef28f3e9bda5bd", "text": "", "phase": "final_answer", "memoryCitation": null, "delivery": null, "questions": null}, "threadId": "01a1775f-9
+[    3.3] evt item/completed {"item": {"type": "agentMessage", "id": "msg_0ee13d8b796309cf016adf1257b374819181ef28f3e9bda5bd", "text": "waiting", "phase": "final_answer", "memoryCitation": null, "delivery": null, "questions": null}, "threadId": "01a
+[    3.3] evt thread/tokenUsage/updated {"threadId": "01a1775f-9ab7-71c3-9fa6-d75d38f883ae", "turnId": "01a1775f-9b3e-7011-94bd-3d48d646a004", "tokenUsage": {"total": {"totalTokens": 22377, "inputTokens": 22372, "cachedInputTokens": 12544, "cacheWriteInputToke
+[   25.3] sending turn/interrupt during Stop-hook wait
+[   25.4] turn/interrupt response {"id": 4, "result": {}}
+[   25.4] evt turn/completed {"threadId": "01a1775f-9ab7-71c3-9fa6-d75d38f883ae", "turn": {"id": "01a1775f-9b3e-7011-94bd-3d48d646a004", "rootTurnId": "01a1775f-9b3e-7011-94bd-3d48d646a004", "items": [], "itemsView": "notLoaded", "status": "interrup
+[   25.4] turn completed
+[   85.4] no new turn within 60 s after interrupt
+[   85.4] done; shutting down app-server

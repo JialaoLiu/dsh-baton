@@ -5,6 +5,7 @@ import path from 'node:path'
 import * as core from './core.mjs'
 import { stableNodePath } from './setup.mjs'
 import { conversationFolder, within } from './folder.mjs'
+import { threadOf, remember, delivered, hookActive } from './codex-hook.mjs'
 
 const SERVER = { name: 'dsh-baton', version: core.VERSION }
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
@@ -33,13 +34,6 @@ const codeModeYield = () => {
 }
 const NO_POLL = 'While waiting, make no other calls (no dsh_status, dsh_session_activity or dsh_read_session) and do not list or read the target folder to check progress.'
 const ARCHIVED = 'Sessions not in dsh_list_sessions are archived or gone: do not look for them on disk.'
-// What to do when a run stops to ask a person (dsh_wait, wait_command and the instructions say it).
-const ASKED = 'If the user told you to decide such questions yourself, choose by your own judgment of the question and the task, call dsh_answer with reason (one sentence on why), then tell the user what you chose and why. Otherwise relay the questions to the user and start with your own advice, on a line of its own: "My recommendation: <option>, because <reason>", the reason drawn from your own judgment of the question and the task (harness_suggested only shows what the asking model would pick; it is never a reason by itself, and your pick may differ). Then list the options, wait for the user\'s decision and submit it with dsh_answer. Never answer on the user\'s behalf without that permission.'
-const DECIDED_HINT = 'Required in your reply: you chose an answer for the user during this run, so start your reply by telling the user, in their language, what you chose and why (decided_for_user: answers and reason), then give the result. Passing on only final_text is not enough.'
-const NEEDS_INPUT_HINT = (st) => st.question
-  ? `The run stopped to ask the user ${st.question.count} question(s) (in question). Unless the user let you decide, show the user relay, written in the user's language, with its first line filled in with your own pick and reason (not the asker's pick and not its option description repeated), then ask which they want. ${ASKED} After answering, wait for the run again.`
-  : 'The run waits for something only a person can do in the Harness UI (an approval, for example). Tell the user, then wait for the run again.'
-
 // A shell command that blocks until a run ends and prints its reply. Run in the
 // background by a client that wakes the model when the command exits (Claude Code),
 // it waits without spending any turns. Plain "<node>" "<cli>" wait <id> form: it runs
@@ -49,17 +43,6 @@ const quote = (p) => `"${p}"`
 const nodeMode = process.versions.electron ? 'ELECTRON_RUN_AS_NODE=1 ' : ''
 const waitCommand = (runId) =>
   /^[\w.-]+$/.test(runId ?? '') ? `${nodeMode}${quote(stableNodePath())} ${quote(path.join(core.ROOT, 'src', 'cli.mjs'))} wait ${runId}` : undefined
-
-// The result of a run that ended, kept short: the client already knows what it sent, and a
-// completed run's event log is only the work behind final_text (dsh_status still has it).
-// A run that did not complete keeps its last events, to show where it stopped.
-function ended({ recent_events, message_preview, backend, ...st }) {
-  const out = { ...st, ...(st.state !== 'completed' && recent_events?.length ? { recent_events: recent_events.slice(-5) } : {}) }
-  // decided_for_user first, so a client that skims to final_text still meets it.
-  return st.decided_for_user
-    ? { hint: `${DECIDED_HINT} ${core.ENDED_HINT}`, decided_for_user: st.decided_for_user, ...out }
-    : { ...out, hint: core.ENDED_HINT }
-}
 
 // Wait in short chunks, reporting progress between them (clients that support it can
 // show it or reset their timer). An unfinished wait returns only the state, not the run's
@@ -72,8 +55,7 @@ async function waitInChunks({ run_id }, progress) {
     const left = Math.ceil((deadline - Date.now()) / 1000)
     const t0 = Date.now()
     const st = await core.api.wait({ run_id, timeout_s: Math.max(1, Math.min(WAIT_CHUNK_S, left)) })
-    if (st.needs_input) return { ...st, ...(st.question ? { relay: core.relayText(st.question) } : {}), hint: NEEDS_INPUT_HINT(st) }
-    if (!st.timed_out) return ended(st)
+    if (st.needs_input || !st.timed_out) return core.waitResult(st)
     // Never spin: a chunk that came back early still takes a moment before the next one.
     if (Date.now() - t0 < 500) await new Promise((r) => setTimeout(r, 500))
     if (Date.now() >= deadline) {
@@ -146,7 +128,16 @@ const TOOLS = [
       const st = { ...(await core.api.send({ ...args, sender: core.senderOf(core.setting('SENDER') || clientName) })), ...folder }
       // Codex has no wake-on-exit for shell commands: offered wait_command, it runs it in a
       // terminal and polls that, so it gets dsh_wait only.
-      if (isCodex()) return { ...st, hint: `Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${NO_POLL} ${codeModeYield()}` }
+      if (isCodex()) {
+        // With dsh-baton's Stop hook installed and firing, the model ends its turn and the
+        // hook brings the result back into this conversation: no model requests while waiting.
+        const thread = threadOf(meta)
+        if (thread && hookActive()) {
+          remember(thread, st.run_id)
+          return { ...st, hint: `Run started. End your turn now: reply to the user in one short line (in their language) that the task is with DeepSeek Harness. Do not call dsh_wait, dsh_status or any other tool, and do not read the target folder. When the run ends or stops to ask something, dsh-baton continues this conversation by itself with the result (the same as dsh_wait returns). If the conversation is ever resumed without it, call dsh_wait with this run_id.` }
+        }
+        return { ...st, hint: `Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${NO_POLL} ${codeModeYield()}` }
+      }
       return {
         ...st,
         wait_command: waitCommand(st.run_id),
@@ -166,7 +157,12 @@ const TOOLS = [
     annotations: annotations('Wait for run'),
     description: () => `Wait for a run sent with dsh_send to end and return its state and final reply.${isCodex() ? '' : ' Prefer the background wait_command from dsh_send if your client wakes you when a background command exits: it costs no turns.'} It also returns at once when the run stops to ask a person: needs_input answer (question and relay; reply with dsh_answer) or harness-ui (an approval only a person can give in Harness). Each call waits up to ${waitSeconds()} s; if it returns timed_out: true, call dsh_wait again with the same run_id, without a progress note.${isCodex() ? ` ${NO_POLL} ${codeModeYield()}` : ''}`,
     inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send') } },
-    run: (a, { progress }) => waitInChunks(a, progress),
+    run: async (a, { progress }) => {
+      const result = await waitInChunks(a, progress)
+      // Got here, the result must not come again through the Codex Stop hook.
+      if (!result.timed_out) delivered(a.run_id, result)
+      return result
+    },
   },
   {
     name: 'dsh_answer',
@@ -289,7 +285,7 @@ async function handle(req) {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: {} },
         serverInfo: SERVER,
-        instructions: `Hands tasks to a local DeepSeek Harness and passes the results back. To hand over a task, call dsh_send {message, checks} directly (no need to list anything first; the new session starts in the folder this conversation works in, or pass cwd for another folder): message is the full, explicit spec (ask for tests that cover each requirement), checks are the project's own test commands such as npm test; do not write check scripts yourself. To continue a session, dsh_send {session_id, message}. Then wait for the reply: ${isCodex() ? 'call dsh_wait with the run_id until it returns the final state (not dsh_status)' : 'run the wait_command it returns as a background shell command if your client wakes you when one exits, otherwise call dsh_wait'}. A run that stops to ask the user something ends the wait with needs_input and the questions; answer with dsh_answer. ${ASKED} ${ARCHIVED} If a note says dsh-baton was updated and names a tool you do not have, call it through dsh_call {name, arguments}.`,
+        instructions: `Hands tasks to a local DeepSeek Harness and passes the results back. To hand over a task, call dsh_send {message, checks} directly (no need to list anything first; the new session starts in the folder this conversation works in, or pass cwd for another folder): message is the full, explicit spec (ask for tests that cover each requirement), checks are the project's own test commands such as npm test; do not write check scripts yourself. To continue a session, dsh_send {session_id, message}. Then wait for the reply: ${isCodex() ? 'call dsh_wait with the run_id until it returns the final state (not dsh_status)' : 'run the wait_command it returns as a background shell command if your client wakes you when one exits, otherwise call dsh_wait'}. A run that stops to ask the user something ends the wait with needs_input and the questions; answer with dsh_answer. ${core.ASKED} ${ARCHIVED} If a note says dsh-baton was updated and names a tool you do not have, call it through dsh_call {name, arguments}.`,
       }
     }
     case 'ping':

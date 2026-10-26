@@ -155,7 +155,8 @@ async function sendAs(clientName) {
   }))
   await new Promise((r) => server.listen(socketEndpoint(sock), r))
   const { DSH_BATON_SENDER, ...env } = process.env
-  const child = spawn(process.execPath, [SERVER], { env: { ...env, DSH_BATON_BACKEND: 'host', DSH_BATON_SOCKET: sock } })
+  // CODEX_HOME in the temp folder: no Codex Stop hook there, whatever this machine has.
+  const child = spawn(process.execPath, [SERVER], { env: { ...env, CODEX_HOME: dir, DSH_BATON_BACKEND: 'host', DSH_BATON_SOCKET: sock } })
   let out = ''
   child.stdout.on('data', (d) => { out += d })
   for (const m of [

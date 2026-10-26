@@ -4,10 +4,13 @@
 import path from 'node:path'
 import * as core from './core.mjs'
 import { setup } from './setup.mjs'
+import { runHook } from './codex-hook.mjs'
 
 const USAGE = `Usage: dsh-baton <command> [args]
 
-  setup [--remove]                                        register the MCP server for Claude Code and Codex (user-wide)
+  setup [--remove] [--codex-hook]                         register the MCP server for Claude Code and Codex (user-wide);
+                                                          --codex-hook also installs the Codex Stop hook that wakes Codex when a run ends
+  codex-stop-hook                                         the Codex Stop hook itself (Codex runs it; reads its JSON on stdin)
   workspaces                                              list Harness sidebar workspaces (host plugin)
   new-workspace <dir> [--title <t>]                       register (and create) a folder as a workspace
   sessions [--cwd <dir>] [--query <text>] [--limit <n>]   list saved sessions
@@ -45,7 +48,15 @@ async function main() {
   const { flags, rest } = parse(argv)
   switch (cmd) {
     case 'setup':
-      return console.log(await setup({ remove: argv.includes('--remove') }))
+      return console.log(await setup({ remove: argv.includes('--remove'), codexHook: argv.includes('--codex-hook') }))
+    case 'codex-stop-hook': {
+      // Never fail the user's turn: on any error the hook prints nothing and the turn ends.
+      let input = null
+      try { input = JSON.parse(await readStdin()) } catch { return }
+      const out = await runHook(input, { shape: core.waitResult }).catch(() => null)
+      if (out) console.log(JSON.stringify(out))
+      return
+    }
     case '_run':
       return core.executeRun(rest[0])
     case 'workspaces':

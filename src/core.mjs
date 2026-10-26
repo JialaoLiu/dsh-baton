@@ -540,6 +540,30 @@ export const REVIEW_REQUEST = '\n\n---\nWhen the work is done, start a read-only
 
 export const ENDED_HINT = 'evidence is produced by dsh-baton (files changed, checks it ran), not by the Harness reply: trust it over final_text. If a check failed, a requirement has no check, or a file the task needs is missing from evidence.changes, send all fixes back in one message to the same session, quoting the failing output; do not reproduce failures or write test scripts yourself. If every check passed and final_text ends with a review table whose rows are all met, accept it without reading code; read code only for rows marked no or unclear.'
 
+// What to do when a run stops to ask a person (dsh_wait, wait_command and the instructions say it).
+export const ASKED = 'If the user told you to decide such questions yourself, choose by your own judgment of the question and the task, call dsh_answer with reason (one sentence on why), then tell the user what you chose and why. Otherwise relay the questions to the user and start with your own advice, on a line of its own: "My recommendation: <option>, because <reason>", the reason drawn from your own judgment of the question and the task (harness_suggested only shows what the asking model would pick; it is never a reason by itself, and your pick may differ). Then list the options, wait for the user\'s decision and submit it with dsh_answer. Never answer on the user\'s behalf without that permission.'
+export const DECIDED_HINT = 'Required in your reply: you chose an answer for the user during this run, so start your reply by telling the user, in their language, what you chose and why (decided_for_user: answers and reason), then give the result. Passing on only final_text is not enough.'
+const NEEDS_INPUT_HINT = (st) => st.question
+  ? `The run stopped to ask the user ${st.question.count} question(s) (in question). Unless the user let you decide, show the user relay, written in the user's language, with its first line filled in with your own pick and reason (not the asker's pick and not its option description repeated), then ask which they want. ${ASKED} After answering, wait for the run again.`
+  : 'The run waits for something only a person can do in the Harness UI (an approval, for example). Tell the user, then wait for the run again.'
+
+// The result of a run that ended, kept short: the client already knows what it sent, and a
+// completed run's event log is only the work behind final_text (dsh_status still has it).
+// A run that did not complete keeps its last events, to show where it stopped.
+function ended({ recent_events, message_preview, backend, ...st }) {
+  const out = { ...st, ...(st.state !== 'completed' && recent_events?.length ? { recent_events: recent_events.slice(-5) } : {}) }
+  // decided_for_user first, so a client that skims to final_text still meets it.
+  return st.decided_for_user
+    ? { hint: `${DECIDED_HINT} ${ENDED_HINT}`, decided_for_user: st.decided_for_user, ...out }
+    : { ...out, hint: ENDED_HINT }
+}
+
+
+// What dsh_wait returns for a run that ended or stopped to ask (the Codex Stop hook returns the same).
+export const waitResult = (st) => (st.needs_input
+  ? { ...st, ...(st.question ? { relay: relayText(st.question) } : {}), hint: NEEDS_INPUT_HINT(st) }
+  : ended(st))
+
 // The asking model marks its favourite option in the label ("(Recommended)", "（推荐）").
 // Clients relaying the question tended to repeat that mark as their own advice, so the
 // label is cleaned and the mark moves to harness_suggested: what the asker suggests, kept

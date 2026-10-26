@@ -1,0 +1,18 @@
+/Users/jarvislao/.codex/sessions/2026/10/26/rollout-2026-10-26T18-59-54-01a17754-96a9-7ac3-9046-ae491935e1d6.jsonl
+08:29:55.554 EVT  task_started {"type": "task_started", "turn_attribution": {"turn_id": "01a17754-99ad-7a10-9185-4f7df0e5a6b4", "turn_trigger": "exec", "parent_turn_id": null, "initiating_age
+08:29:56.456 EVT  thread_settings_applied {"type": "thread_settings_applied", "thread_id": "01a17754-96a9-7ac3-9046-ae491935e1d6", "thread_settings": {"model": "gpt-6-luna", "model_provider_id": "openai
+08:29:56.461 MSG  user This is a tool-behaviour test. Follow exactly, no other actions. | 1. Run exactly this script with your exec tool (keep the first pragma line): | // @exec: {"yield_time_ms": 3600000} | const a = await tools
+08:29:56.462 EVT  item_completed {"type": "item_completed", "thread_id": "01a17754-96a9-7ac3-9046-ae491935e1d6", "turn_id": "01a17754-99ad-7a10-9185-4f7df0e5a6b4", "item": {"type": "UserMessage
+08:29:59.788 EVT  item_completed {"type": "item_completed", "thread_id": "01a17754-96a9-7ac3-9046-ae491935e1d6", "turn_id": "01a17754-99ad-7a10-9185-4f7df0e5a6b4", "item": {"type": "AgentMessag
+08:29:59.791 MSG  assistant I’ll run the exact script and follow its wait instructions, then report each tool call with its reported wall time.
+08:30:00.346 CALL exec // @exec: {"yield_time_ms": 3600000}
+const a = await tools.exec_command({cmd: "sleep 330; echo DONE", yield_time_ms: 1000});
+const t0 = Date.now();
+const b = await tools.write_stdin({session_id: a.ses
+08:35:30.433 EVT  item_completed {"type": "item_completed", "thread_id": "01a17754-96a9-7ac3-9046-ae491935e1d6", "turn_id": "01a17754-99ad-7a10-9185-4f7df0e5a6b4", "item": {"type": "CommandExec
+08:35:30.436 OUT  [{"type": "input_text", "text": "Script completed\nWall time 330.0 seconds\nOutput:\n"}, {"type": "input_text", "text": "{\"waited_s\":328.876,\"b\":{\"chunk_id\":\"fa7e43\",\"wall_time_seconds\":328.868929166,\"exit_code\":0,\"original_token_count\":2,\"output\":\"DONE\\n\"}}"}]
+08:35:30.437 TOKENS req#1 in=22066 cached=12544 out=138 reason=0 primary_used%=56.0
+08:35:32.620 EVT  item_completed {"type": "item_completed", "thread_id": "01a17754-96a9-7ac3-9046-ae491935e1d6", "turn_id": "01a17754-99ad-7a10-9185-4f7df0e5a6b4", "item": {"type": "AgentMessag
+08:35:32.622 MSG  assistant functions.exec — wall time 330.0 seconds
+08:35:32.648 TOKENS req#2 in=22272 cached=12544 out=14 reason=0 primary_used%=56.0
+08:35:32.655 EVT  task_complete {"type": "task_complete", "root_turn_id": "01a17754-99ad-7a10-9185-4f7df0e5a6b4", "turn_id": "01a17754-99ad-7a10-9185-4f7df0e5a6b4", "last_agent_message": "func

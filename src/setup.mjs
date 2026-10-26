@@ -6,6 +6,7 @@ import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { ROOT, VERSION, config, hostAvailable, hostVersionSeen as versionOfHost, versionWarning } from './core.mjs'
 import { appDir, installApp, rewrite, stableNodePath, claudeConfigPath, codexConfigPath, editClaudeConfig, editCodexConfig } from './register.mjs'
+import { editCodexHook, hookCommand } from './codex-hook.mjs'
 
 export { appDir, installApp, stableNodePath, claudeConfigPath, codexConfigPath, editClaudeConfig, editCodexConfig }
 
@@ -102,7 +103,7 @@ export function sameVersionAt(dir, version = VERSION) {
   }
 }
 
-export async function setup({ remove = false } = {}) {
+export async function setup({ remove = false, codexHook = false } = {}) {
   // The same version is already in place (the Harness plugin copied it, say): leave it.
   const copy = !remove && inNpxCache() && !sameVersionAt(appDir())
   const root = !remove && inNpxCache() ? (copy ? installApp(ROOT) : appDir()) : ROOT
@@ -126,6 +127,18 @@ export async function setup({ remove = false } = {}) {
   register('Claude Code', claudeFile, fs.existsSync(claudeFile) || fs.existsSync(path.join(os.homedir(), '.claude')), editClaudeConfig)
   const codexFile = codexConfigPath()
   register('Codex', codexFile, fs.existsSync(path.dirname(codexFile)), editCodexConfig)
+  // The Codex Stop hook (opt-in): wakes Codex when a run ends instead of dsh_wait every few
+  // minutes. Codex runs a new or changed hook only after the user trusts it in its hooks screen.
+  if ((codexHook || remove) && fs.existsSync(path.dirname(codexFile))) {
+    try {
+      const result = rewrite(codexFile, (t) => editCodexHook(t, remove ? null : hookCommand(root)))
+      if (remove) { if (result !== 'unchanged') lines.push(`- Codex Stop hook: removed from ${codexFile}`) }
+      else lines.push(`- Codex Stop hook: ${result === 'unchanged' ? 'already in' : 'added to'} ${codexFile}. Trust it once in Codex (Settings → Hooks), or it does not run.`)
+    } catch (e) {
+      lines.push(`- Codex Stop hook: FAILED to edit ${codexFile}: ${e.message}`)
+      process.exitCode = 1
+    }
+  }
 
   if (remove) {
     const plugins = installedPlugins()
