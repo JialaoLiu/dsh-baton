@@ -103,9 +103,21 @@ test('Codex with the hook active is told to end its turn; the run is remembered 
   for (const m of [
     { id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: 'codex-mcp-client', version: '1' } } },
     { id: 2, method: 'tools/call', params: { name: 'dsh_send', arguments: { session_id: 's1', message: 'hi' }, _meta: { threadId: 'thread-9' } } },
-  ]) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n')
-  await new Promise((resolve) => { const tick = setInterval(() => { if (out.includes('"id":2')) { clearInterval(tick); resolve() } }, 50) })
+    // In the turn the hook woke, after Codex saved one of its own settings: rework steered
+    // into a running session still ends the turn (0.6.1 fell back to dsh_wait here).
+    { id: 3, method: 'tools/call', params: { name: 'dsh_send', arguments: { session_id: 's2', message: 'fix the rain', mode: 'steer' }, _meta: { threadId: 'thread-9' } } },
+  ]) {
+    if (m.id === 3) {
+      fs.writeFileSync(trusted, `localeOverride = "zh-CN"\n${fs.readFileSync(trusted, 'utf8')}`)
+      const later = new Date(Date.now() + 5000)
+      fs.utimesSync(trusted, later, later)
+    }
+    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n')
+  }
+  await new Promise((resolve) => { const tick = setInterval(() => { if (out.includes('"id":3')) { clearInterval(tick); resolve() } }, 50) })
   child.stdin.end(); server.close()
+  const steered = JSON.parse(out.split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((m) => m.id === 3).result.content[0].text)
+  assert.match(steered.hint, /End your turn now/)
   const sent = JSON.parse(out.split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((m) => m.id === 2).result.content[0].text)
   assert.match(sent.hint, /End your turn now/)
   assert.doesNotMatch(sent.hint, /yield_time_ms/)
