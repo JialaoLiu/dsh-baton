@@ -80,6 +80,16 @@ test('an npx run is detected, and installApp copies the package to a stable fold
   assert.ok(fs.existsSync(path.join(to, 'src', 'server.mjs')))
   assert.ok(fs.existsSync(path.join(to, 'host', 'lib', 'client.js')))
   assert.ok(!fs.existsSync(path.join(to, 'src', 'dropped.mjs')))
+  // A packed source dates every file 1985-10-26; the copy's package.json is dated now,
+  // so a running server sees a same-version update.
+  const packed = path.join(dir, 'packed')
+  fs.mkdirSync(path.join(packed, 'src'), { recursive: true })
+  fs.writeFileSync(path.join(packed, 'package.json'), '{"version":"0.0.1"}')
+  const old = new Date('1985-10-26T08:15:00Z')
+  fs.utimesSync(path.join(packed, 'package.json'), old, old)
+  const before = Date.now() - 2000
+  installApp(packed, to)
+  assert.ok(fs.statSync(path.join(to, 'package.json')).mtimeMs >= before)
   fs.rmSync(dir, { recursive: true, force: true })
 })
 

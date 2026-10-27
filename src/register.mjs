@@ -226,6 +226,11 @@ export function installApp(from, to = appDir()) {
     fs.rmSync(path.join(to, part), { recursive: true, force: true })
     fs.cpSync(src, path.join(to, part), { recursive: true })
   }
+  // A running server reloads when package.json's version or time changes (server.mjs).
+  // Copies can keep the source's time (Windows does; npm packs all files as 1985-10-26),
+  // so a same-version copy would go unnoticed: date it now, after everything else is in.
+  const pkg = path.join(to, 'package.json')
+  if (fs.existsSync(pkg)) { const t = new Date(); fs.utimesSync(pkg, t, t) }
   return to
 }
 
