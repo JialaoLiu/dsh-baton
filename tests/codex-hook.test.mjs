@@ -222,10 +222,13 @@ test('Codex with the hook not trusted yet: dsh_wait, and the user is told once p
   await new Promise((resolve) => { const tick = setInterval(() => { if (out.includes('"id":4')) { clearInterval(tick); resolve() } }, 50) })
   child.stdin.end(); server.close()
   const replies = Object.fromEntries(out.split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((m) => m.id > 1).map((m) => [m.id, JSON.parse(m.result.content[0].text)]))
-  assert.match(replies[2].note_for_user, /Settings → Hooks/)
-  assert.match(replies[2].hint, /^First, start your reply to the user with note_for_user/)
-  assert.match(replies[2].hint, /dsh_wait/)
-  assert.equal(replies[3].note_for_user, undefined) // same conversation: once is enough
+  // Calls 2 and 3 come from one conversation and run at the same time, so either may be
+  // the one that carries the note: exactly one does.
+  const told = [replies[2], replies[3]].filter((r) => r.note_for_user)
+  assert.equal(told.length, 1) // same conversation: once is enough
+  assert.match(told[0].note_for_user, /Settings → Hooks/)
+  assert.match(told[0].hint, /^First, start your reply to the user with note_for_user/)
+  for (const r of [replies[2], replies[3]]) assert.match(r.hint, /dsh_wait/)
   assert.ok(replies[4].note_for_user) // a new conversation is told again
   fs.rmSync(codexHome, { recursive: true, force: true })
 })
