@@ -15,3 +15,15 @@ What to check in the rollout and `~/.dsh-baton/codex-hook/`:
 2. One wake only, after the last of the three runs ends (story.md takes longest), carrying all three results; hello.txt finishing first does not wake Codex.
 3. In that woken turn the rework `dsh_send` (to the existing story session) gets "End your turn now", and the turn ends.
 4. A second wake when the rework ends; then the summary.
+
+## Result (2026-10-27, GPT-6 Luna · Medium, main at 6bdd3b9): all four pass
+
+| Time (UTC) | What |
+|---|---|
+| 01:23:04 | three `dsh_send` in one cell; reply "End your turn now"; turn ends after one short reply (01:23:07) |
+| 01:23:16 / 01:24:39 / 01:25:46 | the three runs end (hello.txt first, story.md last); no request in between |
+| 01:25:46 | one wake: "3 Harness runs you handed over with dsh_send have come back", all three results |
+| 01:25:54 | rework `dsh_send` to the story session in the woken turn; reply "End your turn now"; turn ends (01:25:56) |
+| 01:27:23 | second wake with the rework's result; summary; task_complete 01:27:29 |
+
+No `dsh_wait` call at all. 9 model requests: 385,960 input (334,464 cached), 1,537 output.
