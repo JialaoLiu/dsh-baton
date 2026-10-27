@@ -189,6 +189,60 @@ test('trusted or not: Codex\'s trust record, and what the hook last ran as', asy
   fs.rmSync(codexHome, { recursive: true, force: true })
 })
 
+test('Windows: Codex writes the trust key (and may write the command) in single quotes', async () => {
+  const { codexHookStatus } = await import('../src/register.mjs')
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-win-'))
+  const env = { ...process.env, CODEX_HOME: codexHome, DSH_BATON_HOME: home }
+  const cfg = path.join(codexHome, 'config.toml')
+  const cmd = '"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\u\\app\\src\\cli.mjs" codex-stop-hook'
+  const written = hook.editCodexHook('', cmd)
+  fs.writeFileSync(cfg, written)
+  assert.equal(codexHookStatus(env).trusted, false)
+  fs.appendFileSync(cfg, "\n[hooks.state.'C:\\Users\\u\\.codex\\config.toml:stop:0:0']\ntrusted_hash = \"sha256:a\"\n")
+  fs.rmSync(path.join(home, 'codex-hook', 'alive'), { force: true })
+  assert.equal(codexHookStatus(env).trusted, true)
+  // The same command as a literal string is still ours: left in place, trust kept.
+  const literal = fs.readFileSync(cfg, 'utf8').replace(JSON.stringify(cmd), `'${cmd}'`)
+  assert.ok(literal.includes(`command = '${cmd}'`))
+  assert.equal(hook.editCodexHook(literal, cmd), literal)
+  fs.writeFileSync(cfg, literal)
+  assert.equal(codexHookStatus(env).trusted, true)
+  // A quote that does not close the same way is not a key.
+  fs.writeFileSync(cfg, written + "\n[hooks.state.'x:stop:0:0\"]\ntrusted_hash = \"sha256:a\"\n")
+  assert.equal(codexHookStatus(env).trusted, false)
+  fs.rmSync(codexHome, { recursive: true, force: true })
+})
+
+test('hook stdin: a BOM is dropped; input that does not parse is kept for diagnosis', () => {
+  const bad = path.join(home, 'codex-hook', 'last-bad-stdin')
+  fs.rmSync(bad, { force: true })
+  assert.deepEqual(hook.parseHookInput('\uFEFF{"session_id":"t"}'), { session_id: 't' })
+  assert.equal(fs.existsSync(bad), false)
+  assert.equal(hook.parseHookInput('not json ' + 'x'.repeat(5000)), null)
+  const kept = fs.readFileSync(bad)
+  assert.equal(kept.length, 4096)
+  assert.ok(kept.toString().startsWith('not json'))
+  if (process.platform !== 'win32') assert.equal(fs.statSync(bad).mode & 0o777, 0o600)
+  assert.equal(hook.parseHookInput(''), null)
+})
+
+test('the hook command reads UTF-8 with a BOM and UTF-16 stdin, and notes that it ran', async () => {
+  const cli = path.join(path.dirname(SERVER), 'cli.mjs')
+  const alive = path.join(home, 'codex-hook', 'alive')
+  const json = '{"session_id":"no-runs-here","hook_event_name":"Stop"}'
+  for (const input of [Buffer.from('\uFEFF' + json), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(json, 'utf16le')])]) {
+    fs.rmSync(alive, { force: true })
+    const child = spawn(process.execPath, [cli, 'codex-stop-hook'], { env: { ...process.env, DSH_BATON_HOME: home } })
+    let out = ''
+    child.stdout.on('data', (d) => { out += d })
+    child.stdin.end(input)
+    const code = await new Promise((r) => child.on('exit', r))
+    assert.equal(code, 0)
+    assert.equal(out, '') // no runs for this conversation: the turn just ends
+    assert.ok(fs.existsSync(alive))
+  }
+})
+
 test('the trust note is given once per conversation', () => {
   assert.equal(hook.noteOnce('c1'), true)
   assert.equal(hook.noteOnce('c1'), false)

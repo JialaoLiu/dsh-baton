@@ -94,6 +94,19 @@ const HOOK_MARK = '# dsh-baton: wakes Codex when a Harness run ends (dsh-baton c
 export const HOOK_TIMEOUT_S = 24 * 3600
 const OWN_HOOK_LINE = /^(\[\[hooks\.Stop\]\]|\[\[hooks\.Stop\.hooks\]\]|type = "command"|command = .*codex-stop-hook.*|timeout = \d+)$/
 
+// A TOML string as written: basic ("..." with escapes, which JSON reads) or literal ('...',
+// what Codex itself writes when the text holds backslashes, as Windows paths do).
+function readTomlString(v) {
+  const t = v.trim()
+  if (/^'[^']*'$/.test(t)) return t.slice(1, -1)
+  try { return JSON.parse(t) } catch { return null }
+}
+
+// The same file? Windows paths ignore case and take either slash.
+const samePath = (a, b) => process.platform === 'win32'
+  ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase()
+  : a === b
+
 // The hook command for the server at `script`: cli.mjs beside it, run with the same node.
 export const codexHookCommand = (node, script) => `"${node}" "${path.join(path.dirname(script), 'cli.mjs')}" codex-stop-hook`
 
@@ -101,7 +114,7 @@ export const codexHookCommand = (node, script) => `"${node}" "${path.join(path.d
 // is left where it is: Codex keys its trust by the hook's place and content, so moving or
 // rewriting it would ask the user to trust it again.
 export function editCodexHook(text, command) {
-  if (command && text.split(/\r?\n/).includes(`command = ${JSON.stringify(command)}`)) return text
+  if (command && text.split(/\r?\n/).some((l) => /^command = /.test(l) && readTomlString(l.replace(/^command = /, '')) === command)) return text
   const lines = text.split(/\r?\n/)
   const kept = []
   for (let i = 0; i < lines.length; i++) {
@@ -322,7 +335,8 @@ function addCodexHook(codex, env, fallback) {
 export const hookAliveFile = (env = process.env, home = os.homedir()) => path.join(batonHome(env, home), 'codex-hook', 'alive')
 
 // Whether Codex is set up with our Stop hook and the user has trusted it. Codex keeps its
-// trust next to the hooks, as [hooks.state."<config file>:stop:<group>:<hook>"] with the
+// trust next to the hooks, as [hooks.state."<config file>:stop:<group>:<hook>"] (or with
+// the key in single quotes, as on Windows where the path has backslashes) with the
 // hash of the hook it trusted. That hash is Codex's own, so a hook rewritten after it was
 // trusted is caught another way: Codex runs only trusted hooks, and each run notes what it
 // ran as. A trust record with no run noted yet (trusted, no turn ended since) counts.
@@ -335,7 +349,7 @@ export function codexHookStatus(env = process.env, home = os.homedir()) {
   const before = lines.slice(0, at)
   const group = before.filter((l) => l.trim() === '[[hooks.Stop]]').length - 1
   const hook = before.slice(before.lastIndexOf('[[hooks.Stop]]')).filter((l) => l.trim() === '[[hooks.Stop.hooks]]').length - 1
-  const key = new RegExp(`^\\[hooks\\.state\\.".*:stop:${group}:${hook}"\\]`)
+  const key = new RegExp(`^\\[hooks\\.state\\.(["']).*:stop:${group}:${hook}\\1\\]`)
   const s = lines.findIndex((l) => key.test(l))
   const recorded = s >= 0 && lines.slice(s + 1).find((l) => /^\s*(\[|trusted_hash\s*=)/.test(l))?.trim().startsWith('trusted_hash')
   if (!recorded) return { codex: true, installed: true, trusted: false }
@@ -343,8 +357,7 @@ export function codexHookStatus(env = process.env, home = os.homedir()) {
   try { ran = JSON.parse(fs.readFileSync(hookAliveFile(env, home), 'utf8')) } catch { /* not run yet, or noted before 0.6.1 */ }
   if (!ran?.cli) return { codex: true, installed: true, trusted: true }
   const real = (p) => { try { return fs.realpathSync(p) } catch { return p } }
-  let command = null
-  try { command = JSON.parse(lines[at].replace(/^command = /, '')) } catch { /* not ours to read */ }
+  const command = readTomlString(lines[at].replace(/^command = /, ''))
   const m = command?.match(/^"(.+?)" "(.+?)" codex-stop-hook$/)
-  return { codex: true, installed: true, trusted: !m || (real(m[1]) === ran.node && real(m[2]) === ran.cli) }
+  return { codex: true, installed: true, trusted: !m || (samePath(real(m[1]), ran.node) && samePath(real(m[2]), ran.cli)) }
 }

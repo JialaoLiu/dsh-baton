@@ -4,7 +4,7 @@
 import path from 'node:path'
 import * as core from './core.mjs'
 import { setup } from './setup.mjs'
-import { runHook } from './codex-hook.mjs'
+import { runHook, parseHookInput } from './codex-hook.mjs'
 
 const USAGE = `Usage: dsh-baton <command> [args]
 
@@ -40,7 +40,9 @@ const print = (v) => console.log(JSON.stringify(v, null, 2))
 async function readStdin() {
   const chunks = []
   for await (const c of process.stdin) chunks.push(c)
-  return Buffer.concat(chunks).toString()
+  const buf = Buffer.concat(chunks)
+  // UTF-16 with its BOM (FF FE), as some Windows pipes write it; otherwise UTF-8.
+  return buf[0] === 0xff && buf[1] === 0xfe ? buf.subarray(2).toString('utf16le') : buf.toString()
 }
 
 async function main() {
@@ -51,8 +53,8 @@ async function main() {
       return console.log(await setup({ remove: argv.includes('--remove'), codexHook: argv.includes('--codex-hook') }))
     case 'codex-stop-hook': {
       // Never fail the user's turn: on any error the hook prints nothing and the turn ends.
-      let input = null
-      try { input = JSON.parse(await readStdin()) } catch { return }
+      const input = parseHookInput(await readStdin().catch(() => ''))
+      if (!input) return
       const out = await runHook(input, { shape: core.waitResult }).catch(() => null)
       if (out) console.log(JSON.stringify(out))
       return

@@ -94,6 +94,21 @@ function reasonFor(results, running) {
   return `dsh-baton: ${what}.${still} ${one ? 'This is its result' : 'These are their results'}, as dsh_wait would return ${one ? 'it' : 'them'}; act on ${one ? 'it' : 'them'} now (follow the hints):\n${body}`
 }
 
+// The JSON Codex writes to the hook's stdin, or null. A leading BOM is dropped (seen on
+// Windows). Input that does not parse is kept (its first 4 KB) in last-bad-stdin, so a
+// hook that ran and gave up can be told from one Codex never ran.
+export function parseHookInput(raw) {
+  const text = String(raw ?? '').replace(/^\uFEFF/, '')
+  try { return JSON.parse(text) } catch { /* kept below */ }
+  try {
+    fs.mkdirSync(dir(), { recursive: true, mode: 0o700 })
+    const file = path.join(dir(), 'last-bad-stdin')
+    fs.writeFileSync(file, Buffer.from(text).subarray(0, 4096), { mode: 0o600 })
+    fs.chmodSync(file, 0o600)
+  } catch { /* nowhere to keep it */ }
+  return null
+}
+
 // The node and cli.mjs this hook process runs as (what Codex trusted).
 function ranAs() {
   const real = (p) => { try { return fs.realpathSync(p) } catch { return p } }
