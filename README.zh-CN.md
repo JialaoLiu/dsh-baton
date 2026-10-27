@@ -89,7 +89,7 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 **适合谁**：大多数人用 Claude 或 ChatGPT 走的是订阅套餐（Plus、Pro、Max 5x 之类），而 DeepSeek 是充值后按用量扣费，所以每次转交都是套餐之外多花的钱。如果你的套餐额度本来就够用，就不用折腾这套流程，省一点是一点。如果你像我一样，经常跑又长又杂、要反复修改的大任务，老是撞上额度上限，那花一点 DeepSeek 的钱，就能让你已经付费的套餐多干很多活。
 
 <p align="center">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-combined.zh.svg" width="100%" alt="每个任务的花费，自己做与用 0.6.0 转交：Claude Code（Opus 5.5）和 Codex（GPT-6.1 Sol、GPT-6 Astra），各用自己的刻度">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-combined.zh.svg" width="100%" alt="每个任务的花费，自己做与转交（0.6.0；Astra 大号任务为 0.6.1）：Claude Code（Opus 5.5）和 Codex（GPT-6.1 Sol、GPT-6 Astra），各用自己的刻度">
 </p>
 
 每个任务的花费，按标价计，DeepSeek V4.1 Flash 1017 按高峰价：
