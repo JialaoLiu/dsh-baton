@@ -1,7 +1,7 @@
 // The Codex Stop hook: config editing, when the server trusts it, and what one hook call returns.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -14,14 +14,20 @@ const SERVER = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'sr
 
 test('setup adds the hook once, replaces it, and removes only its own lines', () => {
   const user = 'model = "x"\n\n[mcp_servers.a]\ncommand = "n"\n\n[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ntype = "command"\ncommand = "my-own-hook"\n'
-  const once = hook.editCodexHook(user, hook.hookCommand('/r', '/n'))
+  const posix = { platform: 'linux' }
+  const once = hook.editCodexHook(user, hook.hookCommand('/r', '/n', posix))
   assert.equal(once.match(/codex-stop-hook/g).length, 2) // the marker comment and the command
-  assert.equal(hook.hookCommand('/r', '/n'), `"/n" "${path.join('/r', 'src', 'cli.mjs')}" codex-stop-hook`)
-  assert.ok(once.endsWith(`command = ${JSON.stringify(hook.hookCommand('/r', '/n'))}\ntimeout = 86400\n`))
-  const twice = hook.editCodexHook(once, hook.hookCommand('/r2', '/n'))
+  assert.equal(hook.hookCommand('/r', '/n', posix), `"/n" "${path.join('/r', 'src', 'cli.mjs')}" codex-stop-hook`)
+  assert.ok(once.endsWith(`command = ${JSON.stringify(hook.hookCommand('/r', '/n', posix))}\ntimeout = 86400\n`))
+  const twice = hook.editCodexHook(once, hook.hookCommand('/r2', '/n', posix))
   assert.equal(twice.match(/cli\.mjs/g).length, 1)
-  assert.ok(twice.includes(JSON.stringify(hook.hookCommand('/r2', '/n'))))
+  assert.ok(twice.includes(JSON.stringify(hook.hookCommand('/r2', '/n', posix))))
   assert.equal(hook.editCodexHook(twice, null), user)
+  // The old quoted line is replaced by the Windows wrapper (one more trust in Codex).
+  const win = hook.editCodexHook(once, hook.hookCommand('/r', '/n', { platform: 'win32' }))
+  assert.match(win, /^command = ".*codex-stop-hook\.cmd"$/m)
+  assert.doesNotMatch(win, /cli\.mjs/)
+  assert.equal(hook.editCodexHook(win, null), user)
   // Found by its command too, when the marker line was lost.
   const noMark = once.replace(/^# dsh-baton.*\n/m, '')
   assert.equal(hook.editCodexHook(noMark, null), user)
@@ -211,6 +217,66 @@ test('Windows: Codex writes the trust key (and may write the command) in single 
   fs.writeFileSync(cfg, written + "\n[hooks.state.'x:stop:0:0\"]\ntrusted_hash = \"sha256:a\"\n")
   assert.equal(codexHookStatus(env).trusted, false)
   fs.rmSync(codexHome, { recursive: true, force: true })
+})
+
+test('Windows: the hook runs through a .cmd wrapper at a path without spaces', async () => {
+  const { codexHookEntry, codexHookStatus } = await import('../src/register.mjs')
+  const node = 'C:\\Program Files\\nodejs\\node.exe'
+  const script = path.join('C:\\app 100%', 'src', 'server.mjs')
+  const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-wrap-'))
+  const at = codexHookEntry(node, script, { platform: 'win32', home: plain })
+  assert.equal(at, path.join(plain, 'bin', 'codex-stop-hook.cmd'))
+  assert.equal(fs.readFileSync(at, 'utf8'), `@"${node}" "${path.join('C:\\app 100%%', 'src', 'cli.mjs')}" codex-stop-hook\r\n`)
+  // A home with a space: its 8.3 short path, or else PowerShell's call form.
+  const spaced = path.join(plain, 'First Last')
+  assert.equal(codexHookEntry(node, script, { platform: 'win32', home: spaced, shortPath: () => 'C:\\FIRSTL~1\\w.cmd' }), 'C:\\FIRSTL~1\\w.cmd')
+  assert.equal(codexHookEntry(node, script, { platform: 'win32', home: spaced, shortPath: () => null }), `& "${node}" "${path.join('C:\\app 100%', 'src', 'cli.mjs')}" codex-stop-hook`)
+  assert.equal(codexHookEntry(node, script, { platform: 'darwin', home: plain }), `"${node}" "${path.join('C:\\app 100%', 'src', 'cli.mjs')}" codex-stop-hook`)
+  // Trusted through the wrapper: the command Codex hashed is the same whatever node it runs.
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-wrapcfg-'))
+  const env = { ...process.env, CODEX_HOME: codexHome, DSH_BATON_HOME: home }
+  const cfg = path.join(codexHome, 'config.toml')
+  fs.writeFileSync(cfg, hook.editCodexHook('', at))
+  assert.deepEqual(codexHookStatus(env), { codex: true, installed: true, trusted: false })
+  fs.appendFileSync(cfg, `\n[hooks.state.'${cfg}:stop:0:0']\ntrusted_hash = "sha256:a"\n`)
+  fs.writeFileSync(path.join(home, 'codex-hook', 'alive'), JSON.stringify({ at: 1, node: '/elsewhere/node', cli: '/elsewhere/cli.mjs' }))
+  assert.equal(codexHookStatus(env).trusted, true)
+  // PowerShell's call form is checked against what the hook ran as, like the plain line.
+  fs.writeFileSync(cfg, hook.editCodexHook('', `& "${node}" "C:\\a\\cli.mjs" codex-stop-hook`) + `\n[hooks.state."x:stop:0:0"]\ntrusted_hash = "sha256:a"\n`)
+  assert.equal(codexHookStatus(env).trusted, false)
+  fs.rmSync(path.join(home, 'codex-hook', 'alive'), { force: true })
+  fs.rmSync(plain, { recursive: true, force: true })
+  fs.rmSync(codexHome, { recursive: true, force: true })
+})
+
+// What Codex does on Windows: the whole command as one argument to PowerShell -Command,
+// or to cmd /C when no shell is set. Run the generated command both ways, for real.
+test('Windows: the generated hook command runs under PowerShell and cmd', { skip: process.platform !== 'win32' }, async () => {
+  const { codexHookEntry } = await import('../src/register.mjs')
+  const { execFileSync } = await import('node:child_process')
+  const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-run-'))
+  const spaced = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb run '))
+  const run = (shell, args, home) => {
+    const alive = path.join(home, 'codex-hook', 'alive')
+    fs.rmSync(alive, { force: true })
+    spawnSync(shell, args, { input: '\uFEFF{"session_id":"no-runs-here"}', env: { ...process.env, DSH_BATON_HOME: home }, windowsHide: true, timeout: 60000 })
+    return fs.existsSync(alive)
+  }
+  const shells = ['pwsh', 'powershell'].filter((s) => { try { execFileSync(s, ['-NoProfile', '-Command', 'exit 0'], { windowsHide: true }); return true } catch { return false } })
+  assert.ok(shells.length)
+  const cmd = process.env.ComSpec || 'cmd.exe'
+  for (const home of [plain, spaced]) {
+    const entry = codexHookEntry(process.execPath, SERVER, { home })
+    for (const s of shells) assert.ok(run(s, ['-NoProfile', '-Command', entry], home), `${s} -Command ${entry}`)
+    // The wrapper (no spaces in its path) runs under cmd too; the call form is PowerShell's.
+    if (!entry.startsWith('& ')) assert.ok(run(cmd, ['/C', entry], home), `cmd /C ${entry}`)
+  }
+  assert.doesNotMatch(codexHookEntry(process.execPath, SERVER, { home: plain }), /^& /)
+  const call = codexHookEntry(process.execPath, SERVER, { home: spaced, shortPath: () => null })
+  assert.match(call, /^& "/)
+  for (const s of shells) assert.ok(run(s, ['-NoProfile', '-Command', call], spaced), `${s} -Command ${call}`)
+  fs.rmSync(plain, { recursive: true, force: true })
+  fs.rmSync(spaced, { recursive: true, force: true })
 })
 
 test('hook stdin: a BOM is dropped; input that does not parse is kept for diagnosis', () => {

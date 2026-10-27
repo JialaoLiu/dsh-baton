@@ -7,7 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import * as core from './core.mjs'
-import { codexConfigPath, stableNodePath, codexHookCommand, codexHookStatus, HOOK_TIMEOUT_S } from './register.mjs'
+import { codexConfigPath, stableNodePath, codexHookEntry, codexHookStatus, HOOK_TIMEOUT_S } from './register.mjs'
 
 export { editCodexHook, HOOK_TIMEOUT_S } from './register.mjs'
 
@@ -161,6 +161,6 @@ export async function runHook(input, { shape, wait = core.api.wait, now = Date.n
 }
 
 // The hook entry for Codex's config.toml (see register.mjs, which also writes it).
-export function hookCommand(root = core.ROOT, node = stableNodePath()) {
-  return codexHookCommand(node, path.join(root, 'src', 'server.mjs'))
+export function hookCommand(root = core.ROOT, node = stableNodePath(), { platform } = {}) {
+  return codexHookEntry(node, path.join(root, 'src', 'server.mjs'), { platform, home: core.config.batonHome })
 }

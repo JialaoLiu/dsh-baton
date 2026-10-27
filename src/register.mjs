@@ -110,6 +110,42 @@ const samePath = (a, b) => process.platform === 'win32'
 // The hook command for the server at `script`: cli.mjs beside it, run with the same node.
 export const codexHookCommand = (node, script) => `"${node}" "${path.join(path.dirname(script), 'cli.mjs')}" codex-stop-hook`
 
+// On Windows Codex hands the hook command to the session's shell: PowerShell (-Command) or
+// cmd (/C). They read a leading quoted path differently ("x" is a string to PowerShell, a
+// program to cmd), so no form of the line above runs in both. A .cmd file holding that
+// line, named by a path without spaces, does. Its text never changes once written in the
+// config (only the file is rewritten when node moves), so the user trusts it once.
+export const hookWrapperPath = (home = batonHome()) => path.join(home, 'bin', 'codex-stop-hook.cmd')
+
+// What goes in config.toml as the hook command. Elsewhere it is codexHookCommand; on
+// Windows the .cmd wrapper, by its 8.3 short path if the real one has spaces (a user name
+// with a space), else PowerShell's call form, PowerShell being Codex's shell on Windows.
+export function codexHookEntry(node, script, { platform = process.platform, home = batonHome(), shortPath = winShortPath } = {}) {
+  const line = codexHookCommand(node, script)
+  if (platform !== 'win32') return line
+  const file = hookWrapperPath(home)
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, `@${line.replace(/%/g, '%%')}\r\n`)
+  const at = /\s/.test(file) ? shortPath(file) : file
+  return at && !/\s/.test(at) ? at : `& ${line}`
+}
+
+// The 8.3 short form of an existing path, or null (8.3 names can be off for a drive).
+function winShortPath(p) {
+  try {
+    const out = execFileSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"for %I in ("${p}") do @echo %~sI"`], { windowsHide: true, windowsVerbatimArguments: true, timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+    return out && fs.existsSync(out) ? out : null
+  } catch {
+    return null
+  }
+}
+
+// The node and cli.mjs a hook command line runs (plain, or PowerShell's call form).
+function hookTarget(command) {
+  const m = command?.match(/^(?:& )?"(.+?)" "(.+?)" codex-stop-hook$/)
+  return m ? { node: m[1], cli: m[2] } : null
+}
+
 // Add, replace (command given) or remove (null) the hook. An entry with this very command
 // is left where it is: Codex keys its trust by the hook's place and content, so moving or
 // rewriting it would ask the user to trust it again.
@@ -302,7 +338,7 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
         result.clients.push({ id: c.id, label: c.label, state: 'failed', error: e.message })
       }
     }
-    result.codexHook = addCodexHook(list.find((c) => c.id === 'codex'), env, fallback)
+    result.codexHook = addCodexHook(list.find((c) => c.id === 'codex'), env, fallback, home)
     result.node = launch?.command ?? null
     result.runtime = !launch ? null : launch === fallback ? 'harness' : 'node'
     const present = result.clients.filter((c) => c.state !== 'not-installed')
@@ -320,7 +356,7 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
 // with the same node. Codex runs a new hook only once the user trusts it (Settings →
 // Hooks); until then dsh-baton keeps to dsh_wait. Not added when the server runs on
 // Harness's own runtime or a bare command (no node to name), or with DSH_BATON_CODEX_HOOK=0.
-function addCodexHook(codex, env, fallback) {
+function addCodexHook(codex, env, fallback, home) {
   try {
     if (!codex?.present || env.DSH_BATON_CODEX_HOOK === '0') return 'off'
     const e = readCodexEntry(fs.existsSync(codex.file) ? fs.readFileSync(codex.file, 'utf8') : '')
@@ -329,7 +365,7 @@ function addCodexHook(codex, env, fallback) {
       (!fallback || path.resolve(e.command) !== path.resolve(fallback.command)) &&
       script && fs.existsSync(path.join(path.dirname(script), 'cli.mjs'))
     if (!usable) return 'skipped'
-    return rewrite(codex.file, (t) => editCodexHook(t, codexHookCommand(e.command, script))) === 'updated' ? 'added' : 'unchanged'
+    return rewrite(codex.file, (t) => editCodexHook(t, codexHookEntry(e.command, script, { home: batonHome(env, home) }))) === 'updated' ? 'added' : 'unchanged'
   } catch {
     return 'failed'
   }
@@ -363,6 +399,8 @@ export function codexHookStatus(env = process.env, home = os.homedir()) {
   if (!ran?.cli) return { codex: true, installed: true, trusted: true }
   const real = (p) => { try { return fs.realpathSync(p) } catch { return p } }
   const command = readTomlString(lines[at].replace(/^command = /, ''))
-  const m = command?.match(/^"(.+?)" "(.+?)" codex-stop-hook$/)
-  return { codex: true, installed: true, trusted: !m || (samePath(real(m[1]), ran.node) && samePath(real(m[2]), ran.cli)) }
+  // Through the .cmd wrapper the command Codex trusted stays the same when node moves.
+  if (/\.cmd$/i.test(command ?? '')) return { codex: true, installed: true, trusted: true }
+  const t = hookTarget(command)
+  return { codex: true, installed: true, trusted: !t || (samePath(real(t.node), ran.node) && samePath(real(t.cli), ran.cli)) }
 }

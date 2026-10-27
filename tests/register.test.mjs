@@ -191,7 +191,15 @@ test('the Codex Stop hook goes in with the server, once, and only with a real no
     assert.equal(r.codexHook, 'added')
     const text = fs.readFileSync(s.codexFile, 'utf8')
     const cli = path.join(s.app, 'src', 'cli.mjs')
-    assert.ok(text.includes(`command = ${JSON.stringify(`"${process.execPath}" "${cli}" codex-stop-hook`)}`))
+    const line = `"${process.execPath}" "${cli}" codex-stop-hook`
+    if (process.platform === 'win32') {
+      // Windows: the line goes in a .cmd wrapper, and the config names the wrapper.
+      const wrapper = path.join(s.home, '.dsh-baton', 'bin', 'codex-stop-hook.cmd')
+      assert.equal(fs.readFileSync(wrapper, 'utf8'), `@${line}\r\n`)
+      assert.match(text, /^command = ".*codex-stop-hook\.cmd"$/m)
+    } else {
+      assert.ok(text.includes(`command = ${JSON.stringify(line)}`))
+    }
     // Codex adds its trust record; later starts leave the file alone.
     fs.appendFileSync(s.codexFile, '\n[hooks.state."x:stop:0:0"]\ntrusted_hash = "sha256:1"\n')
     const trusted = fs.readFileSync(s.codexFile, 'utf8')
