@@ -15,19 +15,21 @@ const SERVER = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'sr
 test('setup adds the hook once, replaces it, and removes only its own lines', () => {
   const user = 'model = "x"\n\n[mcp_servers.a]\ncommand = "n"\n\n[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ntype = "command"\ncommand = "my-own-hook"\n'
   const posix = { platform: 'linux' }
-  const once = hook.editCodexHook(user, hook.hookCommand('/r', '/n', posix))
+  const wrapper = hook.hookCommand('/r', '/n', posix)
+  assert.equal(wrapper, path.join(home, 'bin', 'codex-stop-hook'))
+  const once = hook.editCodexHook(user, wrapper)
   assert.equal(once.match(/codex-stop-hook/g).length, 2) // the marker comment and the command
-  assert.equal(hook.hookCommand('/r', '/n', posix), `"/n" "${path.join('/r', 'src', 'cli.mjs')}" codex-stop-hook`)
-  assert.ok(once.endsWith(`command = ${JSON.stringify(hook.hookCommand('/r', '/n', posix))}\ntimeout = 86400\n`))
-  const twice = hook.editCodexHook(once, hook.hookCommand('/r2', '/n', posix))
-  assert.equal(twice.match(/cli\.mjs/g).length, 1)
-  assert.ok(twice.includes(JSON.stringify(hook.hookCommand('/r2', '/n', posix))))
-  assert.equal(hook.editCodexHook(twice, null), user)
-  // The old quoted line is replaced by the Windows wrapper (one more trust in Codex).
-  const win = hook.editCodexHook(once, hook.hookCommand('/r', '/n', { platform: 'win32' }))
-  assert.match(win, /^command = ".*codex-stop-hook\.cmd"$/m)
-  assert.doesNotMatch(win, /cli\.mjs/)
-  assert.equal(hook.editCodexHook(win, null), user)
+  assert.ok(once.endsWith(`command = ${JSON.stringify(wrapper)}\nstatusMessage = "dsh-baton: waiting for the Harness run"\ntimeout = 86400\n`))
+  // Written once: another node or server only rewrites the wrapper, never the entry.
+  assert.equal(hook.hookCommand('/r2', '/n2', posix), wrapper)
+  assert.equal(hook.editCodexHook(once, hook.hookCommand('/r2', '/n2', posix)), once)
+  // Entries from before 0.6.1's final form (a node line, no status message) are ours too.
+  const legacy = `"/n" "${path.join('/r', 'src', 'cli.mjs')}" codex-stop-hook`
+  const older = hook.editCodexHook(user, legacy).replace(/^statusMessage = .*\n/m, '')
+  assert.equal(hook.editCodexHook(older, wrapper), once)
+  assert.equal(hook.editCodexHook(older, null), user)
+  assert.equal(hook.editCodexHook(once.replace(/^statusMessage = .*\n/m, ''), wrapper), once)
+  assert.equal(hook.editCodexHook(once, null), user)
   // Found by its command too, when the marker line was lost.
   const noMark = once.replace(/^# dsh-baton.*\n/m, '')
   assert.equal(hook.editCodexHook(noMark, null), user)
@@ -231,7 +233,12 @@ test('Windows: the hook runs through a .cmd wrapper at a path without spaces', a
   const spaced = path.join(plain, 'First Last')
   assert.equal(codexHookEntry(node, script, { platform: 'win32', home: spaced, shortPath: () => 'C:\\FIRSTL~1\\w.cmd' }), 'C:\\FIRSTL~1\\w.cmd')
   assert.equal(codexHookEntry(node, script, { platform: 'win32', home: spaced, shortPath: () => null }), `& "${node}" "${path.join('C:\\app 100%', 'src', 'cli.mjs')}" codex-stop-hook`)
-  assert.equal(codexHookEntry(node, script, { platform: 'darwin', home: plain }), `"${node}" "${path.join('C:\\app 100%', 'src', 'cli.mjs')}" codex-stop-hook`)
+  // Elsewhere: a sh script, and the entry names it (quoted when its path has a space).
+  const shAt = codexHookEntry('/opt/it\'s/node', '/srv/app/src/server.mjs', { platform: 'darwin', home: plain })
+  assert.equal(shAt, path.join(plain, 'bin', 'codex-stop-hook'))
+  assert.equal(fs.readFileSync(shAt, 'utf8'), `#!/bin/sh\nexec '/opt/it'\\''s/node' '${path.join('/srv/app/src', 'cli.mjs')}' codex-stop-hook "$@"\n`)
+  if (process.platform !== 'win32') assert.equal(fs.statSync(shAt).mode & 0o777, 0o700)
+  assert.equal(codexHookEntry(node, script, { platform: 'linux', home: spaced }), JSON.stringify(path.join(spaced, 'bin', 'codex-stop-hook')))
   // Trusted through the wrapper: the command Codex hashed is the same whatever node it runs.
   const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-wrapcfg-'))
   const env = { ...process.env, CODEX_HOME: codexHome, DSH_BATON_HOME: home }
@@ -279,6 +286,17 @@ test('Windows: the generated hook command runs under PowerShell and cmd', { skip
   fs.rmSync(spaced, { recursive: true, force: true })
 })
 
+test('Mac/Linux: the generated hook command runs under sh, with or without a space in the path', { skip: process.platform === 'win32' }, async () => {
+  const { codexHookEntry } = await import('../src/register.mjs')
+  for (const prefix of ['dshb-sh-', 'dshb sh ']) {
+    const at = fs.mkdtempSync(path.join(os.tmpdir(), prefix))
+    const entry = codexHookEntry(process.execPath, SERVER, { home: at })
+    spawnSync('/bin/sh', ['-c', entry], { input: '{"session_id":"no-runs-here"}', env: { ...process.env, DSH_BATON_HOME: at }, timeout: 60000 })
+    assert.ok(fs.existsSync(path.join(at, 'codex-hook', 'alive')), entry)
+    fs.rmSync(at, { recursive: true, force: true })
+  }
+})
+
 test('hook stdin: a BOM is dropped; input that does not parse is kept for diagnosis', () => {
   const bad = path.join(home, 'codex-hook', 'last-bad-stdin')
   fs.rmSync(bad, { force: true })
@@ -307,6 +325,36 @@ test('the hook command reads UTF-8 with a BOM and UTF-16 stdin, and notes that i
     assert.equal(out, '') // no runs for this conversation: the turn just ends
     assert.ok(fs.existsSync(alive))
   }
+})
+
+test('a rewritten hook drops the trust Codex gave the old one, until the user trusts it again', async () => {
+  const { codexHookStatus } = await import('../src/register.mjs')
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-retrust-'))
+  const env = { ...process.env, CODEX_HOME: codexHome, DSH_BATON_HOME: home }
+  const cfg = path.join(codexHome, 'config.toml')
+  const wrapper = hook.hookCommand('/r', '/n', { platform: 'linux' })
+  const mine = '[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ntype = "command"\ncommand = "mine"\n'
+  const theirs = `\n[hooks.state."${cfg}:stop:0:0"]\ntrusted_hash = "sha256:mine"\n`
+  fs.rmSync(path.join(home, 'codex-hook', 'alive'), { force: true }) // no run yet: the lenient case
+  // Trusted in its 0.6.0 form (a node line, no status message); ours is the second Stop group.
+  const old = hook.editCodexHook(mine, '"/n" "/r/src/cli.mjs" codex-stop-hook').replace(/^statusMessage = .*\n/m, '') +
+    theirs + `\n[hooks.state.'${cfg}:stop:1:0']\ntrusted_hash = "sha256:old"\nenabled = true\n`
+  fs.writeFileSync(cfg, old)
+  assert.equal(codexHookStatus(env).trusted, true)
+  const now = hook.editCodexHook(old, wrapper)
+  fs.writeFileSync(cfg, now)
+  assert.equal(codexHookStatus(env).trusted, false) // Codex sees it as modified
+  assert.doesNotMatch(now, /sha256:old|enabled = true/)
+  assert.match(now, /sha256:mine/) // the user's own hook keeps its trust
+  // Every later run leaves the file byte for byte as it is.
+  for (let i = 0; i < 3; i++) assert.equal(hook.editCodexHook(now, hook.hookCommand('/r', `/n${i}`, { platform: 'linux' })), now)
+  fs.appendFileSync(cfg, `\n[hooks.state."${cfg}:stop:1:0"]\ntrusted_hash = "sha256:new"\n`)
+  assert.equal(codexHookStatus(env).trusted, true) // trusted again
+  // Someone edits the entry (here its timeout): it is put back, and the trust starts over.
+  const edited = fs.readFileSync(cfg, 'utf8').replace('timeout = 86400', 'timeout = 60')
+  fs.writeFileSync(cfg, hook.editCodexHook(edited, wrapper))
+  assert.equal(codexHookStatus(env).trusted, false)
+  fs.rmSync(codexHome, { recursive: true, force: true })
 })
 
 test('the trust note is given once per conversation', () => {

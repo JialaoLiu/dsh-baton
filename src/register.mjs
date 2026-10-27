@@ -9,6 +9,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
+import crypto from 'node:crypto'
 import { batonHome } from '../host/lib/socket.js'
 
 export const NAME = 'dsh-baton'
@@ -92,7 +93,9 @@ export function readCodexEntry(text) {
 const HOOK_MARK = '# dsh-baton: wakes Codex when a Harness run ends (dsh-baton codex-stop-hook)'
 // How long one hook call may wait; Codex kills the hook after the timeout in its config.
 export const HOOK_TIMEOUT_S = 24 * 3600
-const OWN_HOOK_LINE = /^(\[\[hooks\.Stop\]\]|\[\[hooks\.Stop\.hooks\]\]|type = "command"|command = .*codex-stop-hook.*|timeout = \d+)$/
+// What Codex shows for the hook (in its hooks list, and while the hook runs).
+const HOOK_STATUS = 'dsh-baton: waiting for the Harness run'
+const OWN_HOOK_LINE = /^(\[\[hooks\.Stop\]\]|\[\[hooks\.Stop\.hooks\]\]|type = "command"|command = .*codex-stop-hook.*|statusMessage = .*|timeout = \d+)$/
 
 // A TOML string as written: basic ("..." with escapes, which JSON reads) or literal ('...',
 // what Codex itself writes when the text holds backslashes, as Windows paths do).
@@ -110,23 +113,37 @@ const samePath = (a, b) => process.platform === 'win32'
 // The hook command for the server at `script`: cli.mjs beside it, run with the same node.
 export const codexHookCommand = (node, script) => `"${node}" "${path.join(path.dirname(script), 'cli.mjs')}" codex-stop-hook`
 
-// On Windows Codex hands the hook command to the session's shell: PowerShell (-Command) or
-// cmd (/C). They read a leading quoted path differently ("x" is a string to PowerShell, a
-// program to cmd), so no form of the line above runs in both. A .cmd file holding that
-// line, named by a path without spaces, does. Its text never changes once written in the
-// config (only the file is rewritten when node moves), so the user trusts it once.
-export const hookWrapperPath = (home = batonHome()) => path.join(home, 'bin', 'codex-stop-hook.cmd')
+// The hook entry in Codex's config is written once and then left as it is: Codex hashes
+// the entry (command, timeout, statusMessage) when the user trusts it, and asks again when
+// any of it changes. So the command names a small wrapper script at a fixed place,
+// ~/.dsh-baton/bin, and what moves (the node and the server's cli.mjs) goes in the script,
+// which is rewritten freely: Codex does not hash what the command runs.
+//
+// On Windows the script is a .cmd: Codex hands the command to the session's shell,
+// PowerShell (-Command) or cmd (/C), and they read a leading quoted path differently ("x"
+// is a string to PowerShell, a program to cmd); a bare path to a .cmd runs in both.
+export const hookWrapperPath = (home = batonHome(), platform = process.platform) =>
+  path.join(home, 'bin', platform === 'win32' ? 'codex-stop-hook.cmd' : 'codex-stop-hook')
 
-// What goes in config.toml as the hook command. Elsewhere it is codexHookCommand; on
-// Windows the .cmd wrapper, by its 8.3 short path if the real one has spaces (a user name
-// with a space), else PowerShell's call form, PowerShell being Codex's shell on Windows.
+// What goes in config.toml as the hook command: the wrapper's path, written beside it.
+// A path with spaces (a user name with a space): on Windows its 8.3 short form, else
+// PowerShell's call form of the whole line (PowerShell being Codex's shell on Windows);
+// elsewhere the path in double quotes, for the shell Codex runs the command with.
 export function codexHookEntry(node, script, { platform = process.platform, home = batonHome(), shortPath = winShortPath } = {}) {
   const line = codexHookCommand(node, script)
-  if (platform !== 'win32') return line
-  const file = hookWrapperPath(home)
+  const file = hookWrapperPath(home, platform)
+  const sh = (p) => `'${p.replace(/'/g, `'\\''`)}'`
+  const body = platform === 'win32'
+    ? `@${line.replace(/%/g, '%%')}\r\n`
+    : `#!/bin/sh\nexec ${sh(node)} ${sh(path.join(path.dirname(script), 'cli.mjs'))} codex-stop-hook "$@"\n`
   fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, `@${line.replace(/%/g, '%%')}\r\n`)
-  const at = /\s/.test(file) ? shortPath(file) : file
+  let old = null
+  try { old = fs.readFileSync(file, 'utf8') } catch { /* first time */ }
+  if (old !== body) fs.writeFileSync(file, body, { mode: 0o700 })
+  if (platform !== 'win32') fs.chmodSync(file, 0o700)
+  if (!/\s/.test(file)) return file
+  if (platform !== 'win32') return JSON.stringify(file)
+  const at = shortPath(file)
   return at && !/\s/.test(at) ? at : `& ${line}`
 }
 
@@ -149,8 +166,62 @@ function hookTarget(command) {
 // Add, replace (command given) or remove (null) the hook. An entry with this very command
 // is left where it is: Codex keys its trust by the hook's place and content, so moving or
 // rewriting it would ask the user to trust it again.
+//
+// Codex keeps its trust in [hooks.state."<config>:stop:<group>:<hook>"] tables, keyed by
+// place only. When ours is rewritten, the record left at its old or new place would still
+// read as trusted while Codex itself sees a modified hook and skips it; such records go.
 export function editCodexHook(text, command) {
-  if (command && text.split(/\r?\n/).some((l) => /^command = /.test(l) && readTomlString(l.replace(/^command = /, '')) === command)) return text
+  if (command && hasHook(text, command)) return text
+  const out = editHookBlock(text, command)
+  return dropTrust(out, [hookPlace(text.split(/\r?\n/)), hookPlace(out.split('\n'))])
+}
+
+// Our entry is there exactly as this version writes it: this command, the status message
+// and the timeout (Codex may have rewritten its strings in single quotes).
+function hasHook(text, command) {
+  const lines = text.split(/\r?\n/)
+  const at = lines.findIndex((l) => /^command = /.test(l) && readTomlString(l.slice(10)) === command)
+  if (at < 0) return false
+  let start = at, end = at
+  while (start > 0 && lines[start - 1] !== '[[hooks.Stop.hooks]]' && OWN_HOOK_LINE.test(lines[start - 1])) start--
+  while (end + 1 < lines.length && OWN_HOOK_LINE.test(lines[end + 1])) end++
+  const kv = {}
+  for (const l of lines.slice(start, end + 1)) {
+    const m = l.match(/^(\w+) = (.*)$/)
+    if (m) kv[m[1]] = m[1] === 'timeout' ? Number(m[2]) : readTomlString(m[2])
+  }
+  const want = { type: 'command', command, statusMessage: HOOK_STATUS, timeout: HOOK_TIMEOUT_S }
+  return Object.keys(kv).length === 4 && Object.entries(want).every(([k, v]) => kv[k] === v)
+}
+
+// Where our hook sits among the Stop hooks ({ group, hook, at: its command line }), or null.
+function hookPlace(lines) {
+  const at = lines.findIndex((l) => /^command = .*codex-stop-hook/.test(l))
+  if (at < 0) return null
+  const before = lines.slice(0, at)
+  const group = before.filter((l) => l.trim() === '[[hooks.Stop]]').length - 1
+  const hook = before.slice(before.lastIndexOf('[[hooks.Stop]]')).filter((l) => l.trim() === '[[hooks.Stop.hooks]]').length - 1
+  return { group, hook, at }
+}
+
+const trustKey = ({ group, hook }) => new RegExp(`^\\[hooks\\.state\\.(["']).*:stop:${group}:${hook}\\1\\]`)
+
+// Remove Codex's trust tables (header and key lines) for the given places.
+function dropTrust(text, places) {
+  const keys = places.filter(Boolean).map(trustKey)
+  if (!keys.length) return text
+  const lines = text.split('\n')
+  const kept = []
+  for (let i = 0; i < lines.length; i++) {
+    if (!keys.some((k) => k.test(lines[i]))) { kept.push(lines[i]); continue }
+    while (i + 1 < lines.length && /^\s*[\w"'.-]+\s*=/.test(lines[i + 1])) i++
+    if (kept.at(-1) === '') kept.pop()
+  }
+  const out = kept.join('\n').replace(/\s+$/, '')
+  return out ? `${out}\n` : ''
+}
+
+function editHookBlock(text, command) {
   const lines = text.split(/\r?\n/)
   const kept = []
   for (let i = 0; i < lines.length; i++) {
@@ -162,7 +233,7 @@ export function editCodexHook(text, command) {
     while (i + 1 < lines.length && OWN_HOOK_LINE.test(lines[i + 1])) i++
   }
   let out = kept.join('\n').replace(/\s+$/, '')
-  if (command) out += `${out ? '\n\n' : ''}${HOOK_MARK}\n[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ntype = "command"\ncommand = ${JSON.stringify(command)}\ntimeout = ${HOOK_TIMEOUT_S}`
+  if (command) out += `${out ? '\n\n' : ''}${HOOK_MARK}\n[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ntype = "command"\ncommand = ${JSON.stringify(command)}\nstatusMessage = ${JSON.stringify(HOOK_STATUS)}\ntimeout = ${HOOK_TIMEOUT_S}`
   return out ? `${out}\n` : ''
 }
 
@@ -270,6 +341,21 @@ export function installApp(from, to = appDir()) {
   return to
 }
 
+// A hash of the files installApp copies (paths and contents), to tell two copies of one
+// version apart.
+export function appDigest(root) {
+  const hash = crypto.createHash('sha256')
+  const walk = (rel) => {
+    const at = path.join(root, rel)
+    let st
+    try { st = fs.statSync(at) } catch { return }
+    if (st.isDirectory()) { for (const n of fs.readdirSync(at).sort()) walk(path.join(rel, n)); return }
+    hash.update(`${rel.split(path.sep).join('/')}\0`).update(fs.readFileSync(at)).update('\0')
+  }
+  for (const part of APP_PARTS) walk(part)
+  return hash.digest('hex')
+}
+
 const versionOf = (root) => { try { return JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version } catch { return null } }
 export function compareVersions(a, b) {
   const parse = (v) => String(v).split('-')[0].split('.').map(Number)
@@ -300,7 +386,10 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
     let serverRoot = root
     if (!fs.existsSync(path.join(root, '.git')) && path.resolve(root) !== path.resolve(app)) {
       const installed = versionOf(app)
-      if (!installed || !fs.existsSync(path.join(app, 'src', 'server.mjs')) || compareVersions(installed, result.version) < 0) installApp(root, app)
+      const older = !installed || compareVersions(installed, result.version) < 0
+      // Same version, other files (a fix synced before its release): copied too.
+      const changed = !older && compareVersions(installed, result.version) === 0 && appDigest(app) !== appDigest(root)
+      if (older || changed || !fs.existsSync(path.join(app, 'src', 'server.mjs'))) installApp(root, app)
       serverRoot = app
     }
     const script = path.join(serverRoot, 'src', 'server.mjs')
@@ -385,12 +474,10 @@ export function codexHookStatus(env = process.env, home = os.homedir()) {
   const file = codexConfigPath(env, home)
   if (!fs.existsSync(path.dirname(file))) return { codex: false, installed: false, trusted: false }
   const lines = (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '').split(/\r?\n/)
-  const at = lines.findIndex((l) => /^command = .*codex-stop-hook/.test(l))
-  if (at < 0) return { codex: true, installed: false, trusted: false }
-  const before = lines.slice(0, at)
-  const group = before.filter((l) => l.trim() === '[[hooks.Stop]]').length - 1
-  const hook = before.slice(before.lastIndexOf('[[hooks.Stop]]')).filter((l) => l.trim() === '[[hooks.Stop.hooks]]').length - 1
-  const key = new RegExp(`^\\[hooks\\.state\\.(["']).*:stop:${group}:${hook}\\1\\]`)
+  const place = hookPlace(lines)
+  if (!place) return { codex: true, installed: false, trusted: false }
+  const { at } = place
+  const key = trustKey(place)
   const s = lines.findIndex((l) => key.test(l))
   const recorded = s >= 0 && lines.slice(s + 1).find((l) => /^\s*(\[|trusted_hash\s*=)/.test(l))?.trim().startsWith('trusted_hash')
   if (!recorded) return { codex: true, installed: true, trusted: false }
@@ -399,8 +486,8 @@ export function codexHookStatus(env = process.env, home = os.homedir()) {
   if (!ran?.cli) return { codex: true, installed: true, trusted: true }
   const real = (p) => { try { return fs.realpathSync(p) } catch { return p } }
   const command = readTomlString(lines[at].replace(/^command = /, ''))
-  // Through the .cmd wrapper the command Codex trusted stays the same when node moves.
-  if (/\.cmd$/i.test(command ?? '')) return { codex: true, installed: true, trusted: true }
+  // Through the wrapper (any command but a node line) the trusted entry does not change
+  // when node moves: the trust record is all there is to check.
   const t = hookTarget(command)
   return { codex: true, installed: true, trusted: !t || (samePath(real(t.node), ran.node) && samePath(real(t.cli), ran.cli)) }
 }

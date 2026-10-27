@@ -100,6 +100,21 @@ test('a newer server in the app folder is not replaced by an older plugin', () =
   } finally { s.done() }
 })
 
+test('the same version with other files is copied again; the same files are left alone', () => {
+  const s = sandbox()
+  try {
+    s.run()
+    const server = path.join(s.app, 'src', 'server.mjs')
+    const pkg = path.join(s.app, 'package.json')
+    const stamp = fs.statSync(pkg).mtimeMs
+    s.run()
+    assert.equal(fs.statSync(pkg).mtimeMs, stamp) // nothing changed: no copy, no reload
+    fs.writeFileSync(server, '// stale build of this version')
+    s.run()
+    assert.notEqual(fs.readFileSync(server, 'utf8'), '// stale build of this version')
+  } finally { s.done() }
+})
+
 test('a git checkout is registered where it is, without a copy', () => {
   const s = sandbox()
   try {
@@ -191,15 +206,12 @@ test('the Codex Stop hook goes in with the server, once, and only with a real no
     assert.equal(r.codexHook, 'added')
     const text = fs.readFileSync(s.codexFile, 'utf8')
     const cli = path.join(s.app, 'src', 'cli.mjs')
-    const line = `"${process.execPath}" "${cli}" codex-stop-hook`
-    if (process.platform === 'win32') {
-      // Windows: the line goes in a .cmd wrapper, and the config names the wrapper.
-      const wrapper = path.join(s.home, '.dsh-baton', 'bin', 'codex-stop-hook.cmd')
-      assert.equal(fs.readFileSync(wrapper, 'utf8'), `@${line}\r\n`)
-      assert.match(text, /^command = ".*codex-stop-hook\.cmd"$/m)
-    } else {
-      assert.ok(text.includes(`command = ${JSON.stringify(line)}`))
-    }
+    // The entry names the wrapper script; node and cli.mjs are in the script.
+    const wrapper = path.join(s.home, '.dsh-baton', 'bin', process.platform === 'win32' ? 'codex-stop-hook.cmd' : 'codex-stop-hook')
+    assert.ok(text.includes(`command = ${JSON.stringify(wrapper)}`))
+    const script = fs.readFileSync(wrapper, 'utf8')
+    if (process.platform === 'win32') assert.equal(script, `@"${process.execPath}" "${cli}" codex-stop-hook\r\n`)
+    else assert.equal(script, `#!/bin/sh\nexec '${process.execPath}' '${cli}' codex-stop-hook "$@"\n`)
     // Codex adds its trust record; later starts leave the file alone.
     fs.appendFileSync(s.codexFile, '\n[hooks.state."x:stop:0:0"]\ntrusted_hash = "sha256:1"\n')
     const trusted = fs.readFileSync(s.codexFile, 'utf8')

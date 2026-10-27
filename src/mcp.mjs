@@ -34,7 +34,7 @@ const codeModeYield = () => {
 }
 // Said to the user (in their language) the first time a Codex conversation hands over
 // while dsh-baton's Stop hook is waiting to be trusted.
-const TRUST_NOTE = 'One step left: in Codex, open Settings → Hooks and trust dsh-baton. After that, Codex no longer uses your quota while it waits for DeepSeek Harness.'
+const TRUST_NOTE = 'One step left: in Codex, open Settings → Hooks and trust the Stop hook "dsh-baton: waiting for the Harness run". After that, Codex no longer uses your quota while it waits for DeepSeek Harness.'
 const NO_POLL = 'While waiting, make no other calls (no dsh_status, dsh_session_activity or dsh_read_session) and do not list or read the target folder to check progress.'
 const ARCHIVED = 'Sessions not in dsh_list_sessions are archived or gone: do not look for them on disk.'
 // A shell command that blocks until a run ends and prints its reply. Run in the

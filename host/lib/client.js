@@ -55,7 +55,7 @@ window.__ModuleLoader__.load({
       notRegistered: '未注册',
       and: '和',
       hookTitle: 'Codex 还差一步',
-      hookText: '打开 Codex → Settings → Hooks → 信任 dsh-baton。信任后，Codex 等 DeepSeek 时不再消耗额度。',
+      hookText: '打开 Codex → Settings → Hooks，信任 Stop 钩子“dsh-baton: waiting for the Harness run”。信任后，Codex 等 DeepSeek 时不再消耗额度。',
     }
     const en = {
       sentFrom: 'Sent by {name} from another chat',
@@ -77,7 +77,7 @@ window.__ModuleLoader__.load({
       notRegistered: 'not registered',
       and: 'and',
       hookTitle: 'One more step for Codex',
-      hookText: 'Open Codex → Settings → Hooks → trust dsh-baton. Once trusted, Codex no longer uses your quota while it waits for DeepSeek.',
+      hookText: 'Open Codex → Settings → Hooks and trust the Stop hook “dsh-baton: waiting for the Harness run”. Once trusted, Codex no longer uses your quota while it waits for DeepSeek.',
     }
 
     // --- Plugins page ------------------------------------------------------------
