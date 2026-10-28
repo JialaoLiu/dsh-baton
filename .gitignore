@@ -11,3 +11,31 @@ docs/STATUS.md
 
 # Demo build folder (recorded for the README, not part of the package)
 demo/
+
+# Public repo = code + what the README shows. Internal docs, benchmark tooling and raw data,
+# screenshots and release notes stay local (backed up off the repo), never pushed.
+docs/*
+!docs/demos.md
+!docs/demos.zh-CN.md
+!docs/benchmarks/
+docs/benchmarks/**
+!docs/benchmarks/**/
+!docs/benchmarks/token-usage-2026-10/charts/evidence-chain.svg
+!docs/benchmarks/token-usage-2026-10/charts/evidence-chain.zh.svg
+!docs/benchmarks/token-usage-2026-10/charts/natural-combined.svg
+!docs/benchmarks/token-usage-2026-10/charts/natural-combined.zh.svg
+!docs/benchmarks/token-usage-2026-10/charts/natural-quota-combined.svg
+!docs/benchmarks/token-usage-2026-10/charts/natural-quota-combined.zh.svg
+!docs/benchmarks/token-usage-2026-10/charts/task4-kanban.svg
+!docs/benchmarks/token-usage-2026-10/charts/task4-kanban.zh.svg
+!docs/benchmarks/token-usage-2026-10/natural/medium.md
+!docs/benchmarks/token-usage-2026-10/natural/large.md
+!docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase*.md
+scripts/readme-images/
+*.jpg
+*.jpeg
+*.mov
+*.mp4
+
+# Local list of private words for scripts/privacy-check.mjs
+.privacy-words

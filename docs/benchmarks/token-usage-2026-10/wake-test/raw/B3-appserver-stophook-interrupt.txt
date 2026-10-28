@@ -1,9 +1,0 @@
-/Users/jarvislao/.codex/sessions/2026/10/26/rollout-2026-10-26T19-11-56-01a1775f-9ab7-71c3-9fa6-d75d38f883ae.jsonl
-08:41:56.802 EVT  task_started {"type": "task_started", "turn_attribution": {"turn_id": "01a1775f-9b3e-7011-94bd-3d48d646a004", "turn_trigger": null, "parent_turn_id": null, "initiating_agent
-08:41:58.174 EVT  thread_settings_applied {"type": "thread_settings_applied", "thread_id": "01a1775f-9ab7-71c3-9fa6-d75d38f883ae", "thread_settings": {"model": "gpt-6-luna", "model_provider_id": "openai
-08:41:58.180 MSG  user This is a tool-behaviour test. Follow exactly, take no other actions. A background job runs outside this conversation. Do not run any tools. Reply with the single word: waiting.
-08:41:58.181 EVT  item_completed {"type": "item_completed", "thread_id": "01a1775f-9ab7-71c3-9fa6-d75d38f883ae", "turn_id": "01a1775f-9b3e-7011-94bd-3d48d646a004", "item": {"type": "UserMessage
-08:41:59.759 EVT  item_completed {"type": "item_completed", "thread_id": "01a1775f-9ab7-71c3-9fa6-d75d38f883ae", "turn_id": "01a1775f-9b3e-7011-94bd-3d48d646a004", "item": {"type": "AgentMessag
-08:41:59.762 MSG  assistant waiting
-08:41:59.784 TOKENS req#1 in=22372 cached=12544 out=5 reason=0 primary_used%=56.0
-08:42:21.914 EVT  turn_aborted {"type": "turn_aborted", "root_turn_id": "01a1775f-9b3e-7011-94bd-3d48d646a004", "turn_id": "01a1775f-9b3e-7011-94bd-3d48d646a004", "reason": "interrupted", "st

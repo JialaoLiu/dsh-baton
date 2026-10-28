@@ -25,4 +25,6 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
+      - name: Privacy check (no home paths, drives, LAN addresses, session files or screenshots outside assets/)
+        run: node scripts/privacy-check.mjs
       - run: npm test

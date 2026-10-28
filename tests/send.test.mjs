@@ -73,11 +73,11 @@ test('Codex: no cwd means the thread cwd from its rollout, not the server folder
   const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-codex-'))
   const day = path.join(codexHome, 'sessions', '2026', '10', '26')
   fs.mkdirSync(day, { recursive: true })
-  const thread = '01a17359-1d10-7b12-b26c-e166cf9f0759'
-  fs.writeFileSync(path.join(day, `rollout-2026-10-26T00-26-22-${thread}.jsonl`), JSON.stringify({ type: 'session_meta', payload: { id: thread, cwd: '/projects/ICT' } }) + '\n')
+  const thread = '00000000-0000-7000-8000-000000000001'
+  fs.writeFileSync(path.join(day, `rollout-2026-10-26T00-26-22-${thread}.jsonl`), JSON.stringify({ type: 'session_meta', payload: { id: thread, cwd: '/projects/demo' } }) + '\n')
   const meta = { 'x-codex-turn-metadata': { thread_id: thread } }
   const { host } = await sendFrom({ clientName: 'codex-mcp-client', cwd: codexHome, args: { message: 'hi' }, meta, env: { CODEX_HOME: codexHome } })
-  assert.equal(host.cwd, '/projects/ICT')
+  assert.equal(host.cwd, '/projects/demo')
   // Unknown thread, server started inside CODEX_HOME: no folder is guessed.
   const none = await sendFrom({ clientName: 'codex-mcp-client', cwd: codexHome, args: { message: 'hi' }, meta: { 'x-codex-turn-metadata': { thread_id: 'nope' } }, env: { CODEX_HOME: codexHome } })
   assert.equal(none.host.cwd, undefined)

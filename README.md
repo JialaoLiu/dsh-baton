@@ -91,8 +91,8 @@ You don't have to take DeepSeek's word for it. Before the run, dsh-baton notes w
 **Who this is for:** most of us pay for Claude or ChatGPT with a plan (Plus, Pro, Max 5x…), while DeepSeek is pay-as-you-go from a balance you top up, so every hand-over is money spent outside your plan. If your plan's limits already cover how you work, you don't need this: keep it simple and keep the money. If you're like me and keep running long, messy jobs with round after round of changes, and keep hitting the limit, a little DeepSeek spend gets you a lot more out of the plan you already pay for.
 
 **The two test tasks**, asked the way a user would (the requests are in Chinese, linked as written):
-- **Task 1 · CLI tool:** a command-line task manager in Node, no dependencies, split into modules, with tests. [Request](docs/benchmarks/token-usage-2026-10/natural/medium.md) · [acceptance check](docs/benchmarks/token-usage-2026-10/checks/natural-medium.mjs)
-- **Task 2 · Web app:** a task manager with a Node server and a page, REST API, stats, tests and a README. [Request](docs/benchmarks/token-usage-2026-10/natural/large.md) · [acceptance check](docs/benchmarks/token-usage-2026-10/checks/natural-large.mjs)
+- **Task 1 · CLI tool:** a command-line task manager in Node, no dependencies, split into modules, with tests. [Request](docs/benchmarks/token-usage-2026-10/natural/medium.md)
+- **Task 2 · Web app:** a task manager with a Node server and a page, REST API, stats, tests and a README. [Request](docs/benchmarks/token-usage-2026-10/natural/large.md)
 
 <p align="center">
   <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-combined.svg" width="100%" alt="Cost per task, working alone vs handed over with 0.6.2, Task 1 · CLI tool and Task 2 · Web app: Claude Code (Opus 5.5) and Codex (GPT-6.1 Sol, GPT-6 Astra), each on its own scale">
@@ -117,7 +117,7 @@ Share of the ChatGPT Plus 5-hour window per task: Task 1 Sol 1.9% → ≈0.6%, T
 
 **Why it got cheaper:** from 0.6.1 Codex is woken by its Stop hook instead of polling with `dsh_wait`, and 0.6.2 cuts the MCP instructions to one sentence, so Codex reads a few thousand to over ten thousand fewer new input tokens per hand-over.
 
-**Task 4 · Kanban app (phased):** a kanban board in plain Node and a plain front end, given in three phases in the same conversation: ① the core (REST API, storage, drag and drop); ② labels, due dates, search syntax, archive, undo and redo, activity log, import and export; ③ version conflicts, WIP limits, bulk actions, live sync over SSE, stats. Each phase has acceptance tests written beforehand, the same for both arms, 55 in all. Requests: [phase 1](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase1.md) · [phase 2](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase2.md) · [phase 3](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase3.md) · [acceptance tests](docs/benchmarks/token-usage-2026-10/xxl/seed/tests/acceptance/) · [checker](docs/benchmarks/token-usage-2026-10/xxl/check.mjs) · [how it was run](docs/benchmarks/token-usage-2026-10/xxl/README.md)
+**Task 4 · Kanban app (phased):** a kanban board in plain Node and a plain front end, given in three phases in the same conversation: ① the core (REST API, storage, drag and drop); ② labels, due dates, search syntax, archive, undo and redo, activity log, import and export; ③ version conflicts, WIP limits, bulk actions, live sync over SSE, stats. Each phase has acceptance tests written beforehand, the same for both arms, 55 in all. Requests: [phase 1](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase1.md) · [phase 2](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase2.md) · [phase 3](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase3.md)
 
 <p align="center">
   <img src="./docs/benchmarks/token-usage-2026-10/charts/task4-kanban.svg" width="100%" alt="Task 4 · Kanban app (phased), Codex GPT-6 Astra high: $8.69 alone vs $2.36 handed over with 0.6.2 ($1.62 client, −81%); 86% of the 5-hour window vs about 16%">
@@ -142,7 +142,6 @@ Task 3, the same kanban app with all three phases in one request, is being measu
 - Same model and effort in both arms, and every run judged by the same acceptance check, which the model never sees.
 - Working alone: the earlier mean of three runs per cell (Astra: one run each). Handed over with 0.6.2: one run per cell; all six passed the first time, with no rework and no `dsh_wait` call.
 - Prices are list prices. DeepSeek is counted at its peak price, the most conservative case; the real DeepSeek bill came to about 58% of that.
-- Every run: [run log](docs/benchmarks/token-usage-2026-10/LOG.md) (section "0.6.2 hand-over rerun"); raw data in `docs/benchmarks/token-usage-2026-10/results/*-n062*.jsonl`; method and earlier builds in the [full report](docs/benchmarks/token-usage-2026-10.md).
 
 </details>
 

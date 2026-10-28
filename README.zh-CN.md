@@ -91,8 +91,8 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 **适合谁**：大多数人用 Claude 或 ChatGPT 走的是订阅套餐（Plus、Pro、Max 5x 之类），而 DeepSeek 是充值后按用量扣费，所以每次转交都是套餐之外多花的钱。如果你的套餐额度本来就够用，就不用折腾这套流程，省一点是一点。如果你像我一样，经常跑又长又杂、要反复修改的大任务，老是撞上额度上限，那花一点 DeepSeek 的钱，就能让你已经付费的套餐多干很多活。
 
 **两个测试案例**，都按普通用户的口吻提需求（原文可以直接点开看）：
-- **案例 1 · 命令行工具**：用 Node 写一个命令行任务管理工具，零依赖，分模块，带测试。[需求原文](docs/benchmarks/token-usage-2026-10/natural/medium.md) · [验收脚本](docs/benchmarks/token-usage-2026-10/checks/natural-medium.mjs)
-- **案例 2 · 任务管理网页**：Node 服务器加前端页面，REST 接口、统计、测试和 README。[需求原文](docs/benchmarks/token-usage-2026-10/natural/large.md) · [验收脚本](docs/benchmarks/token-usage-2026-10/checks/natural-large.mjs)
+- **案例 1 · 命令行工具**：用 Node 写一个命令行任务管理工具，零依赖，分模块，带测试。[需求原文](docs/benchmarks/token-usage-2026-10/natural/medium.md)
+- **案例 2 · 任务管理网页**：Node 服务器加前端页面，REST 接口、统计、测试和 README。[需求原文](docs/benchmarks/token-usage-2026-10/natural/large.md)
 
 <p align="center">
   <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-combined.zh.svg" width="100%" alt="每个任务的花费，自己做与用 0.6.2 转交，案例 1 · 命令行工具和案例 2 · 任务管理网页：Claude Code（Opus 5.5）和 Codex（GPT-6.1 Sol、GPT-6 Astra），各用自己的刻度">
@@ -117,7 +117,7 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 
 **为什么更省了**：0.6.1 起 Codex 由 Stop 钩子唤醒，不再用 `dsh_wait` 轮询；0.6.2 把 MCP 说明缩成一句话，Codex 每次转交少读几千到一万多个新输入 token。
 
-**案例 4 · 看板应用（分阶段）**：只用 Node 内置模块和原生前端的看板应用，分三个阶段在同一个对话里依次给：① 主体（REST 接口、持久化、前端拖拽）；② 标签、截止日期、搜索语法、归档、撤销重做、活动日志、导入导出；③ 版本冲突检测、WIP 上限、批量操作、SSE 实时同步、统计。每个阶段都有事先写好的验收测试，两组用同一套，共 55 项。需求原文：[阶段 1](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase1.md) · [阶段 2](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase2.md) · [阶段 3](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase3.md) · [验收测试](docs/benchmarks/token-usage-2026-10/xxl/seed/tests/acceptance/) · [验收脚本](docs/benchmarks/token-usage-2026-10/xxl/check.mjs) · [测试流程](docs/benchmarks/token-usage-2026-10/xxl/README.md)
+**案例 4 · 看板应用（分阶段）**：只用 Node 内置模块和原生前端的看板应用，分三个阶段在同一个对话里依次给：① 主体（REST 接口、持久化、前端拖拽）；② 标签、截止日期、搜索语法、归档、撤销重做、活动日志、导入导出；③ 版本冲突检测、WIP 上限、批量操作、SSE 实时同步、统计。每个阶段都有事先写好的验收测试，两组用同一套，共 55 项。需求原文：[阶段 1](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase1.md) · [阶段 2](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase2.md) · [阶段 3](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase3.md)
 
 <p align="center">
   <img src="./docs/benchmarks/token-usage-2026-10/charts/task4-kanban.zh.svg" width="100%" alt="案例 4 · 看板应用（分阶段），Codex GPT-6 Astra high：自己做 $8.69，用 0.6.2 转交 $2.36（主 Agent $1.62，−81%）；5 小时额度 86% 对约 16%">
@@ -142,7 +142,6 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 - 两组用同一个模型、同样的推理强度；每次都用同一套验收脚本检查，模型看不到这个脚本。
 - 自己做：沿用之前每格 3 次的平均值（Astra 各 1 次）。用 0.6.2 转交：每格跑 1 次，6 次全部一次通过，没有返工，也没有调用 `dsh_wait`。
 - 价格按标价算。DeepSeek 按高峰价，是最保守的算法；实际 DeepSeek 账单大约是这个数的 58%。
-- 每一次运行：[运行日志](docs/benchmarks/token-usage-2026-10/LOG.md)（「0.6.2 hand-over rerun」一节）；原始数据在 `docs/benchmarks/token-usage-2026-10/results/*-n062*.jsonl`；方法和更早的版本见[完整报告](docs/benchmarks/token-usage-2026-10.md)。
 
 </details>
 
