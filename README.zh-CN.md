@@ -50,7 +50,7 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 
 插件启用后会为 Claude Code 和 Codex 注册 dsh-baton（对所有文件夹生效），Harness 里会弹出提示。
 
-**2. 仅 Codex，只需一次**：Codex **设置 → 钩子（Hooks）** → **信任** **dsh-baton: waiting for the Harness run**。之后 Codex 在任务跑完时会被自动唤醒，不用再每 270 秒查一次。只需信任一次：以后升级、热更新、重启 Harness 都不用再信任。不信任也能用，Codex 会照旧用 `dsh_wait` 等，第一次交接时会提醒你。
+**2. 仅 Codex，只需一次**：Codex **设置 → 钩子（Hooks）** → **信任** **dsh-baton: waiting for the Harness run**。钩子要插件 0.6.0 以上才有（没有 Node.js 时要 0.6.2 以上）；装好或更新插件后，先重启一次 Harness，再重启一次 Codex，它才会出现在这个列表里。不需要 Node.js：没有的话它和服务器一样用 Harness 自带运行环境。之后 Codex 在任务跑完时会被自动唤醒，不用再每 270 秒查一次。只需信任一次：以后升级、热更新、重启 Harness 都不用再信任。不信任也能用，Codex 会照旧用 `dsh_wait` 等，第一次交接时会提醒你。
 
 **3. 检查**：在 Claude Code 或 Codex 里**新开**一个对话，让它调用 `dsh_list_workspaces`，会列出你的 Harness 工作区。
 
@@ -207,7 +207,7 @@ dsh-baton rename-workspace ~/code/new-app 新名字
 
 **插件启用时做了什么**。它把 MCP 服务器复制到 `~/.dsh-baton/app` 这个固定的文件夹，再直接把 MCP 注册写进 `~/.claude.json` 和 `~/.codex/config.toml`，各留一份 `*.bak-dsh-baton` 备份。电脑上有 Node.js ≥ 22.15（在 `PATH` 里能找到）就用它启动服务器；没有的话，就用 Harness 自带的运行环境（Harness 应用本身以 Node 模式运行，`ELECTRON_RUN_AS_NODE=1`），不用另外安装任何东西。两种情况下，只装了桌面应用、`claude` / `codex` 不在 `PATH` 里也能用。每次 Harness 启动都会再检查一遍：已经正确的注册、或者指向另一份可用 dsh-baton 的注册，都不会改动。在 Harness 里输入包名后，安装源会自动切到「npm 官方源」（英文界面是 "Official npm registry"），不用另外选择，也不用重启。不想让插件自动注册，给 Harness 设置 `DSH_BATON_AUTO_REGISTER=0`。
 
-**Codex 的 Stop 钩子**。插件会在 `~/.codex/config.toml` 里加一段带 `# dsh-baton` 标记的 `[[hooks.Stop]]`，Codex 里显示为 **dsh-baton: waiting for the Harness run**，你信任之后才会运行（dsh-baton 不会替你信任）。这一段只写了一个小脚本的路径 `~/.dsh-baton/bin/codex-stop-hook`（Windows 上是 `codex-stop-hook.cmd`），Node.js 和服务器这些会变的路径都放在脚本里。所以这一段本身永远不变：升级、同版本刷新、重启 Harness 都不会动它，信任一直有效。万一这一段被改写，dsh-baton 会清掉旧的信任记录，Codex 会请你重新信任。Windows 上用 `.cmd`，是因为 Codex 通过 `PowerShell -Command` 运行钩子，启动不了带引号的程序路径。服务器用 Harness 自带运行环境时不加这个钩子。手动添加用 `dsh-baton setup --codex-hook`，`setup --remove` 会删掉它，给 Harness 设置 `DSH_BATON_CODEX_HOOK=0` 则插件不再添加。
+**Codex 的 Stop 钩子**。插件会在 `~/.codex/config.toml` 里加一段带 `# dsh-baton` 标记的 `[[hooks.Stop]]`，Codex 里显示为 **dsh-baton: waiting for the Harness run**，你信任之后才会运行（dsh-baton 不会替你信任）。这一段只写了一个小脚本的路径 `~/.dsh-baton/bin/codex-stop-hook`（Windows 上是 `codex-stop-hook.cmd`），Node.js 和服务器这些会变的路径都放在脚本里。所以这一段本身永远不变：升级、同版本刷新、重启 Harness 都不会动它，信任一直有效。万一这一段被改写，dsh-baton 会清掉旧的信任记录，Codex 会请你重新信任。Windows 上用 `.cmd`，是因为 Codex 通过 `PowerShell -Command` 运行钩子，启动不了带引号的程序路径。没有自己的 Node.js 时，脚本和服务器一样以 Node 模式（`ELECTRON_RUN_AS_NODE=1`）运行 Harness 程序本身；插件每次启动都会重写它，所以 Harness 更新后路径也会跟上。只有没装 Codex、设了 `DSH_BATON_CODEX_HOOK=0`、或 Codex 里的 dsh-baton 条目没指向服务器目录（比如裸的 `npx` 命令）时才不加；这时 Codex 对话里第一次交接会说明原因。手动添加用 `dsh-baton setup --codex-hook`，`setup --remove` 会删掉它，给 Harness 设置 `DSH_BATON_CODEX_HOOK=0` 则插件不再添加。
 
 **更新不用重启**。新版本装进 `~/.dsh-baton/app` 后（插件更新、`setup` 或手动复制），或者同一版本但文件有改动时，Claude Code 和 Codex 里已经开着的对话，下一次调用 `dsh_*` 工具时就会用上：服务器每次调用前检查这个文件夹，启动新版本，并在这次调用的结果里提示一次已经更新。正在进行的 `dsh_wait` 会先在旧版本里跑完。新版本启动失败时，旧版本继续工作，结果里会说明原因。新版本新增的工具，Claude Code 里马上就能用（服务器会通知客户端工具列表变了）；Codex 一直用对话开始时的工具列表，新工具要到下一个新对话才会显示；从 0.5.9 起，旧对话里也能通过 `dsh_call` 马上用上新功能（更新提示里会写明），已有的工具也会立刻用上新代码。这个功能从 0.5.8 之后的版本开始有效；由 0.5.8 或更早版本启动的服务器，还需要最后重启一次（或在 `/mcp` 里重新连接）。
 

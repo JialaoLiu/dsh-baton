@@ -63,6 +63,10 @@ test('one hook call: nothing pending ends the turn; a finished run comes back on
   assert.equal(out.decision, 'block')
   assert.match(out.reason, /hrun-a .* has ended \(completed\)/)
   assert.match(out.reason, /"final_text":"done","hint":"shaped"/)
+  // What the model reads is as before 0.6.2, word for word; the user sees a short line.
+  assert.equal(out.reason, `dsh-baton: the Harness run hrun-a you handed over with dsh_send has ended (completed). This is its result, as dsh_wait would return it; act on it now (follow the hints):\n${JSON.stringify({ run_id: 'hrun-a', state: 'completed', final_text: 'done', hint: 'shaped' })}`)
+  assert.equal(out.systemMessage, 'dsh-baton：Harness 任务 hrun-a（completed）已结束，结果已交回 Codex')
+  assert.deepEqual(Object.keys(out), ['decision', 'reason', 'systemMessage'])
   assert.equal(calls, 3)
   // Delivered: the continuation's own Stop lets the turn end.
   assert.equal(await hook.runHook({ session_id: 't1', stop_hook_active: true }, { shape, wait }), null)
@@ -74,6 +78,7 @@ test('a question is passed on once; if nobody answers, the turn ends instead of 
   const asking = async ({ run_id }) => ({ run_id, state: 'waiting', needs_input: 'answer', question: { count: 1, questions: [{ id: 'q1', question: 'Which?' }] } })
   const first = await hook.runHook({ session_id: 't2' }, { shape, wait: asking })
   assert.match(first.reason, /stopped to ask a question/)
+  assert.match(first.systemMessage, /^dsh-baton：Harness 任务 \S+ 在等回答，问题已交给 Codex$/)
   assert.equal(await hook.runHook({ session_id: 't2', stop_hook_active: true }, { shape, wait: asking }), null)
   // Answered (with dsh_answer), the run goes on: the next Stop waits for it again.
   const done = await hook.runHook({ session_id: 't2' }, { shape, wait: async ({ run_id }) => ({ run_id, state: 'completed' }) })
@@ -110,6 +115,8 @@ test('a run that asks a question or fails wakes Codex at once; the rest keep wai
   assert.match(first.reason, /2 Harness runs/)
   assert.match(first.reason, /Red or blue\?/)
   assert.match(first.reason, /Still running, not reviewed yet: hrun-q3/)
+  assert.match(first.systemMessage, /^dsh-baton：2 个 Harness 任务已交回 Codex：.*在等回答.*；还在运行 1 个$/)
+  assert.ok(first.systemMessage.length < 120)
   // The question is answered elsewhere; q3 fails next: that wakes it too, alone.
   states['hrun-q3'] = { state: 'failed', error: 'boom' }
   const second = await hook.runHook({ session_id: 'tq', stop_hook_active: true }, { shape: (s) => s, wait, chunk_s: 0 })
@@ -256,6 +263,73 @@ test('Windows: the hook runs through a .cmd wrapper at a path without spaces', a
   fs.rmSync(codexHome, { recursive: true, force: true })
 })
 
+test('on Harness\'s own runtime the wrapper sets Node mode first (sh and .cmd); the entry is the same', async () => {
+  const { codexHookEntry } = await import('../src/register.mjs')
+  const exe = 'C:\\Program Files\\DeepSeek Harness\\DeepSeek Harness.exe'
+  const script = path.join('C:\\app', 'src', 'server.mjs')
+  const cli = path.join('C:\\app', 'src', 'cli.mjs')
+  const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-hwrap-'))
+  const at = codexHookEntry(exe, script, { platform: 'win32', home: plain, harness: true })
+  assert.equal(at, codexHookEntry('C:\\node.exe', script, { platform: 'win32', home: plain }))
+  codexHookEntry(exe, script, { platform: 'win32', home: plain, harness: true })
+  assert.equal(fs.readFileSync(at, 'utf8'), `@set ELECTRON_RUN_AS_NODE=1\r\n@"${exe}" "${cli}" codex-stop-hook\r\n`)
+  // No 8.3 name for a home with a space: PowerShell's call form, with Node mode set first.
+  const spaced = path.join(plain, 'First Last')
+  assert.equal(codexHookEntry(exe, script, { platform: 'win32', home: spaced, shortPath: () => 'C:\\FIRSTL~1\\w.cmd', harness: true }), 'C:\\FIRSTL~1\\w.cmd')
+  assert.equal(codexHookEntry(exe, script, { platform: 'win32', home: spaced, shortPath: () => null, harness: true }), `$env:ELECTRON_RUN_AS_NODE='1'; & "${exe}" "${cli}" codex-stop-hook`)
+  const mac = '/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness'
+  const shAt = codexHookEntry(mac, '/srv/app/src/server.mjs', { platform: 'darwin', home: plain, harness: true })
+  assert.equal(fs.readFileSync(shAt, 'utf8'), `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec '${mac}' '${path.join('/srv/app/src', 'cli.mjs')}' codex-stop-hook "$@"\n`)
+  fs.rmSync(plain, { recursive: true, force: true })
+})
+
+// Harness's binary runs cli.mjs only with ELECTRON_RUN_AS_NODE=1. Stood in for by a
+// "runtime" that refuses to start without it and then runs this node.
+test('the Harness-runtime wrapper starts the hook in Node mode', async () => {
+  const { codexHookEntry } = await import('../src/register.mjs')
+  const at = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-erun-'))
+  const win = process.platform === 'win32'
+  const runtime = path.join(at, win ? 'harness.cmd' : 'harness')
+  fs.writeFileSync(runtime, win
+    ? `@if not "%ELECTRON_RUN_AS_NODE%"=="1" exit /b 9\r\n@"${process.execPath}" %*\r\n`
+    : `#!/bin/sh\n[ "$ELECTRON_RUN_AS_NODE" = 1 ] || exit 9\nexec '${process.execPath}' "$@"\n`, { mode: 0o700 })
+  const entry = codexHookEntry(runtime, SERVER, { home: at, harness: true })
+  const env = { ...process.env, DSH_BATON_HOME: at }
+  delete env.ELECTRON_RUN_AS_NODE
+  const alive = path.join(at, 'codex-hook', 'alive')
+  const r = win
+    ? spawnSync(process.env.ComSpec || 'cmd.exe', ['/C', entry], { input: '{"session_id":"no-runs-here"}', env, windowsHide: true, timeout: 60000 })
+    : spawnSync('/bin/sh', ['-c', entry], { input: '{"session_id":"no-runs-here"}', env, timeout: 60000 })
+  assert.equal(r.status, 0, String(r.stderr))
+  assert.ok(fs.existsSync(alive), entry)
+  // Without Node mode the stand-in refuses: the wrapper is what sets it.
+  fs.rmSync(alive)
+  const plain = codexHookEntry(runtime, SERVER, { home: at })
+  const bad = win
+    ? spawnSync(process.env.ComSpec || 'cmd.exe', ['/C', plain], { input: '{}', env, windowsHide: true })
+    : spawnSync('/bin/sh', ['-c', plain], { input: '{}', env })
+  assert.equal(bad.status, 9)
+  fs.rmSync(at, { recursive: true, force: true })
+})
+
+test('why the hook was not added is one sentence, only when the plugin noted a reason', () => {
+  const file = path.join(home, 'codex-hook', 'registered.json')
+  const note = (r) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(r)) }
+  fs.rmSync(file, { force: true })
+  assert.equal(hook.hookSkipReason(), null) // no plugin from 0.6.2 on yet
+  note({ state: 'added', reason: null })
+  assert.equal(hook.hookSkipReason(), null)
+  note({ state: 'off', reason: null }) // Codex not installed: nothing to say
+  assert.equal(hook.hookSkipReason(), null)
+  note({ state: 'off', reason: 'disabled' })
+  assert.match(hook.hookSkipReason(), /^dsh-baton's Codex Stop hook is not set up because it is turned off with DSH_BATON_CODEX_HOOK=0 .*dsh_wait\.$/)
+  note({ state: 'skipped', reason: 'no-cli' })
+  assert.match(hook.hookSkipReason(), /cli\.mjs/)
+  note({ state: 'failed', reason: 'EACCES: permission denied' })
+  assert.match(hook.hookSkipReason(), /adding it failed \(EACCES: permission denied\)/)
+  fs.rmSync(file, { force: true })
+})
+
 // What Codex does on Windows: the whole command as one argument to PowerShell -Command,
 // or to cmd /C when no shell is set. Run the generated command both ways, for real.
 test('Windows: the generated hook command runs under PowerShell and cmd', { skip: process.platform !== 'win32' }, async () => {
@@ -398,6 +472,39 @@ test('Codex with the hook not trusted yet: dsh_wait, and the user is told once p
   assert.match(told[0].hint, /^First, start your reply to the user with note_for_user/)
   for (const r of [replies[2], replies[3]]) assert.match(r.hint, /dsh_wait/)
   assert.ok(replies[4].note_for_user) // a new conversation is told again
+  fs.rmSync(codexHome, { recursive: true, force: true })
+})
+
+test('Codex without the hook: the first hand-over of a conversation says why in its hint', async () => {
+  const net = await import('node:net')
+  const { socketEndpoint } = await import('../host/lib/socket.js')
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-nohook-'))
+  fs.writeFileSync(path.join(codexHome, 'config.toml'), 'model = "x"\n')
+  const file = path.join(home, 'codex-hook', 'registered.json')
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, JSON.stringify({ state: 'off', reason: 'disabled', at: 1 }))
+  const sock = path.join(home, 'n.sock')
+  let n = 0
+  const server = net.createServer((c) => c.on('data', (d) => {
+    const req = JSON.parse(String(d).split('\n')[0])
+    c.end(JSON.stringify({ id: req.id, result: { run_id: `hrun-n${++n}`, state: 'queued' } }) + '\n')
+  }))
+  await new Promise((r) => server.listen(socketEndpoint(sock), r))
+  const child = spawn(process.execPath, [SERVER], { env: { ...process.env, CODEX_HOME: codexHome, DSH_BATON_BACKEND: 'host', DSH_BATON_SOCKET: sock } })
+  let out = ''
+  child.stdout.on('data', (d) => { out += d })
+  const send = (id, threadId) => ({ id, method: 'tools/call', params: { name: 'dsh_send', arguments: { session_id: 's1', message: 'hi' }, _meta: { threadId } } })
+  child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: 'codex-mcp-client', version: '1' } } }) + '\n')
+  for (const m of [send(2, 'thread-n1'), send(3, 'thread-n1')]) {
+    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n')
+    await new Promise((resolve) => { const tick = setInterval(() => { if (out.includes(`"id":${m.id}`)) { clearInterval(tick); resolve() } }, 50) })
+  }
+  child.stdin.end(); server.close()
+  const replies = Object.fromEntries(out.split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((m) => m.id > 1).map((m) => [m.id, JSON.parse(m.result.content[0].text)]))
+  assert.match(replies[2].hint, /^dsh-baton's Codex Stop hook is not set up because it is turned off with DSH_BATON_CODEX_HOOK=0.*Tell the user so in one line, in their language\. Run started\. Call dsh_wait/)
+  assert.equal(replies[2].note_for_user, undefined)
+  assert.match(replies[3].hint, /^Run started\. Call dsh_wait/) // once per conversation
+  fs.rmSync(file, { force: true })
   fs.rmSync(codexHome, { recursive: true, force: true })
 })
 

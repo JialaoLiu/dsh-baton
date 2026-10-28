@@ -138,7 +138,7 @@ test('without a Node.js of its own, the server runs on Harness in Node mode', ()
     assert.deepEqual(claude, { type: 'stdio', command: exe, args: [script], env: { ELECTRON_RUN_AS_NODE: '1' } })
     const codex = fs.readFileSync(s.codexFile, 'utf8')
     assert.deepEqual(readCodexEntry(codex), { command: exe, args: [script], env: { ELECTRON_RUN_AS_NODE: '1' } })
-    assert.match(codex, /\[mcp_servers\.dsh-baton\.env\]\nELECTRON_RUN_AS_NODE = '1'\n$/)
+    assert.match(codex, /\[mcp_servers\.dsh-baton\.env\]\nELECTRON_RUN_AS_NODE = '1'\n(\n# dsh-baton: wakes Codex|$)/)
     // A later run finds it working and leaves it, and a later edit replaces the env table too.
     assert.deepEqual(states(s.run({ find: () => null, fallback: harnessRuntime(exe) })), { claude: 'unchanged', codex: 'unchanged' })
     assert.doesNotMatch(editCodexConfig(codex, { command: '/n', args: ['/s'] }), /ELECTRON_RUN_AS_NODE/)
@@ -222,10 +222,47 @@ test('the Codex Stop hook goes in with the server, once, and only with a real no
   try {
     assert.equal(off.run({ env: { PATH: '', DSH_BATON_CODEX_HOOK: '0' } }).codexHook, 'off')
     assert.doesNotMatch(fs.readFileSync(off.codexFile, 'utf8'), /codex-stop-hook/)
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(off.home, '.dsh-baton', 'codex-hook', 'registered.json'), 'utf8')).reason, 'disabled')
   } finally { off.done() }
+  const bare = sandbox()
+  try {
+    // A bare command (npx) has no cli.mjs to run: skipped, and the reason noted.
+    fs.writeFileSync(bare.codexFile, editCodexConfig('', { command: 'npx', args: ['-y', 'dsh-baton-mcp'] }))
+    assert.equal(bare.run().codexHook, 'skipped')
+    assert.equal(JSON.parse(fs.readFileSync(path.join(bare.home, '.dsh-baton', 'codex-hook', 'registered.json'), 'utf8')).reason, 'no-cli')
+  } finally { bare.done() }
+})
+
+test('on Harness\'s own runtime the hook goes in too: the wrapper runs it in Node mode, the entry is the same', () => {
+  const exe = process.execPath
+  const wrapper = (s) => path.join(s.home, '.dsh-baton', 'bin', process.platform === 'win32' ? 'codex-stop-hook.cmd' : 'codex-stop-hook')
+  const hookBlock = (text) => text.match(/# dsh-baton: wakes Codex[^]*?\ntimeout = \d+\n/)[0]
   const harness = sandbox()
   try {
-    // On Harness's own runtime there is no node to name in a hook command.
-    assert.equal(harness.run({ find: () => null, fallback: harnessRuntime(process.execPath) }).codexHook, 'skipped')
+    const r = harness.run({ find: () => null, fallback: harnessRuntime(exe) })
+    assert.equal(r.runtime, 'harness')
+    assert.equal(r.codexHook, 'added')
+    const cli = path.join(harness.app, 'src', 'cli.mjs')
+    const script = fs.readFileSync(wrapper(harness), 'utf8')
+    if (process.platform === 'win32') assert.equal(script, `@set ELECTRON_RUN_AS_NODE=1\r\n@"${exe}" "${cli}" codex-stop-hook\r\n`)
+    else assert.equal(script, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec '${exe}' '${cli}' codex-stop-hook "$@"\n`)
+    assert.equal(JSON.parse(fs.readFileSync(path.join(harness.home, '.dsh-baton', 'codex-hook', 'registered.json'), 'utf8')).state, 'added')
   } finally { harness.done() }
+  // A user who trusted the hook on their own Node.js, then moved to Harness's runtime:
+  // only the wrapper changes; the entry, byte for byte, and Codex's trust record stay.
+  const moved = sandbox()
+  try {
+    assert.equal(moved.run().codexHook, 'added')
+    fs.appendFileSync(moved.codexFile, '\n[hooks.state."x:stop:0:0"]\ntrusted_hash = "sha256:1"\n')
+    const before = fs.readFileSync(moved.codexFile, 'utf8')
+    const script = path.join(moved.app, 'src', 'server.mjs')
+    fs.writeFileSync(moved.codexFile, editCodexConfig(before, { ...harnessRuntime(exe), args: [script] }))
+    const switched = fs.readFileSync(moved.codexFile, 'utf8')
+    assert.equal(moved.run({ find: () => null, fallback: harnessRuntime(exe) }).codexHook, 'unchanged')
+    const after = fs.readFileSync(moved.codexFile, 'utf8')
+    assert.equal(after, switched)
+    assert.equal(hookBlock(after), hookBlock(before))
+    assert.match(after, /trusted_hash = "sha256:1"/)
+    assert.match(fs.readFileSync(wrapper(moved), 'utf8'), /ELECTRON_RUN_AS_NODE=1/)
+  } finally { moved.done() }
 })

@@ -7,7 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import * as core from './core.mjs'
-import { codexConfigPath, stableNodePath, codexHookEntry, codexHookStatus, HOOK_TIMEOUT_S } from './register.mjs'
+import { codexConfigPath, stableNodePath, codexHookEntry, codexHookStatus, hookResultFile, HOOK_TIMEOUT_S } from './register.mjs'
 
 export { editCodexHook, HOOK_TIMEOUT_S } from './register.mjs'
 
@@ -68,6 +68,20 @@ export function hookUntrusted() {
   }
 }
 
+// Why the plugin did not add the hook (see addCodexHook), in one sentence, or null: when
+// it was added, when Codex is not installed, or when no plugin from 0.6.2 on has run yet.
+const SKIP_REASONS = {
+  disabled: 'it is turned off with DSH_BATON_CODEX_HOOK=0 in the environment Harness runs with',
+  'no-cli': "Codex's dsh-baton entry does not name a server folder with cli.mjs in it (a bare command such as npx, or a folder that is gone)",
+}
+export function hookSkipReason(env = process.env) {
+  let r = null
+  try { r = JSON.parse(fs.readFileSync(hookResultFile(env), 'utf8')) } catch { return null }
+  if (!['off', 'skipped', 'failed'].includes(r?.state) || !r.reason) return null
+  const why = SKIP_REASONS[r.reason] ?? `adding it failed (${String(r.reason).slice(0, 200)})`
+  return `dsh-baton's Codex Stop hook is not set up because ${why}, so Codex waits with dsh_wait.`
+}
+
 // Each Codex conversation is told about trusting the hook once.
 const notedFile = () => path.join(dir(), 'trust-noted.json')
 export function noteOnce(thread) {
@@ -92,6 +106,16 @@ function reasonFor(results, running) {
     : ''
   const body = one ? JSON.stringify(one) : JSON.stringify(results)
   return `dsh-baton: ${what}.${still} ${one ? 'This is its result' : 'These are their results'}, as dsh_wait would return ${one ? 'it' : 'them'}; act on ${one ? 'it' : 'them'} now (follow the hints):\n${body}`
+}
+
+// What Codex shows the user for the wake (systemMessage), instead of the JSON in reason:
+// a short line per run with its id and state. The model reads reason only.
+export function summaryFor(results, running = []) {
+  const one = (r) => r.needs_input ? `${r.run_id} 在等回答` : `${r.run_id}（${r.state}）`
+  const head = results.length === 1
+    ? (results[0].needs_input ? `dsh-baton：Harness 任务 ${one(results[0])}，问题已交给 Codex` : `dsh-baton：Harness 任务 ${one(results[0])}已结束，结果已交回 Codex`)
+    : `dsh-baton：${results.length} 个 Harness 任务已交回 Codex：${results.map(one).join('，')}`
+  return running.length ? `${head}；还在运行 ${running.length} 个` : head
 }
 
 // The JSON Codex writes to the hook's stdin, or null. A leading BOM is dropped (seen on
@@ -153,7 +177,8 @@ export async function runHook(input, { shape, wait = core.api.wait, now = Date.n
     }
     if (ended.size && (urgent || !running.length)) {
       for (const [runId, st] of ended) delivered(runId, st)
-      return { decision: 'block', reason: reasonFor([...ended].map(([run_id, st]) => ({ run_id, ...shape(st) })), running) }
+      const results = [...ended].map(([run_id, st]) => ({ run_id, ...shape(st) }))
+      return { decision: 'block', reason: reasonFor(results, running), systemMessage: summaryFor(results, running) }
     }
     if (!running.length) return null
     if (now() > deadline) return null
@@ -161,6 +186,6 @@ export async function runHook(input, { shape, wait = core.api.wait, now = Date.n
 }
 
 // The hook entry for Codex's config.toml (see register.mjs, which also writes it).
-export function hookCommand(root = core.ROOT, node = stableNodePath(), { platform } = {}) {
-  return codexHookEntry(node, path.join(root, 'src', 'server.mjs'), { platform, home: core.config.batonHome })
+export function hookCommand(root = core.ROOT, node = stableNodePath(), { platform, harness = Boolean(process.versions.electron) } = {}) {
+  return codexHookEntry(node, path.join(root, 'src', 'server.mjs'), { platform, home: core.config.batonHome, harness })
 }

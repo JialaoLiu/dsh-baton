@@ -5,7 +5,7 @@ import path from 'node:path'
 import * as core from './core.mjs'
 import { stableNodePath } from './setup.mjs'
 import { conversationFolder, within } from './folder.mjs'
-import { threadOf, remember, delivered, hookActive, hookUntrusted, noteOnce } from './codex-hook.mjs'
+import { threadOf, remember, delivered, hookActive, hookUntrusted, hookSkipReason, noteOnce } from './codex-hook.mjs'
 
 const SERVER = { name: 'dsh-baton', version: core.VERSION }
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
@@ -148,9 +148,13 @@ const TOOLS = [
           return { ...st, hint: `Run started. End your turn now: reply to the user in one short line (in their language) that the task is with DeepSeek Harness. Do not call dsh_wait, dsh_status or any other tool, and do not read the target folder. When all the runs you started end (or one stops to ask something or fails), dsh-baton continues this conversation by itself with their results together (as dsh_wait returns them), so you review them in one go. If the conversation is ever resumed without it, call dsh_wait with this run_id.` }
         }
         // Not trusted yet: the user is told once per conversation, until they trust it.
-        const note = thread && hookUntrusted() && noteOnce(thread) ? { note_for_user: TRUST_NOTE } : null
+        const untrusted = thread && hookUntrusted()
+        const note = untrusted && noteOnce(thread) ? { note_for_user: TRUST_NOTE } : null
         const relay = note ? 'First, start your reply to the user with note_for_user, in their language, on a line of its own. ' : ''
-        return { ...st, ...note, hint: `${relay}Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${NO_POLL} ${codeModeYield()}` }
+        // Not added at all: the reason, once per conversation.
+        const reason = thread && !untrusted ? hookSkipReason() : null
+        const why = reason && noteOnce(thread) ? `${reason} Tell the user so in one line, in their language. ` : ''
+        return { ...st, ...note, hint: `${relay}${why}Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${NO_POLL} ${codeModeYield()}` }
       }
       return {
         ...st,

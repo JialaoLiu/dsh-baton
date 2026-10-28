@@ -130,13 +130,17 @@ export const hookWrapperPath = (home = batonHome(), platform = process.platform)
 // A path with spaces (a user name with a space): on Windows its 8.3 short form, else
 // PowerShell's call form of the whole line (PowerShell being Codex's shell on Windows);
 // elsewhere the path in double quotes, for the shell Codex runs the command with.
-export function codexHookEntry(node, script, { platform = process.platform, home = batonHome(), shortPath = winShortPath } = {}) {
+//
+// harness: node is Harness's own binary (no Node.js of the user's own, see harnessRuntime),
+// which runs cli.mjs only in Node mode, so the wrapper sets ELECTRON_RUN_AS_NODE=1 first.
+// The entry stays the same either way: only the script changes.
+export function codexHookEntry(node, script, { platform = process.platform, home = batonHome(), shortPath = winShortPath, harness = false } = {}) {
   const line = codexHookCommand(node, script)
   const file = hookWrapperPath(home, platform)
   const sh = (p) => `'${p.replace(/'/g, `'\\''`)}'`
   const body = platform === 'win32'
-    ? `@${line.replace(/%/g, '%%')}\r\n`
-    : `#!/bin/sh\nexec ${sh(node)} ${sh(path.join(path.dirname(script), 'cli.mjs'))} codex-stop-hook "$@"\n`
+    ? `${harness ? '@set ELECTRON_RUN_AS_NODE=1\r\n' : ''}@${line.replace(/%/g, '%%')}\r\n`
+    : `#!/bin/sh\n${harness ? 'ELECTRON_RUN_AS_NODE=1 ' : ''}exec ${sh(node)} ${sh(path.join(path.dirname(script), 'cli.mjs'))} codex-stop-hook "$@"\n`
   fs.mkdirSync(path.dirname(file), { recursive: true })
   let old = null
   try { old = fs.readFileSync(file, 'utf8') } catch { /* first time */ }
@@ -145,7 +149,7 @@ export function codexHookEntry(node, script, { platform = process.platform, home
   if (!/\s/.test(file)) return file
   if (platform !== 'win32') return JSON.stringify(file)
   const at = shortPath(file)
-  return at && !/\s/.test(at) ? at : `& ${line}`
+  return at && !/\s/.test(at) ? at : `${harness ? "$env:ELECTRON_RUN_AS_NODE='1'; " : ''}& ${line}`
 }
 
 // The 8.3 short form of an existing path, or null (8.3 names can be off for a drive).
@@ -443,23 +447,36 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
 
 // The Codex Stop hook goes in with the server, so Codex waits for runs without model
 // requests (see codex-hook.mjs). It runs cli.mjs beside the server Codex is set up with,
-// with the same node. Codex runs a new hook only once the user trusts it (Settings →
-// Hooks); until then dsh-baton keeps to dsh_wait. Not added when the server runs on
-// Harness's own runtime or a bare command (no node to name), or with DSH_BATON_CODEX_HOOK=0.
+// with the same runtime: the user's Node.js, or Harness's own in Node mode. Codex runs a
+// new hook only once the user trusts it (Settings → Hooks); until then dsh-baton keeps to
+// dsh_wait. Not added without Codex, with DSH_BATON_CODEX_HOOK=0, or when the entry has
+// no cli.mjs to run (a bare command such as npx, or a server folder that is gone).
+// What happened, and why, is noted in hookResultFile for dsh_send to pass on.
 function addCodexHook(codex, env, fallback, home) {
+  const done = (state, reason = null) => {
+    try {
+      const file = hookResultFile(env, home)
+      fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 })
+      fs.writeFileSync(file, JSON.stringify({ state, reason, at: Date.now() }))
+    } catch { /* nowhere to note it */ }
+    return state
+  }
   try {
-    if (!codex?.present || env.DSH_BATON_CODEX_HOOK === '0') return 'off'
+    if (!codex?.present) return 'off'
+    if (env.DSH_BATON_CODEX_HOOK === '0') return done('off', 'disabled')
     const e = readCodexEntry(fs.existsSync(codex.file) ? fs.readFileSync(codex.file, 'utf8') : '')
     const script = e?.args?.[0]
-    const usable = e && /[\\/]/.test(e.command) && !e.env?.ELECTRON_RUN_AS_NODE &&
-      (!fallback || path.resolve(e.command) !== path.resolve(fallback.command)) &&
-      script && fs.existsSync(path.join(path.dirname(script), 'cli.mjs'))
-    if (!usable) return 'skipped'
-    return rewrite(codex.file, (t) => editCodexHook(t, codexHookEntry(e.command, script, { home: batonHome(env, home) }))) === 'updated' ? 'added' : 'unchanged'
-  } catch {
-    return 'failed'
+    if (!e || !/[\\/]/.test(e.command) || !script || !fs.existsSync(path.join(path.dirname(script), 'cli.mjs'))) return done('skipped', 'no-cli')
+    const harness = e.env?.ELECTRON_RUN_AS_NODE === '1' || Boolean(fallback && path.resolve(e.command) === path.resolve(fallback.command))
+    const entry = codexHookEntry(e.command, script, { home: batonHome(env, home), harness })
+    return done(rewrite(codex.file, (t) => editCodexHook(t, entry)) === 'updated' ? 'added' : 'unchanged')
+  } catch (err) {
+    return done('failed', err.message)
   }
 }
+
+// What the plugin last did about the hook ({ state, reason, at }), see addCodexHook.
+export const hookResultFile = (env = process.env, home = os.homedir()) => path.join(batonHome(env, home), 'codex-hook', 'registered.json')
 
 // Where the Stop hook notes each run (codex-hook.mjs): when, and the node and cli.mjs it
 // ran as, so a hook rewritten since can be told from the one Codex trusted.
