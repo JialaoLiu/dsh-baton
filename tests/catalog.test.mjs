@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { codexCatalog } from '../docs/benchmarks/token-usage-2026-10/codex-catalog.mjs'
+import { codexCatalog } from './codex-catalog.mjs'
 
 const MCP = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'mcp.mjs')
 

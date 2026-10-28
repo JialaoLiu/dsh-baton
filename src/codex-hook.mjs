@@ -3,7 +3,7 @@
 // Codex feed reason back to the model in the same turn. `dsh-baton codex-stop-hook` is such
 // a hook: after dsh_send the model ends its turn, the hook waits for the run without any
 // model requests, and returns the result as dsh_wait would. One wake instead of a dsh_wait
-// call every few minutes. See docs/benchmarks/token-usage-2026-10/wake-test/REPORT.md.
+// call every few minutes.
 import fs from 'node:fs'
 import path from 'node:path'
 import * as core from './core.mjs'
