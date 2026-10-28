@@ -176,3 +176,15 @@ With the check fixed, the hand-over costs about half of working alone on the med
   Reviewer's notes. Alone: the most coherent collectible-diorama read, clean flat toon palette; interior small and generic, thin side section. v2: the warmest, most cinematic lighting, glowing interior, dense poles and wires, visible soil-layer section; but semi-realistic rather than cel-shaded, dark background blocks spill past the base, and in some views the apartment block hides the store. v1: the richest readable props; framing crops the base, cool flat interior, heavy blocky backdrop.
 - Reading: the guidance made the hand-over better (v2 40 vs v1 36, more detail, as the user saw), at about the same GPT cost as v1 once the polling is removed ($1.35 vs $1.18) and a larger DeepSeek bill. Working alone still scored highest, mainly on style (cel shading) and framing; v2's extra detail did not make up for losing the toon look. One reviewer, one build each: a direction, not a settled ranking. The earlier observation that DeepSeek fills in detail is borne out; that its taste is better than GPT's is not, by this scoring.
 
+
+### 2026-10-28: 0.6.2 catalogue size (no client runs)
+
+- Change: the MCP server's `instructions` went from 1,605 characters to one sentence (89), and its rules moved into the tools that need them (hand-over and cwd into `dsh_send`, answering into `dsh_answer`, waiting into `dsh_wait` and `dsh_send`'s hint, archived sessions into `dsh_list_sessions`). Codex's `dsh_wait` text now follows the hook: with the Stop hook trusted it says to end the turn when `dsh_send`'s hint says so, instead of the old "call dsh_wait until the final state".
+- Measured with `codex-catalog.mjs`, which builds the catalogue the way Codex does (instructions in front of every tool's description, plus each input schema), 10 tools, Codex hook not installed:
+
+| Version | Instructions | Descriptions | Schemas | Catalogue Codex shows | Claude Code (instructions once) |
+|---|---|---|---|---|---|
+| 0.6.1 (8850f11) | 1,605 | 4,089 | 4,124 | 24,283 | 9,485 |
+| 0.6.2 | 89 | 4,703 | 4,062 | 9,675 (−60%) | 8,474 (−11%) |
+
+- At about 4 characters per token, the catalogue read in each Codex run drops from about 6.1k to 2.4k tokens. Not yet confirmed in a client run: the rerun is the coordinator's.

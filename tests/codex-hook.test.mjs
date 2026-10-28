@@ -415,3 +415,25 @@ test('moving the MCP table keeps the hook marker that follows it, and the hook e
   assert.equal(hook.editCodexHook(moved, hook.hookCommand('/r', '/n')), moved, 'the hook is still recognised as written')
   assert.equal(editCodexConfig(moved, null).includes('# dsh-baton: wakes'), true, 'removing the MCP server leaves the hook alone')
 })
+
+test('Codex\'s dsh_wait description follows the hook: wait without it, end the turn with it trusted', async () => {
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-codex-'))
+  const cfg = path.join(codexHome, 'config.toml')
+  const describe = () => new Promise((resolve) => {
+    const child = spawn(process.execPath, [SERVER], { env: { ...process.env, CODEX_HOME: codexHome, DSH_BATON_BACKEND: 'host', DSH_BATON_SOCKET: path.join(home, 'none.sock') } })
+    let out = ''
+    child.stdout.on('data', (d) => { out += d })
+    child.on('close', () => resolve(out.trim().split('\n').map((l) => JSON.parse(l)).find((m) => m.id === 2).result.tools.find((t) => t.name === 'dsh_wait').description))
+    child.stdin.end([
+      { id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: 'codex-mcp-client' } } },
+      { id: 2, method: 'tools/list' },
+    ].map((m) => JSON.stringify({ jsonrpc: '2.0', ...m })).join('\n') + '\n')
+  })
+  const none = await describe()
+  assert.doesNotMatch(none, /end your turn/)
+  assert.match(none, /call dsh_wait again with the same run_id/)
+  fs.writeFileSync(cfg, `${hook.editCodexHook('', hook.hookCommand('/r', '/n'))}\n[hooks.state."${cfg}:stop:0:0"]\ntrusted_hash = "sha256:a"\n`)
+  fs.rmSync(path.join(home, 'codex-hook', 'alive'), { force: true })
+  assert.match(await describe(), /when dsh_send's hint says to end your turn, end it, and the result comes back by itself/)
+  fs.rmSync(codexHome, { recursive: true, force: true })
+})

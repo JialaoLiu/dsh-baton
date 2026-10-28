@@ -137,6 +137,8 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 <details>
 <summary>完整工具说明</summary>
 
+服务器的 MCP instructions 只有一句话（0.6.2 起）；怎么转交、怎么等、怎么回答问题，都写在各个工具自己的说明里。Codex 会在每个工具的说明前面重复一遍 instructions，所以它给模型看的工具目录从约 2.43 万字符降到约 0.97 万字符。
+
 | 工具 | 作用 |
 |---|---|
 | `dsh_list_workspaces` | 列出 Harness 侧边栏里的工作区 |
@@ -211,7 +213,7 @@ dsh-baton rename-workspace ~/code/new-app 新名字
 
 **`npx -y dsh-baton-mcp setup`** 在终端里做同样的注册：用于插件没能注册的情况，或者从 MCP 目录过来的用户。插件已经注册过时它什么都不改；插件没装的话，它会提示去添加。
 
-**更新**。Harness 只给官方插件提供"更新"按钮，所以要：插件 → dsh-baton-host → **卸载**，再**添加插件** → `dsh-baton-host`。新版本刚发布的一段时间里，Harness 会装上一个版本（pnpm 的 `minimumReleaseAge` 会暂缓刚发布的版本，安装弹窗里会说明）；想马上用新版，输入带版本号的名字：`dsh-baton-host@0.6.1`。预发布版必须写确切版本号添加，比如 `dsh-baton-host@0.6.0-next.0`：Harness 会把 `@next` 解析成一个坏掉的占位包。只输入 `dsh-baton-host` 装的是最新正式版。重新启用后，插件会把 MCP 服务器也更新到同一版本，新开的对话就会用上。万一两边版本对不上，第一次发现不一致的工具调用会提示，并写明哪一边旧、另一边的确切版本号。
+**更新**。Harness 只给官方插件提供"更新"按钮，所以要：插件 → dsh-baton-host → **卸载**，再**添加插件** → `dsh-baton-host`。新版本刚发布的一段时间里，Harness 会装上一个版本（pnpm 的 `minimumReleaseAge` 会暂缓刚发布的版本，安装弹窗里会说明）；想马上用新版，输入带版本号的名字：`dsh-baton-host@0.6.2`。预发布版必须写确切版本号添加，比如 `dsh-baton-host@0.6.0-next.0`：Harness 会把 `@next` 解析成一个坏掉的占位包。只输入 `dsh-baton-host` 装的是最新正式版。重新启用后，插件会把 MCP 服务器也更新到同一版本，新开的对话就会用上。万一两边版本对不上，第一次发现不一致的工具调用会提示，并写明哪一边旧、另一边的确切版本号。
 
 **卸载**。Harness → 插件 → dsh-baton-host → **卸载**，再运行 `npx -y dsh-baton-mcp setup --remove`。插件分不清"被卸载"和"Harness 退出"，所以 MCP 注册交给这条命令删，它也会删掉 `~/.dsh-baton/app`；运行记录留在 `~/.dsh-baton`，不需要的话自己删掉。
 

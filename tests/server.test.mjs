@@ -179,15 +179,13 @@ test('Claude Code gets a background wait_command; Codex, which cannot be woken b
   const claude = await sendAs('claude-code')
   assert.match(claude.sent.wait_command, /cli\.mjs" wait hrun-1$/)
   assert.match(claude.sent.hint, /background/)
-  assert.match(claude.instructions, /wait_command/)
   const codex = await sendAs('codex-mcp-client')
   assert.equal(codex.sent.wait_command, undefined)
   assert.match(codex.sent.hint, /Call dsh_wait/)
   assert.match(codex.sent.hint, /dsh_session_activity/)
   assert.match(codex.sent.hint, /must start with the line \/\/ @exec: \{"yield_time_ms": 290000\}/)
   assert.match(codex.sent.hint, /do not list or read the target folder/)
-  assert.match(codex.instructions, /archived/)
-  assert.doesNotMatch(codex.instructions, /wait_command/)
+  assert.equal(codex.instructions, claude.instructions, 'one short sentence for every client; the rules are in the tools')
 })
 
 test('dsh_wait length is chosen per client, and DSH_BATON_WAIT_S overrides it', async () => {
