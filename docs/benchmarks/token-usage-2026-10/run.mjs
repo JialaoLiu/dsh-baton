@@ -20,6 +20,8 @@ const start = Number(arg('start', '1'))
 // A label keeps runs of another dsh-baton build apart: own folders and results/<client>-<label>.jsonl.
 const label = arg('label', '')
 // --tasks natural: the plain-language requests in natural/ with behaviour checks (checks/natural-*.mjs).
+// --tasks xxl (size tsumiki): the three-phase kanban app in xxl/, all three phases in one message;
+// the folder starts from xxl/seed and the check is xxl/check.mjs for all three phases.
 const taskSet = arg('tasks', 'spec')
 // --server: arm B uses this dsh-baton server.mjs (a worktree) instead of the installed ~/.dsh-baton/app.
 const serverPath = path.resolve(arg('server', path.join(os.homedir(), '.dsh-baton', 'app', 'src', 'server.mjs')))
@@ -42,11 +44,16 @@ const CLAUDE = (() => {
 })()
 const CLAUDE_MODEL = 'claude-opus-5-5', CLAUDE_EFFORT = 'high'
 
-const prompt = (size, arm) => taskSet === 'natural'
+const XXL_MESSAGE = '按 docs/phase1.md、docs/phase2.md、docs/phase3.md 把三个阶段都做完。验收测试在 tests/acceptance/，不能修改；npm test 全部通过才算完成。'
+const prompt = (size, arm) => taskSet === 'xxl'
+  ? XXL_MESSAGE + (arm === 'B' ? '交给 DeepSeek Harness 去做。' : '')
+  : taskSet === 'natural'
   ? fs.readFileSync(path.join(HERE, 'natural', `${size}.md`), 'utf8') + (arm === 'B' ? '\n交给 DeepSeek Harness 去做。\n' : '')
   : fs.readFileSync(path.join(HERE, 'prompts', `${size}-${arm === 'A' ? 'A-alone' : 'B-harness'}.md`), 'utf8')
 const checkScript = (size) => path.join(HERE, 'checks', `${taskSet === 'natural' ? 'natural-' : ''}${size}.mjs`)
-const reworkPrompt = (failures) => `验收没通过，失败项如下：\n${failures.map((f) => `- ${f}`).join('\n')}\n\n请修好。`
+const reworkPrompt = (failures) => taskSet === 'xxl'
+  ? `外部验收没通过，下面这些测试失败：\n${failures.join('\n')}\n修到 npm test 全部通过。`
+  : `验收没通过，失败项如下：\n${failures.map((f) => `- ${f}`).join('\n')}\n\n请修好。`
 
 function exec(cmd, args, { cwd, input }) {
   return new Promise((resolve) => {
@@ -173,6 +180,10 @@ async function runOne(size, arm, rep) {
   const dir = path.join(ROOT, `${client}-${taskSet === 'natural' ? 'n' : ''}${size}-${arm}-${rep}${label ? `-${label}` : ''}`)
   fs.rmSync(dir, { recursive: true, force: true })
   fs.mkdirSync(dir, { recursive: true })
+  if (taskSet === 'xxl') {
+    fs.cpSync(path.join(HERE, 'xxl', 'seed'), dir, { recursive: true })
+    spawnSync('git', ['init', '-q'], { cwd: dir }); spawnSync('git', ['add', '-A'], { cwd: dir }); spawnSync('git', ['commit', '-qm', 'seed'], { cwd: dir })
+  }
   const turn = client === 'codex' ? codexTurn : claudeTurn
   const windowBefore = client === 'codex' ? codexWindow() : null
   const t0 = Date.now()
@@ -183,7 +194,9 @@ async function runOne(size, arm, rep) {
     const r = await turn(dir, arm, text, thread)
     thread = r.thread
     turns.push({ code: r.code, result: r.result, tail: r.code ? r.tail : undefined })
-    const c = spawnSync('node', [checkScript(size), dir], { encoding: 'utf8', timeout: 300000 })
+    const c = taskSet === 'xxl'
+      ? spawnSync('node', [path.join(HERE, 'xxl', 'check.mjs'), dir, '3'], { encoding: 'utf8', timeout: 60 * 60 * 1000 })
+      : spawnSync('node', [checkScript(size), dir], { encoding: 'utf8', timeout: 300000 })
     try { check = JSON.parse(c.stdout) } catch { check = { pass: false, failures: [`check crashed: ${(c.stderr || c.stdout).slice(-300)}`] } }
     if (check.pass || reworks >= MAX_REWORK || !thread) break
     reworks++
