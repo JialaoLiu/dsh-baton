@@ -9,6 +9,8 @@ import path from 'node:path'
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-hook-'))
 process.env.DSH_BATON_HOME = home
+// No Codex config of this machine's: its language would change the glance in reason.
+process.env.CODEX_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-codexhome-'))
 const hook = await import('../src/codex-hook.mjs')
 const SERVER = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'server.mjs')
 
@@ -63,8 +65,8 @@ test('one hook call: nothing pending ends the turn; a finished run comes back on
   assert.equal(out.decision, 'block')
   assert.match(out.reason, /hrun-a .* has ended \(completed\)/)
   assert.match(out.reason, /"final_text":"done","hint":"shaped"/)
-  // What the model reads is as before 0.6.2, word for word; the user sees a short line.
-  assert.equal(out.reason, `dsh-baton: the Harness run hrun-a you handed over with dsh_send has ended (completed). This is its result, as dsh_wait would return it; act on it now (follow the hints):\n${JSON.stringify({ run_id: 'hrun-a', state: 'completed', final_text: 'done', hint: 'shaped' })}`)
+  // A glance for the person, then the text the model read before, word for word.
+  assert.equal(out.reason, `dsh-baton · hrun-a: completed\n\ndsh-baton: the Harness run hrun-a you handed over with dsh_send has ended (completed). This is its result, as dsh_wait would return it; act on it now (follow the hints):\n${JSON.stringify({ run_id: 'hrun-a', state: 'completed', final_text: 'done', hint: 'shaped' })}`)
   assert.equal(out.systemMessage, 'dsh-baton：Harness 任务 hrun-a（completed）已结束，结果已交回 Codex')
   assert.deepEqual(Object.keys(out), ['decision', 'reason', 'systemMessage'])
   assert.equal(calls, 3)
@@ -122,6 +124,70 @@ test('a run that asks a question or fails wakes Codex at once; the rest keep wai
   const second = await hook.runHook({ session_id: 'tq', stop_hook_active: true }, { shape: (s) => s, wait, chunk_s: 0 })
   assert.match(second.reason, /hrun-q3 you handed over with dsh_send has ended \(failed\)/)
   assert.doesNotMatch(second.reason, /hrun-q1/) // already handed back
+})
+
+test('reason opens with a glance in Codex\'s language, then the full results for the model', async () => {
+  const at = (s) => new Date(Date.UTC(2026, 0, 1, 0, 0, s)).toISOString()
+  const done = {
+    run_id: 'hrun-g1', state: 'completed', started_at: at(0), ended_at: at(252), final_text: 'ok',
+    evidence: { changes: { created: [{ path: 'a' }], modified: [{ path: 'b' }, { path: 'c' }], deleted: [] }, checks: [{ passed: true }, { passed: true }], all_checks_passed: true },
+  }
+  const failed = { run_id: 'hrun-g2', state: 'failed', started_at: at(0), ended_at: at(45), error: 'boom', evidence: { changes: { created: [], modified: [], deleted: [] }, checks: [{ passed: true }, { passed: false }], all_checks_passed: false } }
+  const long = 'x'.repeat(150)
+  const asking = { run_id: 'hrun-g3', state: 'waiting', needs_input: 'answer', question: { count: 2, questions: [{ id: 'q', question: `Which one?\n${long}` }, { id: 'r', question: 'And?' }] } }
+  const approval = { run_id: 'hrun-g4', state: 'waiting', needs_input: 'harness-ui' }
+
+  assert.equal(hook.glanceFor([done]), 'dsh-baton · hrun-g1: completed in 4m 12s · 3 files changed · checks passed (2/2)')
+  assert.equal(hook.glanceFor([done], [], 'zh'), 'dsh-baton · hrun-g1：已完成，用时 4 分 12 秒 · 改动 3 个文件 · 项目测试通过（2/2）')
+  assert.equal(hook.glanceFor([failed]), 'dsh-baton · hrun-g2: failed in 45s · 0 files changed · checks failed (1/2)')
+  assert.equal(hook.glanceFor([failed], [], 'zh'), 'dsh-baton · hrun-g2：失败，用时 45 秒 · 改动 0 个文件 · 项目测试未通过（1/2）')
+  // A question: its first 100 characters, on one line; no time, the run has not ended.
+  const q = `Which one? ${'x'.repeat(89)}…`
+  assert.equal(hook.glanceFor([asking]), `dsh-baton · hrun-g3: waiting for an answer (2 questions): "${q}"`)
+  assert.equal(hook.glanceFor([asking], [], 'zh'), `dsh-baton · hrun-g3：在等回答（共 2 个问题）：「${q}」`)
+  assert.equal(hook.glanceFor([approval], [], 'zh'), 'dsh-baton · hrun-g4：在等你在 Harness 里批准')
+  // Fields the result does not hold are left out, not looked up.
+  assert.equal(hook.glanceFor([{ run_id: 'hrun-g5', state: 'cancelled' }]), 'dsh-baton · hrun-g5: cancelled')
+  assert.equal(hook.glanceFor([{ run_id: 'h', state: 'completed', started_at: at(0), ended_at: at(3725) }]), 'dsh-baton · h: completed in 1h 2m')
+  // Several runs: one line each, and the ones still going.
+  assert.equal(hook.glanceFor([done, asking], ['hrun-g6', 'hrun-g7']), [
+    'dsh-baton: 2 Harness runs are back',
+    '- hrun-g1: completed in 4m 12s · 3 files changed · checks passed (2/2)',
+    `- hrun-g3: waiting for an answer (2 questions): "${q}"`,
+    'Still running: hrun-g6, hrun-g7',
+  ].join('\n'))
+  assert.equal(hook.glanceFor([done, failed], ['hrun-g6'], 'zh'), [
+    'dsh-baton：2 个 Harness 任务回来了',
+    '- hrun-g1：已完成，用时 4 分 12 秒 · 改动 3 个文件 · 项目测试通过（2/2）',
+    '- hrun-g2：失败，用时 45 秒 · 改动 0 个文件 · 项目测试未通过（1/2）',
+    '还在运行：hrun-g6',
+  ].join('\n'))
+
+  // The language comes from Codex's config; the JSON after the glance is unchanged.
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-lang-'))
+  const env = { CODEX_HOME: codexHome }
+  assert.equal(hook.codexLang(env), 'en') // no config
+  fs.writeFileSync(path.join(codexHome, 'config.toml'), 'model = "x"\n\n[desktop]\nlocaleOverride = "zh-CN"\n')
+  assert.equal(hook.codexLang(env), 'zh')
+  fs.writeFileSync(path.join(codexHome, 'config.toml'), '[desktop]\nlocaleOverride = "ja-JP"\n')
+  assert.equal(hook.codexLang(env), 'en')
+  fs.writeFileSync(path.join(codexHome, 'config.toml'), '[desktop]\nlocaleOverride = "zh-CN"\n')
+  const saved = process.env.CODEX_HOME
+  process.env.CODEX_HOME = codexHome
+  try {
+    hook.remember('tg', 'hrun-g1')
+    hook.remember('tg', 'hrun-g2')
+    const states = { 'hrun-g1': done, 'hrun-g2': failed }
+    const out = await hook.runHook({ session_id: 'tg' }, { shape: (s) => s, wait: async ({ run_id }) => states[run_id], chunk_s: 0 })
+    const [glance, rest] = out.reason.split('\n\n')
+    assert.equal(glance, hook.glanceFor([done, failed], [], 'zh'))
+    assert.ok(rest.startsWith('dsh-baton: 2 Harness runs you handed over with dsh_send have come back.'))
+    assert.ok(rest.endsWith(`act on them now (follow the hints):\n${JSON.stringify([done, failed])}`))
+    assert.match(out.systemMessage, /^dsh-baton：2 个 Harness 任务已交回 Codex/) // as before
+  } finally {
+    process.env.CODEX_HOME = saved
+    fs.rmSync(codexHome, { recursive: true, force: true })
+  }
 })
 
 test('a result the model already got with dsh_wait is not delivered again', async () => {

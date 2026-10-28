@@ -94,9 +94,90 @@ export function noteOnce(thread) {
   return true
 }
 
-// What the model is told: each run's result as dsh_wait returns it, and which runs of the
-// same batch are still going (when one came back early to ask something or failed).
-function reasonFor(results, running) {
+// The language of Codex's own interface: 'zh' when localeOverride in its config ([desktop])
+// starts with zh, else 'en' (also when it is not set or the config cannot be read).
+export function codexLang(env = process.env) {
+  try {
+    const m = fs.readFileSync(codexConfigPath(env), 'utf8').match(/^\s*localeOverride\s*=\s*["']([^"']*)["']/m)
+    return /^zh/i.test(m?.[1] ?? '') ? 'zh' : 'en'
+  } catch {
+    return 'en'
+  }
+}
+
+// Codex desktop shows reason as is and folds the rest of a long message away, so it opens
+// with a few lines a person reads at a glance: per run, its state, how long it took, and
+// the files and checks dsh-baton saw (only what the result already holds).
+const WORDS = {
+  en: {
+    state: { completed: 'completed', failed: 'failed', cancelled: 'cancelled', interrupted: 'interrupted' },
+    asks: (q, n) => `waiting for an answer${n > 1 ? ` (${n} questions)` : ''}${q ? `: "${q}"` : ''}`,
+    approval: 'waiting for an approval in Harness',
+    took: (t) => ` in ${t}`, units: ['h', 'm', 's'], join: ' ',
+    files: (n, more) => `${n}${more ? '+' : ''} file${n === 1 && !more ? '' : 's'} changed`,
+    checks: (ok, all, pass) => `checks ${pass ? 'passed' : 'failed'} (${ok}/${all})`,
+    many: (n) => `dsh-baton: ${n} Harness runs are back`,
+    running: (ids) => `Still running: ${ids.join(', ')}`,
+    sep: ': ', dot: ' · ',
+  },
+  zh: {
+    state: { completed: '已完成', failed: '失败', cancelled: '已取消', interrupted: '被中断' },
+    asks: (q, n) => `在等回答${n > 1 ? `（共 ${n} 个问题）` : ''}${q ? `：「${q}」` : ''}`,
+    approval: '在等你在 Harness 里批准',
+    took: (t) => `，用时 ${t}`, units: [' 小时', ' 分', ' 秒'], join: ' ',
+    files: (n, more) => `改动 ${n}${more ? '+' : ''} 个文件`,
+    checks: (ok, all, pass) => `项目测试${pass ? '通过' : '未通过'}（${ok}/${all}）`,
+    many: (n) => `dsh-baton：${n} 个 Harness 任务回来了`,
+    running: (ids) => `还在运行：${ids.join('、')}`,
+    sep: '：', dot: ' · ',
+  },
+}
+
+function took(r, w) {
+  const ms = Date.parse(r.ended_at) - Date.parse(r.started_at)
+  if (!(ms >= 0)) return null
+  const s = Math.round(ms / 1000)
+  const [h, m, sec] = [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60]
+  const parts = h ? [[h, 0], [m, 1]] : m ? [[m, 1], [sec, 2]] : [[sec, 2]]
+  return parts.filter(([v], i) => v || i === 0).map(([v, u]) => `${v}${w.units[u]}`).join(w.join)
+}
+
+const clip = (text, n = 100) => {
+  const t = String(text ?? '').replace(/\s+/g, ' ').trim()
+  return t.length > n ? `${t.slice(0, n)}…` : t
+}
+
+function runLine(r, w) {
+  if (r.needs_input) {
+    const qs = r.question?.questions ?? []
+    return r.needs_input === 'harness-ui' && !qs.length ? w.approval : w.asks(clip(qs[0]?.question), qs.length)
+  }
+  const t = took(r, w)
+  const bits = [`${w.state[r.state] ?? r.state}${t ? w.took(t) : ''}`]
+  const ch = r.evidence?.changes
+  if (ch) bits.push(w.files((ch.created?.length ?? 0) + (ch.modified?.length ?? 0) + (ch.deleted?.length ?? 0), ch.truncated))
+  const checks = r.evidence?.checks
+  if (checks?.length) bits.push(w.checks(checks.filter((c) => c.passed).length, checks.length, Boolean(r.evidence.all_checks_passed)))
+  return bits.join(w.dot)
+}
+
+export function glanceFor(results, running = [], lang = 'en') {
+  const w = WORDS[lang] ?? WORDS.en
+  const lines = results.length === 1
+    ? [`dsh-baton${w.dot}${results[0].run_id}${w.sep}${runLine(results[0], w)}`]
+    : [w.many(results.length), ...results.map((r) => `- ${r.run_id}${w.sep}${runLine(r, w)}`)]
+  if (running.length) lines.push(w.running(running))
+  return lines.join('\n')
+}
+
+// What the model is told: a glance for the person first, then each run's result as
+// dsh_wait returns it, and which runs of the same batch are still going (when one came
+// back early to ask something or failed).
+function reasonFor(results, running, lang) {
+  return `${glanceFor(results, running, lang)}\n\n${modelPart(results, running)}`
+}
+
+function modelPart(results, running) {
   const one = results.length === 1 ? results[0] : null
   const what = one
     ? `the Harness run ${one.run_id} you handed over with dsh_send has ${one.needs_input ? 'stopped to ask a question' : `ended (${one.state})`}`
@@ -146,7 +227,7 @@ function ranAs() {
 // last of them ends, with all their results, so it reviews the parallel parts together.
 // A run that stops to ask a question or fails wakes it at once (with whatever else has
 // ended by then); the rest keep waiting for the next Stop.
-export async function runHook(input, { shape, wait = core.api.wait, now = Date.now, chunk_s = 10, self = ranAs() } = {}) {
+export async function runHook(input, { shape, wait = core.api.wait, now = Date.now, chunk_s = 10, self = ranAs(), lang } = {}) {
   fs.mkdirSync(dir(), { recursive: true, mode: 0o700 })
   fs.writeFileSync(aliveFile(), JSON.stringify({ at: now(), ...self }))
   const thread = input?.session_id
@@ -178,7 +259,7 @@ export async function runHook(input, { shape, wait = core.api.wait, now = Date.n
     if (ended.size && (urgent || !running.length)) {
       for (const [runId, st] of ended) delivered(runId, st)
       const results = [...ended].map(([run_id, st]) => ({ run_id, ...shape(st) }))
-      return { decision: 'block', reason: reasonFor(results, running), systemMessage: summaryFor(results, running) }
+      return { decision: 'block', reason: reasonFor(results, running, lang ?? codexLang()), systemMessage: summaryFor(results, running) }
     }
     if (!running.length) return null
     if (now() > deadline) return null
