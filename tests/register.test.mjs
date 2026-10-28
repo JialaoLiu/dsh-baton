@@ -246,7 +246,9 @@ test('on Harness\'s own runtime the hook goes in too: the wrapper runs it in Nod
     const script = fs.readFileSync(wrapper(harness), 'utf8')
     if (process.platform === 'win32') assert.equal(script, `@set ELECTRON_RUN_AS_NODE=1\r\n@"${exe}" "${cli}" codex-stop-hook\r\n`)
     else assert.equal(script, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec '${exe}' '${cli}' codex-stop-hook "$@"\n`)
-    assert.equal(JSON.parse(fs.readFileSync(path.join(harness.home, '.dsh-baton', 'codex-hook', 'registered.json'), 'utf8')).state, 'added')
+    const noted = JSON.parse(fs.readFileSync(path.join(harness.home, '.dsh-baton', 'codex-hook', 'registered.json'), 'utf8'))
+    assert.equal(noted.state, 'added')
+    assert.ok(fs.readFileSync(harness.codexFile, 'utf8').includes(`command = ${JSON.stringify(noted.command)}`))
   } finally { harness.done() }
   // A user who trusted the hook on their own Node.js, then moved to Harness's runtime:
   // only the wrapper changes; the entry, byte for byte, and Codex's trust record stay.

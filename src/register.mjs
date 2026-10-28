@@ -453,11 +453,11 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
 // no cli.mjs to run (a bare command such as npx, or a server folder that is gone).
 // What happened, and why, is noted in hookResultFile for dsh_send to pass on.
 function addCodexHook(codex, env, fallback, home) {
-  const done = (state, reason = null) => {
+  const done = (state, reason = null, command = null) => {
     try {
       const file = hookResultFile(env, home)
       fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 })
-      fs.writeFileSync(file, JSON.stringify({ state, reason, at: Date.now() }))
+      fs.writeFileSync(file, JSON.stringify({ state, reason, command, at: Date.now() }))
     } catch { /* nowhere to note it */ }
     return state
   }
@@ -469,13 +469,15 @@ function addCodexHook(codex, env, fallback, home) {
     if (!e || !/[\\/]/.test(e.command) || !script || !fs.existsSync(path.join(path.dirname(script), 'cli.mjs'))) return done('skipped', 'no-cli')
     const harness = e.env?.ELECTRON_RUN_AS_NODE === '1' || Boolean(fallback && path.resolve(e.command) === path.resolve(fallback.command))
     const entry = codexHookEntry(e.command, script, { home: batonHome(env, home), harness })
-    return done(rewrite(codex.file, (t) => editCodexHook(t, entry)) === 'updated' ? 'added' : 'unchanged')
+    return done(rewrite(codex.file, (t) => editCodexHook(t, entry)) === 'updated' ? 'added' : 'unchanged', null, entry)
   } catch (err) {
     return done('failed', err.message)
   }
 }
 
-// What the plugin last did about the hook ({ state, reason, at }), see addCodexHook.
+// What the plugin last did about the hook ({ state, reason, command, at }), see addCodexHook.
+// command is the hook command as written to config.toml (the wrapper path, its 8.3 form,
+// or PowerShell's call form), so a check need not parse TOML.
 export const hookResultFile = (env = process.env, home = os.homedir()) => path.join(batonHome(env, home), 'codex-hook', 'registered.json')
 
 // Where the Stop hook notes each run (codex-hook.mjs): when, and the node and cli.mjs it

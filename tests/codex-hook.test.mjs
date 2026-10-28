@@ -309,6 +309,21 @@ test('the Harness-runtime wrapper starts the hook in Node mode', async () => {
     ? spawnSync(process.env.ComSpec || 'cmd.exe', ['/C', plain], { input: '{}', env, windowsHide: true })
     : spawnSync('/bin/sh', ['-c', plain], { input: '{}', env })
   assert.equal(bad.status, 9)
+  // Windows with 8.3 names off for the volume (fsutil 8dot3name) and a home with a space:
+  // no short path, so the entry is PowerShell's call form with Node mode set first.
+  if (win) {
+    const spaced = path.join(at, 'First Last')
+    const call = codexHookEntry(runtime, SERVER, { home: spaced, shortPath: () => null, harness: true })
+    assert.match(call, /^\$env:ELECTRON_RUN_AS_NODE='1'; & "/)
+    const spacedAlive = path.join(spaced, 'codex-hook', 'alive')
+    for (const shell of ['powershell', 'pwsh']) {
+      fs.rmSync(spacedAlive, { force: true })
+      const r2 = spawnSync(shell, ['-NoProfile', '-Command', call], { input: '{"session_id":"no-runs-here"}', env: { ...env, DSH_BATON_HOME: spaced }, windowsHide: true, timeout: 60000 })
+      if (r2.error?.code === 'ENOENT') continue
+      assert.equal(r2.status, 0, `${shell}: ${r2.stderr}`)
+      assert.ok(fs.existsSync(spacedAlive), `${shell} -Command ${call}`)
+    }
+  }
   fs.rmSync(at, { recursive: true, force: true })
 })
 
