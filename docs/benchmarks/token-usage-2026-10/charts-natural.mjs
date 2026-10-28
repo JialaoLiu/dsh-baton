@@ -72,7 +72,12 @@ const overlapped = (r) => { const [a, b] = span(r); return codexRows.some((o) =>
 // The ratio is taken from Sol runs: the estimated runs are all Sol, and every Astra run ran alone.
 const alone = codexRows.filter((r) => !overlapped(r) && !/astra/.test(r.model ?? '') && measuredQuota(r) !== null && valid(r))
 export const DOLLARS_PER_PERCENT = alone.reduce((a, r) => a + mainCost(r), 0) / alone.reduce((a, r) => a + measuredQuota(r), 0)
-const quota = (r) => (overlapped(r) ? { v: mainCost(r) / DOLLARS_PER_PERCENT, estimated: true } : { v: measuredQuota(r), estimated: false })
+// The window reads in whole percent, so a run that used less than one point reads 0 or 1: those are
+// estimated from cost too.
+const quota = (r) => {
+  const m = overlapped(r) ? null : measuredQuota(r)
+  return m === null || m < 1 ? { v: overlapped(r) || m !== null ? mainCost(r) / DOLLARS_PER_PERCENT : null, estimated: true } : { v: m, estimated: false }
+}
 
 const C = { FG: '#0F172A', MUTED: '#5B6577', GRID: '#E2E7EF', BG: '#FFFFFF', DS: '#C3CAD5' }
 // Validated categorical order (dataviz validator: lightness, chroma, contrast pass; one CVD pair at 7.8, so every bar is also named).
@@ -215,25 +220,23 @@ const quotaGroups = ['medium', 'large'].map((size) => ({
 }))
 if (!ASTRA && !rolloutsMissing) chart({ title: T.quotaTitle, note: T.quotaNote.replace('$RATE', `$${DOLLARS_PER_PERCENT.toFixed(3)}`), note2: ZH ? '每根柱子是 3 次的平均值；≈ 表示含估算。绿色百分比 = 比自己做省多少。' : 'Each bar is the mean of 3 runs; ≈ marks estimates. Green % = less than working alone.', groups: quotaGroups, file: `natural-codex-quota${RELEASE ? '-release' : ''}`, unit: (v) => `${v.toFixed(1)}%`, legend: methodsFor('codex').map((m) => ({ name: name(m), color: m.color })) })
 // One row, two panels with their own y-axis (Claude Code costs several times what Codex does):
-// working alone vs 0.6.0 only. The total sits on top of each hand-over bar; the client's own
-// cost sits inside the bar where the grey DeepSeek part meets the blue client part.
+// working alone vs the current release (0.6.2). The total sits on top of each hand-over bar; the
+// client's own cost sits inside the bar where the grey DeepSeek part meets the blue client part.
+// The tasks are described above the chart in the README, with links to their briefs.
+const HANDED = ZH ? '转交（0.6.2）' : 'Handed over (0.6.2)'
+const SCENARIO = ZH ? { medium: '案例 1 · 命令行工具', large: '案例 2 · 任务管理网页' } : { medium: 'Task 1 · CLI tool', large: 'Task 2 · Web app' }
 if (COMBINED) {
-  const handedLabel = 'nreview', DS_NAME = 'DeepSeek V4.1 Flash 1017'
-  const cell = (client, size, label, sub) => {
-    const base = pick(client, size, { ...METHODS[0], label: label ?? METHODS[0].label })
-    const list = pick(client, size, { key: 'B', label: label ?? handedLabel })
+  const DS_NAME = 'DeepSeek V4.1 Flash 1017'
+  const cell = (client, size, aloneLabel, handLabel) => {
+    const base = pick(client, size, { ...METHODS[0], label: aloneLabel })
+    const list = pick(client, size, { key: 'B', label: handLabel })
     const alone = mean(base.map(mainCost)), own = mean(list.map(mainCost)), ds = mean(list.map(dsCost))
-    return { size, sub, alone, own, ds, total: own + ds }
+    return { size, alone, own, ds, total: own + ds }
   }
-  // The large task (Astra, one run each; LOG.md, "Large task, v2 result"): not in results/*.jsonl,
-  // so its numbers are written here. The hand-over is v2 (0.6.1). Its client cost leaves out the
-  // three dsh_wait polls ($0.17) a since-fixed hook bug caused after a wake; raw it was $1.52.
-  const XL = { size: 'xl', sub: ZH ? '各 1 次' : '1 run each', alone: 4.37, own: 1.52 - 0.168, ds: 1.297, handed: ZH ? '转交（0.6.1）' : 'Handed over (0.6.1)' }
-  XL.total = XL.own + XL.ds
   const panels = [
-    { title: 'Claude Code · Opus 5.5 high', cells: [cell('claude', 'medium'), cell('claude', 'large')] },
-    { title: 'Codex · GPT-6.1 Sol high', cells: [cell('codex', 'medium'), cell('codex', 'large')] },
-    { title: 'Codex · GPT-6 Astra high', cells: [cell('codex', 'medium', 'nastra', ZH ? '转交为 2 次平均' : 'hand-over: mean of 2'), cell('codex', 'large', 'nastra', ZH ? '各 1 次' : '1 run each'), XL] },
+    { title: 'Claude Code · Opus 5.5 high', cells: [cell('claude', 'medium', 'n059', 'n062'), cell('claude', 'large', 'n059', 'n062')] },
+    { title: 'Codex · GPT-6.1 Sol high', cells: [cell('codex', 'medium', 'n059', 'n062'), cell('codex', 'large', 'n059', 'n062')] },
+    { title: 'Codex · GPT-6 Astra high', cells: [cell('codex', 'medium', 'nastra', 'n062astra'), cell('codex', 'large', 'nastra', 'n062astra')] },
   ]
   const W = 1800, H = 680, TOP = 120, BOT = 150, GAP = 76, LEFT = 70
   const usable = W - LEFT - 30 - GAP * (panels.length - 1) - 20
@@ -283,9 +286,8 @@ if (COMBINED) {
       }
       const by = y(0)
       out.push(`<text x="${xa + bw / 2}" y="${by + 18}" font-size="12" fill="${C.FG}" text-anchor="middle">${esc(name(METHODS[0]))}</text>`,
-        `<text x="${xb + bw / 2}" y="${by + 18}" font-size="12" fill="${C.FG}" text-anchor="middle">${esc(c.handed ?? (ZH ? '转交（0.6.0）' : 'Handed over (0.6.0)'))}</text>`,
-        `<text x="${cx0}" y="${by + 44}" font-size="14" font-weight="600" fill="${C.FG}" text-anchor="middle">${esc(c.size === 'xl' ? (ZH ? '大号任务' : 'Large task') : T[c.size])}</text>`)
-      if (c.sub) out.push(`<text x="${cx0}" y="${by + 63}" font-size="12" fill="${C.MUTED}" text-anchor="middle">${esc(c.sub)}</text>`)
+        `<text x="${xb + bw / 2}" y="${by + 18}" font-size="12" fill="${C.FG}" text-anchor="middle">${esc(HANDED)}</text>`,
+        `<text x="${cx0}" y="${by + 44}" font-size="14" font-weight="600" fill="${C.FG}" text-anchor="middle">${esc(SCENARIO[c.size])}</text>`)
     })
     x += pw + GAP
   }
@@ -294,7 +296,6 @@ if (COMBINED) {
     out.push(`<rect x="${lx}" y="${H - 52}" width="13" height="13" rx="2" fill="${it.color}"/>`, `<text x="${lx + 20}" y="${H - 41}" font-size="13" fill="${C.FG}">${esc(it.name)}</text>`)
     lx += 40 + textW(it.name, 13.5)
   }
-  out.push(`<text x="24" y="${H - 14}" font-size="12" fill="${C.MUTED}">${esc(ZH ? '大号任务的转交为 0.6.1，主 Agent 花费已扣除一次已修复 bug 造成的轮询（$0.17）。' : 'Large task: handed over with 0.6.1; its client cost leaves out polling caused by a since-fixed bug ($0.17).')}</text>`)
   out.push('</svg>')
   const svg = path.join(OUT, `natural-combined${ZH ? '.zh' : ''}.svg`)
   fs.writeFileSync(svg, out.join('\n') + '\n')
@@ -304,20 +305,20 @@ if (COMBINED) {
 // per model with its own y-axis. Runs that overlapped another Codex run are estimated (≈).
 if (rolloutsMissing) console.warn('Some Codex rollouts are gone (set DSHB_ROLLOUTS to their archive): the 5-hour window charts were left as they are.')
 if (COMBINED && !rolloutsMissing) {
-  const cell = (size, label, sub) => {
+  const cell = (size, aloneLabel, handLabel) => {
     const q = (m) => pick('codex', size, m).map(quota).filter((x) => x.v !== null)
-    const a = q({ ...METHODS[0], label: label ?? METHODS[0].label }), b = q({ key: 'B', label: label ?? 'nreview' })
-    return { size, sub, alone: mean(a.map((x) => x.v)), handed: mean(b.map((x) => x.v)), estA: a.some((x) => x.estimated), estB: b.some((x) => x.estimated) }
+    const a = q({ ...METHODS[0], label: aloneLabel }), b = q({ key: 'B', label: handLabel })
+    return { size, alone: mean(a.map((x) => x.v)), handed: mean(b.map((x) => x.v)), estA: a.some((x) => x.estimated), estB: b.some((x) => x.estimated) }
   }
   const panels = [
-    { title: 'Codex · GPT-6.1 Sol high', cells: [cell('medium'), cell('large')] },
-    { title: 'Codex · GPT-6 Astra high', cells: [cell('medium', 'nastra', ZH ? '转交为 2 次平均' : 'hand-over: mean of 2'), cell('large', 'nastra', ZH ? '各 1 次' : '1 run each')] },
+    { title: 'Codex · GPT-6.1 Sol high', cells: [cell('medium', 'n059', 'n062'), cell('large', 'n059', 'n062')] },
+    { title: 'Codex · GPT-6 Astra high', cells: [cell('medium', 'nastra', 'n062astra'), cell('large', 'nastra', 'n062astra')] },
   ]
   const W = 1200, H = 600, TOP = 120, BOT = 130, GAP = 76, LEFT = 66
   const pw = (W - LEFT - 30 - GAP) / 2
   const out = [`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" ${FONT}>`, `<rect width="${W}" height="${H}" fill="${C.BG}"/>`,
     `<text x="24" y="38" font-size="20" font-weight="600" fill="${C.FG}">${esc(ZH ? 'Codex：每个任务占 ChatGPT Plus 5 小时额度的多少' : 'Codex: share of the ChatGPT Plus 5-hour window per task')}</text>`,
-    `<text x="24" y="66" font-size="13.5" fill="${C.MUTED}">${esc(ZH ? `越低越好。DeepSeek 不占这个额度。≈ = 和别的 Codex 任务同时跑，按花费估算（约每 1% $${DOLLARS_PER_PERCENT.toFixed(2)}）；其余为实测。` : `Lower is better. DeepSeek does not use this window. ≈ = ran alongside another Codex run, estimated from cost (about $${DOLLARS_PER_PERCENT.toFixed(2)} per 1%); the rest measured.`)}</text>`]
+    `<text x="24" y="66" font-size="13.5" fill="${C.MUTED}">${esc(ZH ? `越低越好。DeepSeek 不占这个额度。≈ = 按花费估算（约每 1% $${DOLLARS_PER_PERCENT.toFixed(2)}）：和别的 Codex 任务同时跑，或用量不到 1 点、额度读数分辨不出；其余为实测。` : `Lower is better. DeepSeek does not use this window. ≈ = estimated from cost (about $${DOLLARS_PER_PERCENT.toFixed(2)} per 1%): ran alongside another Codex run, or used under one point, below what the window reading shows; the rest measured.`)}</text>`]
   const pct = (v, b) => `${v < b ? '−' : '+'}${Math.round(Math.abs(v / b - 1) * 100)}%`
   let x = LEFT
   for (const pnl of panels) {
@@ -332,7 +333,7 @@ if (COMBINED && !rolloutsMissing) {
     const gw = pw / pnl.cells.length
     pnl.cells.forEach((c, gi) => {
       const bw = Math.min(104, gw / 2 - 16), cx0 = x + gi * gw + gw / 2
-      const bars = [[cx0 - bw - 6, c.alone, c.estA, METHODS[0].color, name(METHODS[0]), ''], [cx0 + 6, c.handed, c.estB, '#2563EB', ZH ? '转交（0.6.0）' : 'Handed over', pct(c.handed, c.alone)]]
+      const bars = [[cx0 - bw - 6, c.alone, c.estA, METHODS[0].color, name(METHODS[0]), ''], [cx0 + 6, c.handed, c.estB, '#2563EB', HANDED, pct(c.handed, c.alone)]]
       for (const [bx, v, est, fill, label, ch] of bars) {
         const y1 = y(v), y0 = y(0)
         out.push(`<path d="M${bx},${y0} V${y1 + 4} Q${bx},${y1} ${bx + 4},${y1} H${bx + bw - 4} Q${bx + bw},${y1} ${bx + bw},${y1 + 4} V${y0} Z" fill="${fill}"/>`,
@@ -340,13 +341,12 @@ if (COMBINED && !rolloutsMissing) {
           `<text x="${bx + bw / 2}" y="${y0 + 18}" font-size="12" fill="${C.FG}" text-anchor="middle">${esc(label)}</text>`)
         if (ch) out.push(`<text x="${bx + bw / 2}" y="${y1 - 8}" font-size="12.5" font-weight="600" fill="${ch.startsWith('+') ? '#B42318' : '#067647'}" text-anchor="middle">${ch}</text>`)
       }
-      out.push(`<text x="${cx0}" y="${y(0) + 44}" font-size="14" font-weight="600" fill="${C.FG}" text-anchor="middle">${esc(T[c.size])}</text>`)
-      if (c.sub) out.push(`<text x="${cx0}" y="${y(0) + 63}" font-size="12" fill="${C.MUTED}" text-anchor="middle">${esc(c.sub)}</text>`)
+      out.push(`<text x="${cx0}" y="${y(0) + 44}" font-size="14" font-weight="600" fill="${C.FG}" text-anchor="middle">${esc(SCENARIO[c.size])}</text>`)
     })
     x += pw + GAP
   }
   let lx = 24
-  for (const it of [{ name: name(METHODS[0]), color: METHODS[0].color }, { name: ZH ? '转交（0.6.0）' : 'Handed over (0.6.0)', color: '#2563EB' }]) {
+  for (const it of [{ name: name(METHODS[0]), color: METHODS[0].color }, { name: HANDED, color: '#2563EB' }]) {
     out.push(`<rect x="${lx}" y="${H - 38}" width="13" height="13" rx="2" fill="${it.color}"/>`, `<text x="${lx + 20}" y="${H - 27}" font-size="13" fill="${C.FG}">${esc(it.name)}</text>`)
     lx += 40 + textW(it.name, 13.5)
   }
