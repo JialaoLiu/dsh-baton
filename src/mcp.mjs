@@ -104,9 +104,16 @@ const TOOLS = [
   {
     name: 'dsh_list_sessions',
     annotations: annotations('List sessions'),
-    description: `List Harness sessions, newest first, to find a session_id: session_id, title, cwd, updated_at, running and bridge_runs. No paging: raise limit or narrow it with cwd or query. Read-only. ${ARCHIVED}`,
+    description: `List Harness sessions, newest first, to find a session_id: session_id, title, cwd, updated_at, running, bridge_runs and model (what its next request uses). No paging: raise limit or narrow it with cwd or query. Read-only. ${ARCHIVED}`,
     inputSchema: { type: 'object', properties: { cwd: str('Only sessions of this workspace folder'), query: str('Case-insensitive text to match in title, folder or session id'), limit: int('Max sessions returned', 20), include_subagents: { type: 'boolean', description: 'Also list sub-agent sessions', default: false } } },
     run: (a) => core.api.list_sessions(a),
+  },
+  {
+    name: 'dsh_list_models',
+    annotations: annotations('List models'),
+    description: 'List the models this DeepSeek Harness can run (provider, model id, name, reasoning efforts) and its default model, to check a name before passing model to dsh_send. Read-only. Needs the dsh-baton-host plugin.',
+    inputSchema: { type: 'object', properties: {} },
+    run: () => core.api.models(),
   },
   {
     name: 'dsh_read_session',
@@ -119,7 +126,7 @@ const TOOLS = [
     name: 'dsh_send',
     annotations: annotations('Send message', hints(false, false, false)),
     description: 'Send a message to a Harness session and return at once with a run_id; then wait for the reply with dsh_wait (or the wait_command it returns, where offered). session_id continues that session; without it a new session starts in cwd or workspace_id, or, with neither, in the folder this conversation works in (a new cwd is registered first). If the session is busy, mode followup queues the message and steer adds it to the running turn; leave mode out to follow the Harness setting. The message arrives verbatim as a user message (with checks, a short request for a sub-agent review table is appended): make it self-contained (Harness does not see this conversation), in the user\'s language. For a large task, first turn the request into a concrete spec (goal, modules and the files each owns, level of detail, acceptance criteria) instead of passing the user\'s words on; send independent parts to separate sessions in parallel, each owning its own files. Review once all parallel parts are back: check their screenshots or test results together, then send back specific fixes for what falls short.',
-    inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session; leave out to use the folder this conversation works in'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: "followup queues after the current turn; steer injects into a running turn. Omit to follow Harness's busy-send setting" }, checks: { type: 'array', items: { type: 'string' }, description: 'The project\'s own test commands, e.g. npm test (ask Harness in the message to write tests for each requirement). Do not write check scripts yourself. dsh-baton runs them in the folder when the run ends and returns exit codes and the last output lines as evidence.' } } },
+    inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session; leave out to use the folder this conversation works in'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: "followup queues after the current turn; steer injects into a running turn. Omit to follow Harness's busy-send setting" }, model: str('Only when the user names a model for this run (e.g. "DeepSeek-V4 Pro", "v4-pro"); leave out otherwise and the session uses its own model, or Harness\'s default model for a new session. Matched against Harness\'s model list ignoring case, spaces, hyphens and a leading DeepSeek; a name that matches no model or several fails the send with the list (provider/model picks one). Sets this session only; Harness\'s default model is left as it was'), reasoning_effort: str('Only when the user names a reasoning effort, e.g. high; one of the efforts dsh_list_models shows for the model'), checks: { type: 'array', items: { type: 'string' }, description: 'The project\'s own test commands, e.g. npm test (ask Harness in the message to write tests for each requirement). Do not write check scripts yourself. dsh-baton runs them in the folder when the run ends and returns exit codes and the last output lines as evidence.' } } },
     run: async (a, { meta } = {}) => {
       // A new session goes to this conversation's folder unless the call names another one;
       // a different folder is allowed but said back, so a wrong guess does not go unnoticed.

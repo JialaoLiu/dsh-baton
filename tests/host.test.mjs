@@ -15,7 +15,7 @@ const IS_WIN = process.platform === 'win32'
 // here, except in the test that points it at a throwaway home.
 process.env.DSH_BATON_AUTO_REGISTER = '0'
 
-function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web, settings, queue = false, recheckMs = 300 } = {}) {
+function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web, settings, queue = false, recheckMs = 300, models } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-'))
   // Run records go to the bridge home: keep them out of the real ~/.dsh-baton.
   process.env.DSH_BATON_HOME = home ?? path.join(dir, 'bridge')
@@ -34,9 +34,9 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
     effect: (fn) => disposers.push(fn()),
     waterfall: async (ev, { sessionId }) => activity(sessionId),
     logger: { info: () => {}, error: (m) => logs.push(m) },
-    ...(web || settings ? {
+    ...(web || settings || models?.viaInject ? {
       inject: (deps, fn) => {
-        const services = { webServer: web, settings }
+        const services = { webServer: web, settings, agentDefaultModel: models?.viaInject ? models.agentDefaultModel : undefined }
         if (deps.every((d) => services[d])) fn({ effect: (f) => disposers.push(f()), ...services })
       },
     } : {}),
@@ -76,8 +76,13 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
       } : {}),
       cancel: (r) => { calls.cancel.push(r) },
       rename: async (r) => { calls.rename.push(r); return { title: r.title } },
+      ...models?.controller,
     },
+    ...(models?.agentDefaultModel && !models.viaInject ? { agentDefaultModel: models.agentDefaultModel } : {}),
   }
+  // Harness (cordis) throws when a plugin reads a service it did not inject.
+  if (models?.viaInject) Object.defineProperty(ctx, 'agentDefaultModel', { get: () => { throw new Error('cannot get property "agentDefaultModel" without inject') } })
+  if (models) models.calls = calls
   process.env.DSH_BATON_SOCKET = sock
   process.env.DSH_BATON_QUEUE_RECHECK_MS = String(recheckMs)
   apply(ctx)
@@ -651,4 +656,191 @@ test('an approval wait (no question) also ends the wait once, and dsh_answer say
   const w = await waiting
   assert.deepEqual([w.needs_input, w.state, w.question], ['harness-ui', 'waiting', undefined])
   await assert.rejects(h.call('answer', { run_id: run.run_id, answers: [{ skip: true }] }), /cannot be answered from here/)
+})
+
+// --- choosing a model --------------------------------------------------------
+
+const CATALOG = [
+  { id: 'deepseek-account', name: 'DeepSeek', models: [
+    { id: 'deepseek-v4.1-flash', name: 'DeepSeek-V4.1-Flash', reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'high' } },
+    { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro', reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'high' } },
+  ] },
+]
+
+// Harness's model side as its session controller and default-model service behave:
+// selectModel installs the pick for the session and saves it as the default in the
+// background; saves commit in the order they are made, each after a delay, and the
+// default reads the last committed one.
+function fakeModels({ groups = CATALOG, saveMs = () => 20, selectModel = true, defaultService = true } = {}) {
+  const state = { default: { provider: 'deepseek-account', model: 'deepseek-v4.1-flash', reasoningEffort: 'high' }, sessions: {}, saves: [], order: [] }
+  let chain = Promise.resolve()
+  const agentDefaultModel = {
+    currentSelection: () => ({ ...state.default }),
+    saveSelection(next) {
+      const saved = chain.then(() => sleep(saveMs())).then(() => { state.default = { ...next }; state.saves.push({ ...next }) })
+      chain = saved.catch(() => {})
+      return saved
+    },
+  }
+  const fake = { state, agentDefaultModel: defaultService ? agentDefaultModel : undefined, settled: () => chain }
+  fake.controller = {
+    modelCatalog: async () => ({ default: { ...state.default }, routableProviders: groups.map((g) => g.id), groups, failures: [] }),
+    projections: async ({ sessionId }) => ({ kind: 'sequenced', asOfSeq: 1, values: { modelSelection: { lastUsed: null, next: state.sessions[sessionId] ?? null } } }),
+    ...(selectModel ? {
+      selectModel: async (r) => {
+        const entry = groups.find((g) => g.id === r.provider)?.models.find((m) => m.id === r.model)
+        if (!entry) throw new Error('session/model-unavailable')
+        const selected = { provider: r.provider, model: r.model, ...(r.reasoningEffort ?? entry.reasoning?.defaultEffort ? { reasoningEffort: r.reasoningEffort ?? entry.reasoning.defaultEffort } : {}) }
+        state.sessions[r.sessionId] = selected
+        state.order.push(`select:${r.sessionId}`)
+        agentDefaultModel.saveSelection(selected).catch(() => {})
+        return { selected: { ...selected } }
+      },
+    } : {}),
+  }
+  return fake
+}
+
+test('model matches Harness\'s catalog by id or name, ignoring case, spaces, hyphens and a DeepSeek prefix', async (t) => {
+  const m = fakeModels()
+  const h = startHost({ models: m }); t.after(h.close); await h.ready
+  for (const asked of ['V4 Pro', 'v4-pro', 'DeepSeek-V4-Pro', 'deepseek v4 pro', 'DEEPSEEK_V4_PRO', 'deepseek-account/V4 Pro']) {
+    const r = await h.call('send', { message: 'go', cwd: '/w', model: asked })
+    assert.deepEqual(r.model, { provider: 'deepseek-account', model: 'deepseek-v4-pro', reasoning_effort: 'high' }, asked)
+    assert.equal(r.model_source, 'requested')
+  }
+  const flash = await h.call('send', { message: 'go', cwd: '/w', model: 'V4.1 Flash' })
+  assert.equal(flash.model.model, 'deepseek-v4.1-flash')
+  const status = await h.call('status', { run_id: flash.run_id })
+  assert.equal(status.model.model, 'deepseek-v4.1-flash', 'dsh_status shows the run\'s model')
+})
+
+test('a model added to the catalog later (V4.1 Pro) is found with no change here', async (t) => {
+  const groups = [{ ...CATALOG[0], models: [...CATALOG[0].models, { id: 'deepseek-v4.1-pro', name: 'DeepSeek-V4.1-Pro' }] }]
+  const m = fakeModels({ groups })
+  const h = startHost({ models: m }); t.after(h.close); await h.ready
+  assert.equal((await h.call('send', { message: 'go', cwd: '/w', model: 'V4.1 Pro' })).model.model, 'deepseek-v4.1-pro')
+  assert.equal((await h.call('send', { message: 'go', cwd: '/w', model: 'v4 pro' })).model.model, 'deepseek-v4-pro', 'V4 Pro is still its own model')
+})
+
+test('a model that matches nothing, or several, fails the send before anything is created, listing what is there', async (t) => {
+  const groups = [...CATALOG, { id: 'deepseek-api', name: 'DeepSeek API', models: [{ id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' }] }]
+  const m = fakeModels({ groups })
+  const h = startHost({ models: m }); t.after(h.close); await h.ready
+  await assert.rejects(h.call('send', { message: 'go', cwd: '/w', model: 'V5 Ultra' }), /No model in Harness matches "V5 Ultra"\. Available: deepseek-account\/deepseek-v4\.1-flash \(DeepSeek-V4\.1-Flash\), deepseek-account\/deepseek-v4-pro/)
+  await assert.rejects(h.call('send', { message: 'go', cwd: '/w', model: 'Pro' }), /No model in Harness matches "Pro"/, 'a part of a name is no match')
+  await assert.rejects(h.call('send', { message: 'go', cwd: '/w', model: 'V4 Pro' }), /matches several models: deepseek-account\/deepseek-v4-pro, deepseek-api\/deepseek-v4-pro\. Pass one of them as provider\/model/)
+  await assert.rejects(h.call('send', { message: 'go', cwd: '/w', model: 'deepseek-account/V4 Pro', reasoning_effort: 'max' }), /has no reasoning effort "max"; it has low, high/)
+  assert.equal(m.calls.create.length, 0)
+  assert.equal(m.calls.prompt.length, 0)
+  assert.equal((await h.call('send', { message: 'go', cwd: '/w', model: 'deepseek-api/v4-pro' })).model.provider, 'deepseek-api')
+})
+
+test('the model is set on the session before its prompt, and Harness\'s default model is left as it was', async (t) => {
+  const m = fakeModels()
+  const h = startHost({ models: m }); t.after(h.close); await h.ready
+  const original = { ...m.state.default }
+  const r = await h.call('send', { message: 'go', session_id: 's1', model: 'V4 Pro', reasoning_effort: 'Low' })
+  assert.deepEqual(r.model, { provider: 'deepseek-account', model: 'deepseek-v4-pro', reasoning_effort: 'low' })
+  assert.equal(m.calls.prompt.length, 1)
+  assert.deepEqual(m.state.order, ['select:s1'])
+  await m.settled()
+  assert.deepEqual(m.state.default, original, 'the default ends where it was')
+  assert.deepEqual(m.state.saves.at(-1), original, 'and the restore is the last save')
+  // Effort alone keeps the session's model.
+  const e = await h.call('send', { message: 'again', session_id: 's1', reasoning_effort: 'high' })
+  assert.deepEqual(e.model, { provider: 'deepseek-account', model: 'deepseek-v4-pro', reasoning_effort: 'high' })
+  // Nothing asked: an existing session keeps its own model, untouched.
+  const before = m.state.order.length
+  const keep = await h.call('send', { message: 'more', session_id: 's1' })
+  assert.equal(keep.model.model, 'deepseek-v4-pro')
+  assert.equal(keep.model_source, 'session')
+  assert.equal(m.state.order.length, before, 'no selectModel for it')
+  await m.settled()
+  assert.deepEqual(m.state.default, original)
+})
+
+test('concurrent sends with different models and slow, uneven default saves leave the default as it was', async (t) => {
+  let n = 0
+  const m = fakeModels({ saveMs: () => [60, 5, 30, 1, 45][n++ % 5] })
+  const h = startHost({ models: m }); t.after(h.close); await h.ready
+  const original = { ...m.state.default }
+  const sends = await Promise.all([
+    h.call('send', { message: 'a', cwd: '/w', model: 'V4 Pro' }),
+    h.call('send', { message: 'b', cwd: '/w' }),
+    h.call('send', { message: 'c', cwd: '/w', model: 'V4.1 Flash', reasoning_effort: 'low' }),
+    h.call('send', { message: 'd', cwd: '/w', model: 'V4 Pro' }),
+    h.call('send', { message: 'e', cwd: '/w' }),
+  ])
+  assert.deepEqual(sends.map((s) => s.model.model), ['deepseek-v4-pro', 'deepseek-v4.1-flash', 'deepseek-v4.1-flash', 'deepseek-v4-pro', 'deepseek-v4.1-flash'])
+  // A new session without model is pinned to the default as it stood, never to another send's pick.
+  for (const i of [1, 4]) {
+    assert.equal(sends[i].model_source, 'default')
+    assert.deepEqual(m.state.sessions[sends[i].session_id], original)
+  }
+  await m.settled()
+  assert.deepEqual(m.state.default, original)
+  assert.deepEqual(m.state.saves.at(-1), original)
+  // The next pick after the spell reads the default afresh.
+  m.state.default = { provider: 'deepseek-account', model: 'deepseek-v4-pro', reasoningEffort: 'high' }
+  await h.call('send', { message: 'f', cwd: '/w', model: 'V4.1 Flash' })
+  await m.settled()
+  assert.equal(m.state.default.model, 'deepseek-v4-pro', 'a default the user changed in between is kept')
+})
+
+test('a Harness without selectModel/modelCatalog, or without its default-model service, refuses model clearly and still sends without it', async (t) => {
+  const old = fakeModels({ selectModel: false })
+  const h = startHost({ models: old }); t.after(h.close); await h.ready
+  await assert.rejects(h.call('send', { message: 'go', cwd: '/w', model: 'V4 Pro' }), /cannot choose a model per session/)
+  assert.equal(old.calls.create.length, 0)
+  const plain = await h.call('send', { message: 'go', cwd: '/w' })
+  assert.equal(plain.state, 'queued')
+  assert.equal(old.calls.prompt.length, 1)
+
+  const noDefault = fakeModels({ defaultService: false })
+  const h2 = startHost({ models: noDefault }); t.after(h2.close); await h2.ready
+  await assert.rejects(h2.call('send', { message: 'go', session_id: 's1', model: 'V4 Pro' }), /No message was sent: the model could not be set \(.*keep its default model/)
+  assert.equal(noDefault.calls.prompt.length, 0)
+  assert.equal(noDefault.state.order.length, 0, 'selectModel was never called, so the default never moved')
+  assert.equal((await h2.call('send', { message: 'go', cwd: '/w' })).state, 'queued')
+
+  const bare = startHost(); t.after(bare.close); await bare.ready
+  await assert.rejects(bare.call('models'), /cannot choose a model per session/)
+})
+
+test('models lists the catalog and the default; list_sessions shows each session\'s model', async (t) => {
+  const m = fakeModels()
+  const sessions = [{ sessionId: 's1', title: 'A', projections: { values: { modelSelection: { lastUsed: { provider: 'deepseek-account', model: 'deepseek-v4-pro', reasoningEffort: 'high' }, next: null } } } }, { sessionId: 's2', title: 'B' }]
+  const h = startHost({ models: m, sessions }); t.after(h.close); await h.ready
+  const r = await h.call('models')
+  assert.deepEqual(r.default, { provider: 'deepseek-account', model: 'deepseek-v4.1-flash', reasoning_effort: 'high' })
+  assert.deepEqual(r.models.map((x) => x.name), ['DeepSeek-V4.1-Flash', 'DeepSeek-V4-Pro'])
+  assert.deepEqual(r.models[1].reasoning_efforts, ['low', 'high'])
+  const list = await h.call('list_sessions')
+  assert.equal(list[0].model.model, 'deepseek-v4-pro')
+  assert.equal(list[1].model, null)
+})
+
+test('Harness\'s default-model service is taken through inject, as Harness requires', async (t) => {
+  const m = fakeModels()
+  m.viaInject = true
+  const h = startHost({ models: m }); t.after(h.close); await h.ready
+  const original = { ...m.state.default }
+  const [pro, plain] = await Promise.all([
+    h.call('send', { message: 'a', cwd: '/w', model: 'DeepSeek-V4 Pro' }),
+    h.call('send', { message: 'b', cwd: '/w' }),
+  ])
+  assert.equal(pro.model.model, 'deepseek-v4-pro')
+  assert.deepEqual(m.state.sessions[plain.session_id], original)
+  await m.settled()
+  assert.deepEqual(m.state.default, original)
+
+  // Without the service at all, a send without model still goes through, unpinned.
+  const none = fakeModels({ defaultService: false })
+  none.viaInject = true
+  const h2 = startHost({ models: none }); t.after(h2.close); await h2.ready
+  const r = await h2.call('send', { message: 'b', cwd: '/w' })
+  assert.equal(r.state, 'queued')
+  assert.equal(r.model_source, 'default')
+  assert.equal(none.state.order.length, 0)
 })

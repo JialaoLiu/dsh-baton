@@ -132,6 +132,8 @@ export function apply(ctx) {
   const registry = ctx.workspaceRegistry
   // Harness's settings service, when this Harness has one: read for its busy-send setting.
   let settings = null
+  // Harness's default-model service (see defaultModel()), when this Harness has one.
+  let defaultModelService = null
   const runs = new Map() // runId -> run
   let stopping = false // set when the plugin unloads: release every wait()
   const waiters = new Map() // runId -> Set<resolve>
@@ -142,6 +144,7 @@ export function apply(ctx) {
     run_id: run.id, session_id: run.sessionId, state: run.state, started_at: run.startedAt, ended_at: run.endedAt,
     message_preview: run.preview, final_text: run.finalText, turn_end: run.turnEnd, error: run.error,
     ...(run.sender ? { sender: run.sender } : {}),
+    ...(run.model ? { model: run.model } : {}),
     ...(run.waitingOn ? { waiting_on: run.waitingOn } : {}),
     ...(run.supersededBy ? { superseded_by: run.supersededBy } : {}),
     ...(run.humanInputs?.length ? { human_interjections: run.humanInputs } : {}),
@@ -677,6 +680,7 @@ export function apply(ctx) {
         session_id: item.sessionId, cwd: item.cwd ?? null, title: item.title ?? item.projections?.values?.title ?? null,
         updated_at: iso(item.updatedAt), running: !!item.running, blank: !!item.blank,
         bridge_runs: activeRunsFor(item.sessionId).map((r) => r.id),
+        model: shownModel(item.projections?.values?.modelSelection?.next ?? item.projections?.values?.modelSelection?.lastUsed),
       }
       if (want && (!row.cwd || normalizePath(row.cwd) !== want)) continue
       if (q && !`${row.title ?? ''} ${row.cwd ?? ''} ${row.session_id}`.toLowerCase().includes(q)) continue
@@ -704,7 +708,133 @@ export function apply(ctx) {
     return { session_id, ...(isArchived(session_id) ? { archived: true } : {}), cwd: meta?.cwd ?? null, title, total_messages: messages.length, messages: messages.slice(-last) }
   }
 
-  async function send({ message, session_id, cwd, workspace_id, mode: asked, sender }) {
+  // --- models -----------------------------------------------------------------
+  // Harness's own catalog decides which names exist: "V4 Pro", "v4-pro" and "DeepSeek-V4-Pro"
+  // all name the model whose id or name reads that way once case, spaces, hyphens,
+  // underscores and a leading "deepseek" are left out. No model name is written here.
+
+  const MODELS_UNSUPPORTED = 'This DeepSeek Harness version cannot choose a model per session: its session controller has no modelCatalog/selectModel. Leave out model and reasoning_effort, or update Harness.'
+  const modelKey = (s) => String(s ?? '').toLowerCase().replace(/[\s_-]+/g, '').replace(/^deepseek/, '')
+  // Harness's default-model service comes through inject (below); reading it off ctx
+  // without that throws in Harness, so that read is only a fallback.
+  const defaultModel = () => {
+    if (defaultModelService) return defaultModelService
+    try { return ctx.agentDefaultModel ?? null } catch { return null }
+  }
+  const canSelect = () => typeof controller.modelCatalog === 'function' && typeof controller.selectModel === 'function'
+  const shownModel = (s) => (s ? { provider: s.provider, model: s.model, reasoning_effort: s.reasoningEffort ?? null } : null)
+
+  async function catalog() {
+    if (typeof controller.modelCatalog !== 'function') throw new Error(MODELS_UNSUPPORTED)
+    return controller.modelCatalog()
+  }
+
+  async function models() {
+    const c = await catalog()
+    return {
+      default: shownModel(c.default),
+      models: c.groups.flatMap((g) => g.models.map((m) => ({
+        provider: g.id, model: m.id, name: m.name ?? m.id,
+        ...(m.reasoning ? { reasoning_efforts: m.reasoning.efforts.map((e) => e.id), default_effort: m.reasoning.defaultEffort ?? null } : {}),
+      }))),
+      ...(c.failures?.length ? { failures: c.failures.map((f) => ({ provider: f.id, error: f.message })) } : {}),
+    }
+  }
+
+  const listed = (c) => c.groups.flatMap((g) => g.models.map((m) => `${g.id}/${m.id}${m.name && m.name !== m.id ? ` (${m.name})` : ''}`)).join(', ') || 'none'
+
+  // One model, or an error naming what is there: never a near miss in its place.
+  // "provider/model" picks between providers that offer the same model.
+  function matchModel(c, asked) {
+    const slash = String(asked).lastIndexOf('/')
+    const provider = slash > 0 ? modelKey(String(asked).slice(0, slash)) : null
+    const want = modelKey(slash > 0 ? String(asked).slice(slash + 1) : asked)
+    const hits = c.groups.flatMap((g) => (provider && modelKey(g.id) !== provider ? [] : g.models
+      .filter((m) => modelKey(m.id) === want || modelKey(m.name) === want)
+      .map((m) => ({ provider: g.id, entry: m }))))
+    if (!want || !hits.length) throw new Error(`No model in Harness matches ${JSON.stringify(asked)}. Available: ${listed(c)}.`)
+    if (hits.length > 1) throw new Error(`${JSON.stringify(asked)} matches several models: ${hits.map((h) => `${h.provider}/${h.entry.id}`).join(', ')}. Pass one of them as provider/model.`)
+    return hits[0]
+  }
+
+  function matchEffort(hit, asked) {
+    const efforts = hit.entry.reasoning?.efforts ?? []
+    if (!efforts.length) throw new Error(`${hit.provider}/${hit.entry.id} has no reasoning effort to choose.`)
+    const e = efforts.find((x) => modelKey(x.id) === modelKey(asked) || modelKey(x.name) === modelKey(asked))
+    if (!e) throw new Error(`${hit.provider}/${hit.entry.id} has no reasoning effort ${JSON.stringify(asked)}; it has ${efforts.map((x) => x.id).join(', ')}.`)
+    return e.id
+  }
+
+  // What a session will run with next: its own choice or last request, else Harness's default.
+  async function sessionModel(sessionId) {
+    try {
+      const p = typeof controller.projections === 'function' ? await controller.projections({ sessionId }, signal()) : null
+      const s = p?.values?.modelSelection
+      return s?.next ?? s?.lastUsed ?? null
+    } catch { return null }
+  }
+
+  // selectModel also saves the pick as Harness's default model (in the background).
+  // Every pick goes through this queue and the default it found is saved back after
+  // it. Harness commits default saves in the order they are made, so the restore lands
+  // after the pick's save. The default is read once per busy spell: a pick that starts
+  // while another is still restoring would otherwise read that other pick as "the default".
+  let modelQueue = Promise.resolve()
+  let busyPicks = 0
+  let keptDefault = null
+  function keepingDefault(fn) {
+    const dm = defaultModel()
+    if (typeof dm?.currentSelection !== 'function' || typeof dm?.saveSelection !== 'function') {
+      return Promise.reject(new Error('This DeepSeek Harness version does not let dsh-baton keep its default model while choosing one for a session, so no model was chosen. Leave out model and reasoning_effort, or update Harness.'))
+    }
+    busyPicks++
+    const step = modelQueue.then(async () => {
+      keptDefault ??= dm.currentSelection()
+      try { return await fn(keptDefault) } finally {
+        await dm.saveSelection(keptDefault).catch((error) => logError('restore default model', error))
+      }
+    }).finally(() => { if (--busyPicks === 0) keptDefault = null })
+    modelQueue = step.catch(() => {})
+    return step
+  }
+
+  // Work out the model a send asks for before anything is created, so a name that
+  // matches nothing (or several) fails the send with the list of what is there.
+  async function planModel(sessionId, { model, reasoning_effort }) {
+    if (model == null && reasoning_effort == null) return null
+    if (!canSelect()) throw new Error(MODELS_UNSUPPORTED)
+    const c = await catalog()
+    let hit
+    if (model != null) hit = matchModel(c, model)
+    else {
+      // Effort alone: the model the session runs with now (a new one: Harness's default).
+      const current = (sessionId && (await sessionModel(sessionId))) || c.default
+      const entry = c.groups.find((g) => g.id === current?.provider)?.models.find((m) => m.id === current?.model)
+      if (!entry) throw new Error(`The model ${current?.provider}/${current?.model} is not in Harness's catalog now; pass model too. Available: ${listed(c)}.`)
+      hit = { provider: current.provider, entry }
+    }
+    return { provider: hit.provider, model: hit.entry.id, ...(reasoning_effort != null ? { reasoningEffort: matchEffort(hit, reasoning_effort) } : {}) }
+  }
+
+  // Put the session on its model before the prompt goes in. Without a plan, a new session
+  // is pinned to the default as it stands, so a pick running for another send cannot leak
+  // into it (Harness reads the default only when the first request is built); an existing
+  // one keeps its own. The pin is best effort: if it fails, the session just uses the default.
+  async function applyModel(sessionId, plan, isNew) {
+    if (plan) {
+      const { selected } = await keepingDefault(() => controller.selectModel({ sessionId, ...plan }))
+      return { model: shownModel(selected), source: 'requested' }
+    }
+    if (isNew && canSelect() && defaultModel()) {
+      try {
+        const { selected } = await keepingDefault((kept) => controller.selectModel({ sessionId, ...kept }))
+        return { model: shownModel(selected), source: 'default' }
+      } catch (error) { logError('pin default model', error) }
+    }
+    return { model: shownModel(await sessionModel(sessionId)), source: isNew ? 'default' : 'session' }
+  }
+
+  async function send({ message, session_id, cwd, workspace_id, mode: asked, sender, model, reasoning_effort }) {
     if (!message || !message.trim()) throw new Error('message is required')
     if (asked != null && asked !== 'followup' && asked !== 'steer') throw new Error('mode must be followup or steer')
     // Without a mode, a message to a busy session does what Harness's own busy-send setting says.
@@ -718,18 +848,25 @@ export function apply(ctx) {
     if (sessionId && isArchived(sessionId)) {
       throw new Error(`Session ${sessionId} is archived. Unarchive it in Harness, or start a new session with cwd or workspace_id.`)
     }
-    if (!sessionId) {
-      if (!cwd && !workspace_id) throw new Error('A new session needs cwd or workspace_id. Pass session_id to continue an existing one.')
+    if (!sessionId && !cwd && !workspace_id) throw new Error('A new session needs cwd or workspace_id. Pass session_id to continue an existing one.')
+    const plan = await planModel(sessionId, { model, reasoning_effort })
+    const isNew = !sessionId
+    if (isNew) {
       // A folder that is not a workspace yet is registered first, so the new session shows in the sidebar.
       workspace = workspace_id ? { id: workspace_id } : await createWorkspace({ path: cwd, create_dir: false })
       sessionId = (await controller.create({ workspaceId: workspace.id })).sessionId
     }
+    // A model that cannot be set fails the send before the prompt goes in.
+    const chosen = await applyModel(sessionId, plan, isNew).catch((error) => {
+      throw new Error(`${isNew ? `Session ${sessionId} was created, but no message was sent: ` : 'No message was sent: '}the model could not be set (${error?.message ?? error})`)
+    })
     const ahead = activeRunsFor(sessionId).map((r) => r.id)
     const run = {
       id: `hrun-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`,
       sessionId, requestId: requestIdFor(sender), ...(sender ? { sender } : {}), mode, state: 'queued', sawPrompt: false,
       startedAt: new Date().toISOString(), endedAt: null, preview: message.slice(0, 200),
       events: [], finalText: null, turnEnd: null, error: null,
+      ...(chosen.model ? { model: chosen.model } : {}),
     }
     remember(run)
     try {
@@ -742,6 +879,8 @@ export function apply(ctx) {
       ...publicRun(run),
       mode,
       mode_source: modeSource,
+      model: chosen.model,
+      model_source: chosen.source,
       ...(ahead.length ? { other_active_runs: ahead } : {}),
       ...(workspace ? { workspace } : {}),
     }
@@ -861,6 +1000,7 @@ export function apply(ctx) {
     create_workspace: createWorkspace,
     list_sessions: listSessions,
     read_session: readSession,
+    models,
     send,
     status: ({ run_id, tail }) => publicRun(getRun(run_id), tail ?? 20),
     wait,
@@ -944,6 +1084,10 @@ export function apply(ctx) {
     ctx.inject(['settings'], (child) => {
       settings = child.settings
       child.effect(() => () => { if (settings === child.settings) settings = null }, 'dsh-baton-host settings')
+    })
+    ctx.inject(['agentDefaultModel'], (child) => {
+      defaultModelService = child.agentDefaultModel
+      child.effect(() => () => { if (defaultModelService === child.agentDefaultModel) defaultModelService = null }, 'dsh-baton-host default model')
     })
     ctx.inject(['webServer'], (web) => {
       web.effect(() => web.webServer.register({

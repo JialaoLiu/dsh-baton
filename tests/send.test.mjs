@@ -21,7 +21,7 @@ test('within: same folder or below it, not beside it', () => {
   assert.equal(within('/a', '/a/b'), false)
 })
 
-async function sendFrom({ clientName, cwd, args, meta, env = {} }) {
+async function sendFrom({ clientName, cwd, args, meta, env = {}, oldHost = false }) {
   const { socketEndpoint } = await import('../host/lib/socket.js')
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-f-'))
   const sock = path.join(dir, 'h.sock')
@@ -29,7 +29,8 @@ async function sendFrom({ clientName, cwd, args, meta, env = {} }) {
   const server = net.createServer((c) => c.on('data', (d) => {
     const req = JSON.parse(String(d).split('\n')[0])
     if (req.method === 'send') sends.push(req.params)
-    c.end(JSON.stringify({ id: req.id, result: { run_id: 'hrun-1', state: 'queued' } }) + '\n')
+    if (req.method === 'models' && oldHost) return c.end(JSON.stringify({ id: req.id, error: 'Unknown method: models' }) + '\n')
+    c.end(JSON.stringify({ id: req.id, result: req.method === 'models' ? { models: [] } : { run_id: 'hrun-1', state: 'queued' } }) + '\n')
   }))
   await new Promise((r) => server.listen(socketEndpoint(sock), r))
   const { DSH_BATON_SENDER, ...base } = process.env
@@ -46,7 +47,9 @@ async function sendFrom({ clientName, cwd, args, meta, env = {} }) {
   const exited = new Promise((r) => child.on('close', r))
   child.stdin.end(); server.close()
   await exited
-  const reply = JSON.parse(out.split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((m) => m.id === 2).result.content[0].text)
+  const result = out.split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((m) => m.id === 2).result
+  const text = result.content[0].text
+  const reply = result.isError ? { error: text } : JSON.parse(text)
   rm(dir)
   return { host: sends[0], reply }
 }
@@ -87,5 +90,18 @@ test('a hand-over with checks asks for a sub-agent review table; a plain message
   assert.match(handover.host.message, /^build it\n\n---\nWhen the work is done, start a read-only sub-agent/)
   const plain = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'what changed?', session_id: 's1' } })
   assert.equal(plain.host.message, 'what changed?')
+  rm(project)
+})
+
+test('model goes to the plugin with the message; a plugin too old to choose one gets nothing', async () => {
+  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
+  const { host } = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'hi', model: 'V4 Pro', reasoning_effort: 'high' } })
+  assert.equal(host.model, 'V4 Pro')
+  assert.equal(host.reasoning_effort, 'high')
+  const old = await sendFrom({ clientName: 'claude-code', cwd: project, oldHost: true, args: { message: 'hi', model: 'V4 Pro' } })
+  assert.equal(old.host, undefined, 'nothing was sent')
+  assert.match(old.reply.error, /too old to choose a model.*Nothing was sent/)
+  const plain = await sendFrom({ clientName: 'claude-code', cwd: project, oldHost: true, args: { message: 'hi' } })
+  assert.equal(plain.host.message, 'hi', 'without model an old plugin is used as before')
   rm(project)
 })

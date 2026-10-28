@@ -648,6 +648,15 @@ export const api = {
     if (!(await useHost())) throw new Error('Listing workspaces needs the dsh-baton-host plugin running inside DeepSeek Harness.')
     return hostCall('workspaces')
   },
+  async models() {
+    if (!(await useHost())) throw new Error('Listing models needs the dsh-baton-host plugin running inside DeepSeek Harness.')
+    try {
+      return await hostCall('models')
+    } catch (error) {
+      if (!/Unknown method: models/.test(error?.message)) throw error
+      throw new Error(`The Harness plugin dsh-baton-host ${hostVersion ?? ''} is too old to list models; this MCP server is ${VERSION}. Update the plugin: Plugins → dsh-baton-host → Uninstall, then Add plugin → dsh-baton-host@${VERSION}.`.replace('  ', ' '))
+    }
+  },
   async create_workspace(a) {
     if (!(await useHost())) throw new Error('Creating workspaces needs the dsh-baton-host plugin running inside DeepSeek Harness.')
     return hostCall('create_workspace', a)
@@ -664,7 +673,16 @@ export const api = {
   // that table and the evidence instead of reading the code itself.
   async send({ checks, ...a }) {
     if (Array.isArray(checks) && checks.length && typeof a.message === 'string') a = { ...a, message: `${a.message}${REVIEW_REQUEST}` }
-    const st = (await useHost()) ? tag('host', await hostCall('send', a)) : tag('headless', await waitForSessionId(startRun(a)))
+    const host = await useHost()
+    if (a.model != null || a.reasoning_effort != null) {
+      if (!host) throw new Error('Choosing a model needs the dsh-baton-host plugin running inside DeepSeek Harness. Nothing was sent; send again without model and reasoning_effort to use the Harness default.')
+      // An older plugin would drop model silently and run on the default: ask it first.
+      await hostCall('models').catch((error) => {
+        if (!/Unknown method: models/.test(error?.message)) throw error
+        throw new Error(`The Harness plugin dsh-baton-host ${hostVersion ?? ''} is too old to choose a model; this MCP server is ${VERSION}. Nothing was sent. Update the plugin: Plugins → dsh-baton-host → Uninstall, then Add plugin → dsh-baton-host@${VERSION}, or send without model.`.replace('  ', ' '))
+      })
+    }
+    const st = host ? tag('host', await hostCall('send', a)) : tag('headless', await waitForSessionId(startRun(a)))
     evidence.prepare(config.batonHome, { run_id: st.run_id, cwd: await runFolder(a, st), checks })
     return st
   },

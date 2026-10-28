@@ -402,3 +402,16 @@ test('Codex with the hook not trusted yet: dsh_wait, and the user is told once p
 })
 
 test.after(() => fs.rmSync(home, { recursive: true, force: true }))
+
+test('moving the MCP table keeps the hook marker that follows it, and the hook entry as written', async () => {
+  const { editCodexConfig } = await import('../src/register.mjs')
+  const entry = { command: '/n', args: ['/s'] }
+  const withHook = hook.editCodexHook(editCodexConfig('model = "x"\n', entry), hook.hookCommand('/r', '/n'))
+  const block = withHook.slice(withHook.indexOf('# dsh-baton: wakes'))
+  assert.match(withHook, /args = \['\/s'\]\n\n# dsh-baton: wakes/, 'the hook block directly follows the MCP table')
+  const moved = editCodexConfig(withHook, { command: '/n2', args: ['/s2'] })
+  assert.ok(moved.includes(block.trimEnd()), 'marker and the 4 hook fields are kept byte for byte')
+  assert.match(moved, /\[mcp_servers\.dsh-baton\]\ncommand = '\/n2'/)
+  assert.equal(hook.editCodexHook(moved, hook.hookCommand('/r', '/n')), moved, 'the hook is still recognised as written')
+  assert.equal(editCodexConfig(moved, null).includes('# dsh-baton: wakes'), true, 'removing the MCP server leaves the hook alone')
+})

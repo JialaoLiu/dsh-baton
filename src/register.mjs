@@ -51,7 +51,8 @@ export function editCodexConfig(text, entry) {
   let skipping = false
   for (const line of text.split(/\r?\n/)) {
     if (OWN_TABLE.test(line)) skipping = true
-    else if (ANY_TABLE.test(line)) skipping = false
+    // The hook's marker line heads the hook block that follows, not our table before it.
+    else if (ANY_TABLE.test(line) || line === HOOK_MARK) skipping = false
     if (!skipping) kept.push(line)
   }
   let out = kept.join('\n').replace(/\s+$/, '')
