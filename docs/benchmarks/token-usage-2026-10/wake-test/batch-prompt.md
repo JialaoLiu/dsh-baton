@@ -27,3 +27,15 @@ What to check in the rollout and `~/.dsh-baton/codex-hook/`:
 | 01:27:23 | second wake with the rework's result; summary; task_complete 01:27:29 |
 
 No `dsh_wait` call at all. 9 model requests: 385,960 input (334,464 cached), 1,537 output.
+
+## Windows (2026-10-28, GPT-6 Luna · Medium, b24801a, hook trusted): all four pass
+
+Codex desktop on Windows, new conversation in an empty folder, same prompt. 06:12:12 → 06:14:55 UTC (2 min 43 s). As reported by the Windows test session from its rollout:
+
+- First tool cell: three `dsh_send` in parallel (the primes session with `checks: node --test primes.test.mjs`); the turn ends.
+- First wake: "3 Harness runs … have come back", all three results.
+- Review found hello.txt written as 「你好，雨夜。」 (an extra full stop). In one cell Codex sent two follow-ups in parallel: a fix to the hello session and the open-ending rework to the story session; the turn ends.
+- Second wake: "2 Harness runs …"; final check, summary, task_complete.
+- 5 `dsh_send` (3 new, 2 follow-ups), no `dsh_wait`, no `dsh_answer`.
+- Output: hello.txt 15 bytes, no full stop; `node --test` 13/13; story.md 5 sections, 1,552 Chinese characters, open ending.
+- 9 model requests: 433,362 input (376,832 cached), 2,659 output (761 reasoning). About 47k more input than the Mac run, mostly the extra hello fix, plus Windows' larger AGENTS.md and memory.
