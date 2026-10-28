@@ -225,3 +225,21 @@ With the check fixed, the hand-over costs about half of working alone on the med
 
 - Against working alone: GPT −74%, total −45%, window 12 points against 43 (−72%).
 - The code is still in the dsh-baton-test folder. The LJL4T drive is not mounted, so it goes to the evidence folder once the drive is plugged in, before the folder is reset.
+
+### 2026-10-28 22:15–23:00 local: 0.6.2 hand-over rerun (short MCP instructions), small and medium
+
+- dsh-baton 0.6.2 (0b17b99): the MCP instructions are cut to one sentence and the rules moved into the tools. The catalogue Codex sees is 24,283 → 9,675 characters. Installed as a local pack (`~/.dsh-baton-dev/plugin-0.6.2`, linked in the Harness profile). The Codex hook entry stayed byte for byte the same and stayed trusted. Same order and settings as the 0.6.1 round, labels `n062` and `n062astra`. Window 22% at the start.
+- All six passed the first time with no rework. One `dsh_send` each, no `dsh_wait`.
+
+| Client · model | Task | 0.6.1 client $ | 0.6.2 client $ | 0.6.1 new input | 0.6.2 new input | 0.6.2 DeepSeek $ | 0.6.2 total $ | 0.6.2 window |
+|---|---|---|---|---|---|---|---|---|
+| Codex · Sol high | Small | 0.087 | **0.063** | 28,537 | 21,102 | 0.132 | 0.195 | 22 → 23 |
+| Codex · Sol high | Medium | 0.075 | **0.064** | 24,006 | 20,854 | 0.183 | 0.247 | 23 → 23 |
+| Codex · Astra high | Small | 0.464 | **0.301** | 33,007 | 16,580 | 0.115 | 0.416 | 23 → 26 |
+| Codex · Astra high | Medium | 0.351 | **0.297** | 19,638 | 15,919 | 0.125 | 0.422 | 26 → 29 |
+| Claude Code · Opus high | Small | 0.385 | 0.419 | – | – | 0.102 | 0.522 | – |
+| Claude Code · Opus high | Medium | 0.393 | 0.473 | – | – | 0.129 | 0.602 | – |
+
+- Codex: new (uncached) input fell by 3–7k tokens per hand-over, about what the shorter catalogue predicts (≈3.6k tokens). Client cost fell 15–28% on Sol and Astra medium. Astra small's −35% also includes the cold cache in the 0.6.1 run.
+- Claude Code: no saving expected, since it shows the instructions only once. Its client cost went up 9–20%, from 9 requests instead of 7–8. With one run per cell, that is within run-to-run noise.
+- DeepSeek's share moves with each build (Sol small $0.069 → $0.132) and has nothing to do with the catalogue.
