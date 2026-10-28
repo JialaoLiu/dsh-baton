@@ -177,6 +177,24 @@ With the check fixed, the hand-over costs about half of working alone on the med
 - Reading: the guidance made the hand-over better (v2 40 vs v1 36, more detail, as the user saw), at about the same GPT cost as v1 once the polling is removed ($1.35 vs $1.18) and a larger DeepSeek bill. Working alone still scored highest, mainly on style (cel shading) and framing; v2's extra detail did not make up for losing the toon look. One reviewer, one build each: a direction, not a settled ranking. The earlier observation that DeepSeek fills in detail is borne out; that its taste is better than GPT's is not, by this scoring.
 
 
+### 2026-10-28 19:45–20:35 local: 0.6.1 hand-over rerun, small and medium (one run per cell)
+
+- Setup: dsh-baton-host 0.6.1 from npm in Harness (switched from the local pack; the Codex hook entry stayed byte for byte the same), Codex Stop hook trusted. `run.mjs --tasks natural --arms B --reps 1`, labels `n061` (Sol, Claude) and `n061astra`. Only the hand-over arm: the working-alone figures are kept from the earlier rounds. The Codex runs went one after another; the Claude Code runs ran at the same time (different account). `run.mjs` now reads the 5-hour window before and after each Codex run from Codex's own app-server (`window.mjs`, `account/rateLimits/read`), and finds the newest Claude Code build itself. The window was 0% (weekly 0%) at the start, and Windows stayed off Codex for the whole round.
+- All six passed the hidden check the first time (small 16/16, medium 13/13), with no rework. Every hand-over was a single `dsh_send`, and no run called `dsh_wait`. Sol small's tool scripts name `dsh_wait` once, but only to print its description, not to call it.
+
+| Client · model | Task | Client $ | DeepSeek $ | Total $ | 5-hour window | Wall | Requests |
+|---|---|---|---|---|---|---|---|
+| Codex · GPT-6.1 Sol high | Small | 0.087 | 0.069 | 0.155 | 0 → 1 | 6 min | 5 |
+| Codex · GPT-6.1 Sol high | Medium | 0.075 | 0.187 | 0.263 | 1 → 2 | 16 min | 4 |
+| Codex · GPT-6 Astra high | Small | 0.464 | 0.121 | 0.585 | 2 → 7 | 15 min | 4 |
+| Codex · GPT-6 Astra high | Medium | 0.351 | 0.171 | 0.522 | 7 → 10 | 13 min | 4 |
+| Claude Code · Opus 5.5 high | Small | 0.385 | 0.103 | 0.488 | – | 8 min | 7 |
+| Claude Code · Opus 5.5 high | Medium | 0.393 | 0.159 | 0.552 | – | 14 min | 8 |
+
+- Prices as before (list prices; DeepSeek deepseek-flash at peak price). The 5-hour window is reported in whole percent, so small runs read as 1 point.
+- Why Astra small cost more than Astra medium: the provider's prompt cache. Astra small was the first Astra run after the Sol runs, so its first request had nothing cached (22,587 input, 0 cached). Astra medium's first request found 13,184 tokens already cached. After that the two match request for request: the catalogue read (+6.2k new), the hand-over (+0.6k), and the wake with the result (+3.4–3.6k). New input in total: 33,007 for small, 19,638 for medium. The 13.2k gap is about $0.12 at Astra prices, so with the cache warm, small would cost about $0.35, the same as medium. This comes from the run order, not from dsh-baton.
+- Same in both runs, and worth cutting next: Codex's first tool script prints every tool whose name or description mentions DeepSeek or Harness (`ALL_TOOLS.filter(/deepseek|harness/)`). That is all 10 dsh-baton tools, about 25k characters (≈6.2k tokens), because every tool's description in Codex's catalogue carries the MCP server instructions again (bug 2). This is the MCP server's text (`instructions` in `src/mcp.mjs`), not the Harness plugin's description.
+
 ### 2026-10-28: 0.6.2 catalogue size (no client runs)
 
 - Change: the MCP server's `instructions` went from 1,605 characters to one sentence (89), and its rules moved into the tools that need them (hand-over and cwd into `dsh_send`, answering into `dsh_answer`, waiting into `dsh_wait` and `dsh_send`'s hint, archived sessions into `dsh_list_sessions`). Codex's `dsh_wait` text now follows the hook: with the Stop hook trusted it says to end the turn when `dsh_send`'s hint says so, instead of the old "call dsh_wait until the final state".
@@ -188,3 +206,22 @@ With the check fixed, the hand-over costs about half of working alone on the med
 | 0.6.2 | 89 | 4,703 | 4,062 | 9,675 (−60%) | 8,474 (−11%) |
 
 - At about 4 characters per token, the catalogue read in each Codex run drops from about 6.1k to 2.4k tokens. Not yet confirmed in a client run: the rerun is the coordinator's.
+
+### 2026-10-28 20:37–22:05 local: large task, hand-over v3 (Codex desktop, GPT-6 Astra high, dsh-baton 0.6.1 from npm)
+
+- Same brief (`natural/xl-B-harness.md`), same model and effort, a new Codex desktop chat in the dsh-baton-test project, folder reset to `56163d4`. Started by full-screen control (paste, Return). The Stop hook was trusted. Nothing else used this ChatGPT account during the run (Windows stayed off Codex), so the 5-hour window is comparable this time.
+- Codex turn 10:07:32Z → 11:05:16Z (58 min). Codex wrote one integration brief and sent three parallel sessions: main/art integration, `store.js`, `neighborhood.js`. They ended at 10:37, 10:34 and 10:55. Codex was woken once, when the last run ended, and then sent one final re-check to the integration session (10:55:46 → 11:04:59), with a second wake for its result. 4 `dsh_send`, no `dsh_wait`.
+- GPT (Astra), from this conversation's rollout: 9 requests, input 421,330 (367,104 cached), output 4,181: **$1.12** at list price. The first request had nothing cached (35,574 new). Only one request between 10:10:20 and 10:55:10, while the hook waited (45 min, $0).
+- DeepSeek (deepseek-flash, 3 sessions, 379 requests): 319,087 new input, 78,932,480 cached, 599,389 output: **$1.29** at peak price.
+- Total **$2.41**. 5-hour window **10% → 22% (12 points)**, read from Codex's app-server before and after.
+- Output: **5,691 lines** (`neighborhood.js` 2,081, `store.js` 2,060, `atmosphere.js` 655, `main.js` 631, README 202, `styles.css` 40, `index.html` 22), not counting `screenshots/` or `verification/`. Hidden check: **11/11**.
+
+| Large task, Astra high, one run each | Lines | Time | GPT $ | DeepSeek $ | Total $ | 5-hour window | Check |
+|---|---|---|---|---|---|---|---|
+| Alone | 843 | 21 min | 4.37 | – | 4.37 | 43 points | 11/11 |
+| Handed over v1 (0.6.0) | 5,300 | 49 min | 1.18 | 0.73 | 1.91 | 11 points | 11/11 |
+| Handed over v2 (0.6.1 dev), polling removed | 7,235 | 44 min | 1.35 | 1.30 | 2.65 | not comparable | 11/11 |
+| Handed over v3 (0.6.1 release) | 5,691 | 58 min | 1.12 | 1.29 | 2.41 | 12 points | 11/11 |
+
+- Against working alone: GPT −74%, total −45%, window 12 points against 43 (−72%).
+- The code is still in the dsh-baton-test folder. The LJL4T drive is not mounted, so it goes to the evidence folder once the drive is plugged in, before the folder is reset.

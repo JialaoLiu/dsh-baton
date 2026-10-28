@@ -30,7 +30,16 @@ const ROOT = '/private/tmp/dshb-bench'
 
 const CODEX = '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex'
 const CODEX_MODEL = arg('model', 'gpt-6.1-sol'), CODEX_EFFORT = 'high' // --model gpt-6-astra for the Astra check
-const CLAUDE = path.join(os.homedir(), 'Library/Application Support/Claude/claude-code/2.1.304/6bbba6adc37f/claude.app/Contents/MacOS/claude')
+// The newest Claude Code build the desktop app has installed (it updates itself).
+const CLAUDE = (() => {
+  const base = path.join(os.homedir(), 'Library/Application Support/Claude/claude-code')
+  const versions = fs.readdirSync(base).filter((v) => /^\d+\.\d+\.\d+$/.test(v)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  for (const v of versions.reverse()) for (const h of fs.readdirSync(path.join(base, v))) {
+    const exe = path.join(base, v, h, 'claude.app/Contents/MacOS/claude')
+    if (fs.existsSync(exe)) return exe
+  }
+  return null
+})()
 const CLAUDE_MODEL = 'claude-opus-5-5', CLAUDE_EFFORT = 'high'
 
 const prompt = (size, arm) => taskSet === 'natural'
@@ -80,6 +89,12 @@ function codexUsage(thread) {
     dsh_calls: dshCalls,
     rate_limit_used_percent: last.rate_limits?.primary?.used_percent ?? null,
   }
+}
+
+// The 5-hour window's used percent right now, from Codex's own app-server (window.mjs).
+function codexWindow() {
+  const r = spawnSync('node', [path.join(HERE, 'window.mjs')], { encoding: 'utf8', timeout: 60000 })
+  try { return JSON.parse(r.stdout).rateLimits.primary.usedPercent } catch { return null }
 }
 
 // --- Claude Code -----------------------------------------------------------------------------
@@ -159,6 +174,7 @@ async function runOne(size, arm, rep) {
   fs.rmSync(dir, { recursive: true, force: true })
   fs.mkdirSync(dir, { recursive: true })
   const turn = client === 'codex' ? codexTurn : claudeTurn
+  const windowBefore = client === 'codex' ? codexWindow() : null
   const t0 = Date.now()
   const turns = []
   let thread = null, check = null, reworks = 0
@@ -175,12 +191,14 @@ async function runOne(size, arm, rep) {
   }
   const wall_s = Math.round((Date.now() - t0) / 1000)
   const usage = client === 'codex' ? codexUsage(thread) : claudeUsage(thread, turns.map((t) => t.result))
+  const windowAfter = client === 'codex' ? codexWindow() : null
   const row = {
     client, label: label || 'baseline', tasks: taskSet, server: serverPath, courier, model: client === 'codex' ? `${CODEX_MODEL} (${CODEX_EFFORT})` : `${CLAUDE_MODEL} (${CLAUDE_EFFORT})`,
     size, arm, rep, dir, thread, at: new Date().toISOString(), wall_s,
     pass: check.pass, checks_passed: check.passed, checks_failed: check.failed, failures: check.failures,
     reworks, exit_codes: turns.map((t) => t.code), errors: turns.map((t) => t.tail).filter(Boolean),
     ...usage,
+    ...(client === 'codex' ? { window_before: windowBefore, window_after: windowAfter } : {}),
     harness: arm === 'B' ? harnessUsage(dir) : null,
   }
   fs.mkdirSync(path.join(HERE, 'results'), { recursive: true })
