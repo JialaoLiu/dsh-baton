@@ -100,8 +100,8 @@ def features():
         ('workspace', 'Workspaces + sessions', ['Start Harness in any folder;', 'it shows in the sidebar.']),
         ('continue', 'Continue a session', ['Send by session_id and keep', 'its full context.']),
         ('live', 'Live in the Harness UI', ['Runs as if typed in Harness,', 'labelled with who sent it.']),
-        ('done', "Woken when it's done", ['Block with dsh_wait, or run', 'wait in the background.']),
-        ('key', 'No extra API key', ['Reuses the desktop sign-in,', 'presets and settings.']),
+        ('done', "Woken when it's done", ['Claude Code and Codex wake', 'up when a run ends.']),
+        ('key', 'No extra API key', ['Desktop sign-in and presets;', 'pick any model Harness has.']),
         ('local', 'macOS + Windows', ['Zero deps; owner-only socket', 'or pipe, no network port.']),
     ]
     W, H, gap, x0, y0 = 341, 196, 24, 64, 56
@@ -116,7 +116,7 @@ def features():
     h = y0 * 2 + H * 2 + gap
     return svg(1200, h, 'What dsh-baton does',
                'Six capabilities: create workspaces and sessions, continue a specific session, run live in the '
-               'Harness UI labelled with the sender, get woken when a run ends, no extra API key, macOS and Windows with zero dependencies.',
+               'Harness UI labelled with the sender, Claude Code and Codex woken when a run ends, no extra API key and any Harness model, macOS and Windows with zero dependencies.',
                '\n'.join(b), BG)
 
 
@@ -161,14 +161,19 @@ def comparison():
 
 # ---------------------------------------------------------------- install steps
 def install():
-    """Same order as the Quick start text: add the plugin in Harness (it registers the MCP server), then check."""
-    gap, x0, y0, H = 24, 64, 104, 236
-    W = (1072 - gap) // 2
-    b = [eyebrow(64, 64, 'TWO STEPS')]
+    """Same order as the Quick start text: add the plugin in Harness (it registers the MCP server),
+    trust the Codex hook once, then check."""
+    gap, x0, y0, H = 24, 64, 104, 300
+    W = (1072 - 2 * gap) // 3
+    b = [eyebrow(64, 64, 'THREE STEPS')]
     steps = [
-        ('1', 'Add in Harness', [('crumb', ['Plugins', 'Add plugin', 'dsh-baton-host']), ('crumb', ['Install', 'Enable now']),
-                                 ('text', 'It registers Claude Code + Codex for you.')]),
-        ('2', 'Check', [('text', 'Open a new chat and ask for'), ('mono', 'dsh_list_workspaces'),
+        ('1', 'Add in Harness', [('crumb', ['Plugins', 'Add plugin']), ('crumb', ['dsh-baton-host']),
+                                 ('crumb', ['Install', 'Enable now']),
+                                 ('text', 'Registers Claude Code + Codex.')]),
+        ('2', 'Codex: trust once', [('crumb', ['Settings', 'Hooks', 'Trust']),
+                                    ('text', 'dsh-baton: waiting for the'), ('text', 'Harness run. Codex is then'),
+                                    ('text', 'woken when a run ends.')]),
+        ('3', 'Check', [('text', 'Open a new chat and ask for'), ('mono', 'dsh_list_workspaces'),
                         ('text', 'It lists your Harness workspaces.')]),
     ]
     for i, (n, head, rows) in enumerate(steps):
@@ -200,20 +205,22 @@ def install():
         if i < len(steps) - 1:
             ax = x + W + 4
             b.append(f'<path d="M{ax} {y0 + H / 2} h{gap - 8}" stroke="{MUTED}" stroke-width="2"/>')
-    return svg(1200, y0 + H + 40, 'Set up dsh-baton in two steps',
+    return svg(1200, y0 + H + 40, 'Set up dsh-baton in three steps',
                tx('Step 1: in Harness open Plugins, Add plugin, enter dsh-baton-host, Install, Enable now; it registers '
-                  'dsh-baton for Claude Code and Codex. Step 2: in a new chat, ask for dsh_list_workspaces; it lists your '
-                  'Harness workspaces.'), '\n'.join(b), BG)
+                  'dsh-baton for Claude Code and Codex. Step 2, Codex only, once: Settings, Hooks, trust "dsh-baton: waiting '
+                  'for the Harness run", so Codex is woken when a run ends. Step 3: in a new chat, ask for '
+                  'dsh_list_workspaces; it lists your Harness workspaces.'), '\n'.join(b), BG)
 
 
 # ---------------------------------------------------------------- tools map
 def tools():
     # listed in tools/list (0.6.0); the rest are hidden and reached through dsh_call
     groups = [
-        ('WORKSPACES · SESSIONS', [('dsh_list_workspaces', 'sidebar workspaces'),
-                                   ('dsh_list_sessions', 'newest first, filterable'),
-                                   ('dsh_read_session', 'recent prompts + replies')]),
-        ('RUNS', [('dsh_send', 'start a run → run_id'),
+        ('FIND', [('dsh_list_workspaces', 'sidebar workspaces'),
+                  ('dsh_list_sessions', 'newest first, with model'),
+                  ('dsh_read_session', 'recent prompts + replies'),
+                  ('dsh_list_models', 'models Harness can run')]),
+        ('RUNS', [('dsh_send', 'start a run, pick a model'),
                   ('dsh_status', 'progress + final reply'),
                   ('dsh_wait', 'until it ends, with evidence')]),
         ('CONTROL', [('dsh_answer', "answer a run's questions"),
@@ -227,25 +234,25 @@ def tools():
               ('dsh_update_queued', 'edit a queued message'),
               ('dsh_list_runs', 'recent runs')]
     W, gap, x0 = 341, 24, 64
-    b = [t(64, 76, '9 tools listed, 6 more through dsh_call', 30, FG, weight=700)]
+    b = [t(64, 76, '10 tools listed, 6 more through dsh_call', 30, FG, weight=700)]
     for i, (name, items) in enumerate(groups):
         x = x0 + i * (W + gap)
-        b.append(r(x, 104, W, 276, 16, PANEL, LINE))
+        b.append(r(x, 104, W, 340, 16, PANEL, LINE))
         b.append(t(x + 26, 146, name, 18, ACC, mono=True, ls=2))
         for k, (tool, what) in enumerate(items):
             y = 196 + k * 64
             hot = tool == 'dsh_call'
             b.append(t(x + 26, y, tool, 20, ACC if hot else FG, mono=True, weight=600))
             b.append(t(x + 26, y + 28, what, 18, MUTED))
-    b.append(r(x0, 404, 3 * W + 2 * gap, 212, 16, PANEL2, LINE2, sw=1.5, dash='8 6'))
-    b.append(t(x0 + 26, 446, 'LESS USED · NOT IN THE TOOL LIST', 18, MUTED, mono=True, ls=2))
+    b.append(r(x0, 468, 3 * W + 2 * gap, 212, 16, PANEL2, LINE2, sw=1.5, dash='8 6'))
+    b.append(t(x0 + 26, 510, 'LESS USED · NOT IN THE TOOL LIST', 18, MUTED, mono=True, ls=2))
     for k, (tool, what) in enumerate(hidden):
         x = x0 + (k % 3) * (W + gap) + 26
-        y = 496 + (k // 3) * 64
+        y = 560 + (k // 3) * 64
         b.append(t(x, y, tool, 20, MUTED, mono=True, weight=600))
         b.append(t(x, y + 28, what, 18, MUTED, opacity=0.8))
-    return svg(1200, 656, 'dsh-baton MCP tools',
-               'Listed: list workspaces, list sessions, read session, send, status, wait, answer, cancel, call. '
+    return svg(1200, 720, 'dsh-baton MCP tools',
+               'Listed: list workspaces, list sessions, read session, list models, send, status, wait, answer, cancel, call. '
                'Less used, reached through dsh_call: create and rename workspace, session activity, '
                'rename session, update queued, list runs.', '\n'.join(b), BG)
 
@@ -319,18 +326,18 @@ def limits():
     return cards_row('Good to know', 'HEADS UP', [
         ('UI input is flagged', ['A message typed in the UI', 'mid-run is recorded on the', 'run as a human interjection.']),
         ('Runs survive restarts', ['Run records are kept on', 'disk; a run cut short by a', 'restart shows interrupted.']),
-        ('Waits without polling', ['Claude Code is woken once,', 'at the end; Codex waits up', 'to 270 s per call.']),
+        ('Waits without polling', ['Claude Code and Codex are', 'woken once, when a run', 'ends; nothing polls.']),
     ], '#2F855A', 210, 350,
         'A message typed in the Harness UI during a relayed run is recorded on that run as a human interjection; '
         'run records survive a Harness restart and a run cut short by one is marked interrupted; Claude Code waits '
-        'in the background and is woken once; Codex waits up to 270 seconds per call, under its tool timeout.')
+        'in the background and Codex ends its turn with its Stop hook; both are woken once, when the run ends.')
 
 
 # ---------------------------------------------------------------- typical flow (animated)
 FLOW = [
     ('1', 'Create a workspace', 'dsh_create_workspace', ['~/code/new-app', 'joins the sidebar']),
     ('2', 'Send the task', 'dsh_send', ['returns run_id +', 'session_id at once']),
-    ('3', 'Wait, no polling', 'wait_command', ['Claude Code: woken once', 'Codex: dsh_wait, 270 s']),
+    ('3', 'Wait, no polling', 'wait_command', ['Claude Code: woken once', 'Codex: woken by its hook']),
     ('4', 'Follow up', 'dsh_send session_id', ['same session, same', 'context: "fix tests"']),
 ]
 
@@ -362,8 +369,8 @@ def flow(time=None):
             ax = x + W + 3
             b.append(f'<path d="M{ax} {y0 + 125} l14 0" stroke="{ACC if a > .5 else LINE2}" stroke-width="2.5"/>')
     return svg(1200, 400, 'Typical dsh-baton flow',
-               'Create a workspace, send the task and get a run id, wait without polling (Claude Code is woken once, '
-               'Codex waits up to 270 s per dsh_wait call), then follow up in the same session.', '\n'.join(b), BG)
+               'Create a workspace, send the task and get a run id, wait without polling (Claude Code and Codex '
+               'are each woken once, when the run ends), then follow up in the same session.', '\n'.join(b), BG)
 
 
 if __name__ == '__main__':
