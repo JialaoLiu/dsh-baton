@@ -20,12 +20,10 @@ docs/*
 !docs/benchmarks/
 docs/benchmarks/**
 !docs/benchmarks/**/
-!docs/benchmarks/token-usage-2026-10/charts/cost-change.svg
-!docs/benchmarks/token-usage-2026-10/charts/cost-change.zh.svg
+!docs/benchmarks/token-usage-2026-10/charts/cost.svg
+!docs/benchmarks/token-usage-2026-10/charts/cost.zh.svg
 !docs/benchmarks/token-usage-2026-10/charts/quota.svg
 !docs/benchmarks/token-usage-2026-10/charts/quota.zh.svg
-!docs/benchmarks/token-usage-2026-10/charts/handover-split.svg
-!docs/benchmarks/token-usage-2026-10/charts/handover-split.zh.svg
 !docs/benchmarks/token-usage-2026-10/charts/evidence-chain.svg
 !docs/benchmarks/token-usage-2026-10/charts/evidence-chain.zh.svg
 !docs/benchmarks/token-usage-2026-10/natural/medium.md

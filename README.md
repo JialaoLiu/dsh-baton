@@ -82,34 +82,30 @@ Codex and Claude take turns in the same Harness session, and every message is la
 
 | Task 3 | Alone | Handed over |
 |---|---|---|
-| Opus 5.5 | 55/55, 39 min | 55/55, 93 min |
-| GPT-6.1 Sol | 55/55, 18 min | 55/55, 101 min |
-| GPT-6 Astra | 55/55, about 31 min | 55/55, about 87 min |
+| Opus 5.5 high | 55/55, 39 min | 55/55, 93 min |
+| GPT-6.1 Sol high | 55/55, 18 min | 55/55, 101 min |
+| GPT-6 Astra high | 55/55, about 31 min | 55/55, about 87 min |
 
 Cost per task at list price, DeepSeek V4.1 Flash 1017 at its peak price. Opus 5.5 runs in Claude Code, GPT-6.1 Sol and GPT-6 Astra in Codex, all at high effort:
 
 | Task | Model | Alone | Handed over: main agent | Handed over: DeepSeek | Handed over: total | Total | Main agent | 5-hour window, alone → handed over |
 |---|---|---|---|---|---|---|---|---|
-| Task 1 · CLI tool | Opus 5.5 | $1.07 | $0.42 | $0.10 | $0.52 | −51.2% | −60.8% | — |
-| | GPT-6.1 Sol | $0.17 | $0.06 | $0.13 | $0.20 | +15.3% | −62.9% | 2.08% → 0.77% |
-| | GPT-6 Astra | $0.79 | $0.30 | $0.12 | $0.42 | −47.4% | −62.0% | 7.83% → 2.98% |
-| Task 2 · Web app | Opus 5.5 | $2.13 | $0.47 | $0.13 | $0.60 | −71.7% | −77.7% | — |
-| | GPT-6.1 Sol | $0.41 | $0.06 | $0.18 | $0.25 | −40.2% | −84.5% | 5.08% → 0.79% |
-| | GPT-6 Astra | $2.27 | $0.30 | $0.13 | $0.42 | −81.4% | −86.9% | 22.43% → 2.94% |
-| Task 3 · Kanban app (phased) | Opus 5.5 | $14.18 | $2.32 | $0.84 | $3.16 | −77.7% | −83.6% | — |
-| | GPT-6.1 Sol | $1.12 | $0.22 | $0.81 | $1.03 | −8.1% | −80.5% | 13.71% → 2.67% |
-| | GPT-6 Astra | $8.69 | $1.62 | $0.74 | $2.35 | −72.9% | −81.4% | 86.01% → 16.01% |
+| Task 1 · CLI tool | Opus 5.5 high | $1.07 | $0.42 | $0.10 | $0.52 | −51.2% | −60.8% | — |
+| | GPT-6.1 Sol high | $0.17 | $0.06 | $0.13 | $0.20 | +15.3% | −62.9% | 2.08% → 0.77% |
+| | GPT-6 Astra high | $0.79 | $0.30 | $0.12 | $0.42 | −47.4% | −62.0% | 7.83% → 2.98% |
+| Task 2 · Web app | Opus 5.5 high | $2.13 | $0.47 | $0.13 | $0.60 | −71.7% | −77.7% | — |
+| | GPT-6.1 Sol high | $0.41 | $0.06 | $0.18 | $0.25 | −40.2% | −84.5% | 5.08% → 0.79% |
+| | GPT-6 Astra high | $2.27 | $0.30 | $0.13 | $0.42 | −81.4% | −86.9% | 22.43% → 2.94% |
+| Task 3 · Kanban app (phased) | Opus 5.5 high | $14.18 | $2.32 | $0.84 | $3.16 | −77.7% | −83.6% | — |
+| | GPT-6.1 Sol high | $1.12 | $0.22 | $0.81 | $1.03 | −8.1% | −80.5% | 13.71% → 2.67% |
+| | GPT-6 Astra high | $8.69 | $1.62 | $0.74 | $2.35 | −72.9% | −81.4% | 86.01% → 16.01% |
 
 <p align="center">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/cost-change.svg" width="100%" alt="Total cost handed over compared with working alone, DeepSeek included. Task 1: Opus −51.2%, Sol +15.3%, Astra −47.4%. Task 2: Opus −71.7%, Sol −40.2%, Astra −81.4%. Task 3: Opus −77.7%, Sol −8.1%, Astra −72.9%">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/cost.svg" width="100%" alt="Cost per task in USD, working alone vs handed over, grouped by model. Opus 5.5 high: $1.07 vs $0.52, $2.13 vs $0.60, $14.18 vs $3.16. GPT-6.1 Sol high: $0.17 vs $0.20, $0.41 vs $0.25, $1.12 vs $1.03. GPT-6 Astra high: $0.79 vs $0.42, $2.27 vs $0.42, $8.69 vs $2.35">
 </p>
 
 <p align="center">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/quota.svg" width="100%" alt="Share of a ChatGPT Plus 5-hour window in Codex, alone vs handed over. Task 1: Sol 2.08% → 0.77%, Astra 7.83% → 2.98%. Task 2: Sol 5.08% → 0.79%, Astra 22.43% → 2.94%. Task 3: Sol 13.71% → 2.67%, Astra 86.01% → 16.01%">
-</p>
-
-<p align="center">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/handover-split.svg" width="100%" alt="What a hand-over costs, split between the main agent and DeepSeek. Opus: $0.52, $0.60, $3.16, DeepSeek about a fifth to a quarter. Sol: $0.20, $0.25, $1.03, DeepSeek 68–79%. Astra: $0.42, $0.42, $2.35, DeepSeek about 30%">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/quota.svg" width="100%" alt="Share of a ChatGPT Plus 5-hour window in Codex, working alone vs handed over, grouped by model. GPT-6.1 Sol high: 2.08% vs 0.77%, 5.08% vs 0.79%, 13.71% vs 2.67%. GPT-6 Astra high: 7.83% vs 2.98%, 22.43% vs 2.94%, 86.01% vs 16.01%">
 </p>
 
 **Hand it over:** big jobs, long jobs, and whenever the 5-hour window is running low. The main agent's own spend drops 61–87% on every task and model.

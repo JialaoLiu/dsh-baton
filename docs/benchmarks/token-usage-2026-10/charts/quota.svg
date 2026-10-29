@@ -1,54 +1,65 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="580" viewBox="0 0 1200 580" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
-<defs><pattern id="ds" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="10" fill="#C3CAD5"/><line x1="0" y1="0" x2="0" y2="10" stroke="#8C96A6" stroke-width="3"/></pattern></defs>
-<rect width="1200" height="580" fill="#FFFFFF"/>
-<text x="32.0" y="46.0" font-size="28" font-weight="700" fill="#0F172A" text-anchor="start">Share of a ChatGPT Plus 5-hour window in Codex</text>
-<text x="32.0" y="80.0" font-size="19" font-weight="400" fill="#5B6577" text-anchor="start">Each pair: working alone, then handed over.</text>
-<rect x="32" y="109" width="18" height="18" rx="3" fill="#2563EB"/>
-<text x="58.0" y="124.0" font-size="18" font-weight="400" fill="#0F172A" text-anchor="start">Sol alone</text>
-<rect x="178.72000000000003" y="109" width="18" height="18" rx="3" fill="#93B4F5"/>
-<text x="204.7" y="124.0" font-size="18" font-weight="400" fill="#0F172A" text-anchor="start">Sol handed over</text>
-<rect x="385.9200000000001" y="109" width="18" height="18" rx="3" fill="#7C3AED"/>
-<text x="411.9" y="124.0" font-size="18" font-weight="400" fill="#0F172A" text-anchor="start">Astra alone</text>
-<rect x="552.8000000000001" y="109" width="18" height="18" rx="3" fill="#C4A8F7"/>
-<text x="578.8" y="124.0" font-size="18" font-weight="400" fill="#0F172A" text-anchor="start">Astra handed over</text>
-<text x="32.0" y="158.0" font-size="18" font-weight="400" fill="#5B6577" text-anchor="start">Opus 5.5 runs on a Claude plan, so it is not in this chart.</text>
-<line x1="100" x2="1170" y1="520.0" y2="520.0" stroke="#0F172A" stroke-width="2"/>
-<text x="88.0" y="526.0" font-size="17" font-weight="400" fill="#5B6577" text-anchor="end">0%</text>
-<line x1="100" x2="1170" y1="454.0" y2="454.0" stroke="#E2E7EF" stroke-width="1"/>
-<text x="88.0" y="460.0" font-size="17" font-weight="400" fill="#5B6577" text-anchor="end">20%</text>
-<line x1="100" x2="1170" y1="388.0" y2="388.0" stroke="#E2E7EF" stroke-width="1"/>
-<text x="88.0" y="394.0" font-size="17" font-weight="400" fill="#5B6577" text-anchor="end">40%</text>
-<line x1="100" x2="1170" y1="322.0" y2="322.0" stroke="#E2E7EF" stroke-width="1"/>
-<text x="88.0" y="328.0" font-size="17" font-weight="400" fill="#5B6577" text-anchor="end">60%</text>
-<line x1="100" x2="1170" y1="256.0" y2="256.0" stroke="#E2E7EF" stroke-width="1"/>
-<text x="88.0" y="262.0" font-size="17" font-weight="400" fill="#5B6577" text-anchor="end">80%</text>
-<line x1="100" x2="1170" y1="190.0" y2="190.0" stroke="#E2E7EF" stroke-width="1"/>
-<text x="88.0" y="196.0" font-size="17" font-weight="400" fill="#5B6577" text-anchor="end">100%</text>
-<rect x="137.3" y="513.1" width="62" height="6.9" rx="3" fill="#2563EB"/>
-<text x="168.3" y="504.1" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">2.08%</text>
-<rect x="205.3" y="517.5" width="62" height="2.5" rx="3" fill="#93B4F5"/>
-<text x="236.3" y="508.5" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">0.77%</text>
-<rect x="289.3" y="494.2" width="62" height="25.8" rx="3" fill="#7C3AED"/>
-<text x="320.3" y="485.2" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">7.83%</text>
-<rect x="357.3" y="510.2" width="62" height="9.8" rx="3" fill="#C4A8F7"/>
-<text x="388.3" y="501.2" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">2.98%</text>
-<text x="278.3" y="560.0" font-size="20" font-weight="600" fill="#0F172A" text-anchor="middle">Task 1 · CLI tool</text>
-<rect x="494.0" y="503.2" width="62" height="16.8" rx="3" fill="#2563EB"/>
-<text x="525.0" y="494.2" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">5.08%</text>
-<rect x="562.0" y="517.4" width="62" height="2.6" rx="3" fill="#93B4F5"/>
-<text x="593.0" y="508.4" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">0.79%</text>
-<rect x="646.0" y="446.0" width="62" height="74.0" rx="3" fill="#7C3AED"/>
-<text x="677.0" y="437.0" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">22.43%</text>
-<rect x="714.0" y="510.3" width="62" height="9.7" rx="3" fill="#C4A8F7"/>
-<text x="745.0" y="501.3" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">2.94%</text>
-<text x="635.0" y="560.0" font-size="20" font-weight="600" fill="#0F172A" text-anchor="middle">Task 2 · Web app</text>
-<rect x="850.7" y="474.8" width="62" height="45.2" rx="3" fill="#2563EB"/>
-<text x="881.7" y="465.8" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">13.71%</text>
-<rect x="918.7" y="511.2" width="62" height="8.8" rx="3" fill="#93B4F5"/>
-<text x="949.7" y="502.2" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">2.67%</text>
-<rect x="1002.7" y="236.2" width="62" height="283.8" rx="3" fill="#7C3AED"/>
-<text x="1033.7" y="227.2" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">86.01%</text>
-<rect x="1070.7" y="467.2" width="62" height="52.8" rx="3" fill="#C4A8F7"/>
-<text x="1101.7" y="458.2" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">16.01%</text>
-<text x="991.7" y="560.0" font-size="20" font-weight="600" fill="#0F172A" text-anchor="middle">Task 3 · Kanban app (phased)</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<defs><pattern id="ds" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#D3EEEB"/><line x1="0" y1="0" x2="0" y2="8" stroke="#8CCDC6" stroke-width="2.5"/></pattern></defs>
+<rect width="1200" height="600" fill="#FFFFFF"/>
+<text x="32.0" y="44.0" font-size="25" font-weight="600" fill="#222222" text-anchor="start">Share of a ChatGPT Plus 5-hour window in Codex</text>
+<text x="32.0" y="76.0" font-size="17" font-weight="400" fill="#666666" text-anchor="start">Each model has its own scale; the bigger the task, the more of the window a hand-over saves. Opus runs on a Claude plan.</text>
+<rect x="32" y="106" width="17" height="17" fill="#948EC1"/>
+<text x="56.0" y="120.0" font-size="17" font-weight="400" fill="#222222" text-anchor="start">Working alone</text>
+<rect x="207.8" y="106" width="17" height="17" fill="#598EBB"/>
+<text x="231.8" y="120.0" font-size="17" font-weight="400" fill="#222222" text-anchor="start">Handed over</text>
+<text x="32.0" y="152.0" font-size="16" font-weight="400" fill="#666666" text-anchor="start">Task 1 · CLI tool   Task 2 · Web app   Task 3 · Kanban app (phased)</text>
+<line x1="242.0" x2="587.0" y1="480.0" y2="480.0" stroke="#222222" stroke-width="1.2"/>
+<text x="234.0" y="485.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">0%</text>
+<line x1="242.0" x2="587.0" y1="409.0" y2="409.0" stroke="#E6E6E6" stroke-width="1"/>
+<text x="234.0" y="414.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">5%</text>
+<line x1="242.0" x2="587.0" y1="338.0" y2="338.0" stroke="#E6E6E6" stroke-width="1"/>
+<text x="234.0" y="343.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">10%</text>
+<line x1="242.0" x2="587.0" y1="267.0" y2="267.0" stroke="#E6E6E6" stroke-width="1"/>
+<text x="234.0" y="272.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">15%</text>
+<line x1="242.0" x2="587.0" y1="196.0" y2="196.0" stroke="#E6E6E6" stroke-width="1"/>
+<text x="234.0" y="201.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">20%</text>
+<rect x="263.5" y="450.5" width="34" height="29.5" fill="#948EC1"/>
+<rect x="301.5" y="469.1" width="34" height="10.9" fill="#598EBB"/>
+<text x="280.5" y="443.5" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">2.08%</text>
+<text x="318.5" y="462.1" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">0.77%</text>
+<text x="299.5" y="504.0" font-size="15" font-weight="600" fill="#222222" text-anchor="middle">Task 1</text>
+<rect x="378.5" y="407.9" width="34" height="72.1" fill="#948EC1"/>
+<rect x="416.5" y="468.8" width="34" height="11.2" fill="#598EBB"/>
+<text x="395.5" y="400.9" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">5.08%</text>
+<text x="433.5" y="461.8" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">0.79%</text>
+<text x="414.5" y="504.0" font-size="15" font-weight="600" fill="#222222" text-anchor="middle">Task 2</text>
+<rect x="493.5" y="285.3" width="34" height="194.7" fill="#948EC1"/>
+<rect x="531.5" y="442.1" width="34" height="37.9" fill="#598EBB"/>
+<text x="510.5" y="278.3" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">13.71%</text>
+<text x="548.5" y="435.1" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">2.67%</text>
+<text x="529.5" y="504.0" font-size="15" font-weight="600" fill="#222222" text-anchor="middle">Task 3</text>
+<text x="414.5" y="538.0" font-size="18" font-weight="700" fill="#222222" text-anchor="middle">Codex · GPT-6.1 Sol high</text>
+<line x1="667.0" x2="1012.0" y1="480.0" y2="480.0" stroke="#222222" stroke-width="1.2"/>
+<text x="659.0" y="485.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">0%</text>
+<line x1="667.0" x2="1012.0" y1="423.2" y2="423.2" stroke="#E6E6E6" stroke-width="1"/>
+<text x="659.0" y="428.2" font-size="14" font-weight="400" fill="#666666" text-anchor="end">20%</text>
+<line x1="667.0" x2="1012.0" y1="366.4" y2="366.4" stroke="#E6E6E6" stroke-width="1"/>
+<text x="659.0" y="371.4" font-size="14" font-weight="400" fill="#666666" text-anchor="end">40%</text>
+<line x1="667.0" x2="1012.0" y1="309.6" y2="309.6" stroke="#E6E6E6" stroke-width="1"/>
+<text x="659.0" y="314.6" font-size="14" font-weight="400" fill="#666666" text-anchor="end">60%</text>
+<line x1="667.0" x2="1012.0" y1="252.8" y2="252.8" stroke="#E6E6E6" stroke-width="1"/>
+<text x="659.0" y="257.8" font-size="14" font-weight="400" fill="#666666" text-anchor="end">80%</text>
+<line x1="667.0" x2="1012.0" y1="196.0" y2="196.0" stroke="#E6E6E6" stroke-width="1"/>
+<text x="659.0" y="201.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">100%</text>
+<rect x="688.5" y="457.8" width="34" height="22.2" fill="#948EC1"/>
+<rect x="726.5" y="471.5" width="34" height="8.5" fill="#598EBB"/>
+<text x="705.5" y="450.8" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">7.83%</text>
+<text x="743.5" y="464.5" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">2.98%</text>
+<text x="724.5" y="504.0" font-size="15" font-weight="600" fill="#222222" text-anchor="middle">Task 1</text>
+<rect x="803.5" y="416.3" width="34" height="63.7" fill="#948EC1"/>
+<rect x="841.5" y="471.7" width="34" height="8.3" fill="#598EBB"/>
+<text x="820.5" y="409.3" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">22.43%</text>
+<text x="858.5" y="464.7" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">2.94%</text>
+<text x="839.5" y="504.0" font-size="15" font-weight="600" fill="#222222" text-anchor="middle">Task 2</text>
+<rect x="918.5" y="235.7" width="34" height="244.3" fill="#948EC1"/>
+<rect x="956.5" y="434.5" width="34" height="45.5" fill="#598EBB"/>
+<text x="935.5" y="228.7" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">86.01%</text>
+<text x="973.5" y="427.5" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">16.01%</text>
+<text x="954.5" y="504.0" font-size="15" font-weight="600" fill="#222222" text-anchor="middle">Task 3</text>
+<text x="839.5" y="538.0" font-size="18" font-weight="700" fill="#222222" text-anchor="middle">Codex · GPT-6 Astra high</text>
 </svg>

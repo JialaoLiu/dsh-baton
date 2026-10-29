@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<defs><pattern id="ds" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#D3EEEB"/><line x1="0" y1="0" x2="0" y2="8" stroke="#8CCDC6" stroke-width="2.5"/></pattern></defs>
+<rect width="1200" height="600" fill="#FFFFFF"/>
+<text x="32.0" y="44.0" font-size="25" font-weight="600" fill="#222222" text-anchor="start">Cost per task (USD): working alone vs handed over</text>
+<text x="32.0" y="76.0" font-size="17" font-weight="400" fill="#666666" text-anchor="start">Handed over = main agent + DeepSeek (hatched). Each model has its own scale; the bigger the task, the wider the gap.</text>
+<rect x="32" y="106" width="17" height="17" fill="#948EC1"/>
+<text x="56.0" y="120.0" font-size="17" font-weight="400" fill="#222222" text-anchor="start">Working alone</text>
+<rect x="207.8" y="106" width="17" height="17" fill="#598EBB"/>
+<text x="231.8" y="120.0" font-size="17" font-weight="400" fill="#222222" text-anchor="start">Handed over: main agent</text>
+<rect x="478.8" y="106" width="17" height="17" fill="url(#ds)"/>
+<text x="502.8" y="120.0" font-size="17" font-weight="400" fill="#222222" text-anchor="start">Handed over: DeepSeek V4.1 Flash 1017</text>
+<text x="32.0" y="152.0" font-size="16" font-weight="400" fill="#666666" text-anchor="start">Task 1 · CLI tool   Task 2 · Web app   Task 3 · Kanban app (phased)</text>
+<line x1="102.0" x2="398.7" y1="480.0" y2="480.0" stroke="#222222" stroke-width="1.2"/>
+<text x="94.0" y="485.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">$0</text>
+<line x1="102.0" x2="398.7" y1="409.0" y2="409.0" stroke="#E6E6E6" stroke-width="1"/>
+<text x="94.0" y="414.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">$5</text>
+<line x1="102.0" x2="398.7" y1="338.0" y2="338.0" stroke="#E6E6E6" stroke-width="1"/>
+<text x="94.0" y="343.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">$10</text>
+<line x1="102.0" x2="398.7" y1="267.0" y2="267.0" stroke="#E6E6E6" stroke-width="1"/>
+<text x="94.0" y="272.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">$15</text>
+<line x1="102.0" x2="398.7" y1="196.0" y2="196.0" stroke="#E6E6E6" stroke-width="1"/>
+<text x="94.0" y="201.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">$20</text>
+<rect x="115.4" y="464.8" width="34" height="15.2" fill="#948EC1"/>
+<rect x="153.4" y="474.0" width="34" height="6.0" fill="#598EBB"/>
+<rect x="153.4" y="472.6" width="34" height="1.4" fill="url(#ds)"/>
+<text x="132.4" y="457.8" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$1.07</text>
+<text x="170.4" y="465.6" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$0.52</text>
+<text x="151.4" y="504.0" font-size="15" font-weight="600" fill="#222222" text-anchor="middle">Task 1</text>
+<rect x="214.3" y="449.8" width="34" height="30.2" fill="#948EC1"/>
+<rect x="252.3" y="473.3" width="34" height="6.7" fill="#598EBB"/>
+<rect x="252.3" y="471.5" width="34" height="1.8" fill="url(#ds)"/>
+<text x="231.3" y="442.8" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$2.13</text>
+<text x="269.3" y="464.5" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$0.60</text>
+<text x="250.3" y="504.0" font-size="15" font-weight="600" fill="#222222" text-anchor="middle">Task 2</text>
+<rect x="313.2" y="278.6" width="34" height="201.4" fill="#948EC1"/>
+<rect x="351.2" y="447.1" width="34" height="32.9" fill="#598EBB"/>
+<rect x="351.2" y="435.1" width="34" height="11.9" fill="url(#ds)"/>
+<text x="330.2" y="271.6" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$14.18</text>
+<text x="368.2" y="428.1" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$3.16</text>
+<text x="349.2" y="504.0" font-size="15" font-weight="600" fill="#222222" text-anchor="middle">Task 3</text>
+<text x="250.3" y="538.0" font-size="18" font-weight="700" fill="#222222" text-anchor="middle">Claude Code · Opus 5.5 high</text>
+<line x1="478.7" x2="775.3" y1="480.0" y2="480.0" stroke="#222222" stroke-width="1.2"/>
+<text x="470.7" y="485.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">$0</text>
+<line x1="478.7" x2="775.3" y1="385.3" y2="385.3" stroke="#E6E6E6" stroke-width="1"/>
+<text x="470.7" y="390.3" font-size="14" font-weight="400" fill="#666666" text-anchor="end">$0.5</text>
+<line x1="478.7" x2="775.3" y1="290.7" y2="290.7" stroke="#E6E6E6" stroke-width="1"/>
+<text x="470.7" y="295.7" font-size="14" font-weight="400" fill="#666666" text-anchor="end">$1</text>
+<line x1="478.7" x2="775.3" y1="196.0" y2="196.0" stroke="#E6E6E6" stroke-width="1"/>
+<text x="470.7" y="201.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">$1.5</text>
+<rect x="492.1" y="447.8" width="34" height="32.2" fill="#948EC1"/>
+<rect x="530.1" y="468.6" width="34" height="11.4" fill="#598EBB"/>
+<rect x="530.1" y="442.1" width="34" height="26.5" fill="url(#ds)"/>
+<text x="509.1" y="440.8" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$0.17</text>
+<text x="547.1" y="435.1" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$0.20</text>
+<text x="528.1" y="504.0" font-size="15" font-weight="600" fill="#222222" text-anchor="middle">Task 1</text>
+<rect x="591.0" y="402.4" width="34" height="77.6" fill="#948EC1"/>
+<rect x="629.0" y="468.6" width="34" height="11.4" fill="#598EBB"/>
+<rect x="629.0" y="432.7" width="34" height="36.0" fill="url(#ds)"/>
+<text x="608.0" y="395.4" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$0.41</text>
+<text x="646.0" y="425.7" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$0.25</text>
+<text x="627.0" y="504.0" font-size="15" font-weight="600" fill="#222222" text-anchor="middle">Task 2</text>
+<rect x="689.9" y="267.9" width="34" height="212.1" fill="#948EC1"/>
+<rect x="727.9" y="438.3" width="34" height="41.7" fill="#598EBB"/>
+<rect x="727.9" y="285.0" width="34" height="153.4" fill="url(#ds)"/>
+<text x="706.9" y="260.9" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$1.12</text>
+<text x="744.9" y="278.0" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$1.03</text>
+<text x="725.9" y="504.0" font-size="15" font-weight="600" fill="#222222" text-anchor="middle">Task 3</text>
+<text x="627.0" y="538.0" font-size="18" font-weight="700" fill="#222222" text-anchor="middle">Codex · GPT-6.1 Sol high</text>
+<line x1="855.3" x2="1152.0" y1="480.0" y2="480.0" stroke="#222222" stroke-width="1.2"/>
+<text x="847.3" y="485.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">$0</text>
+<line x1="855.3" x2="1152.0" y1="423.2" y2="423.2" stroke="#E6E6E6" stroke-width="1"/>
+<text x="847.3" y="428.2" font-size="14" font-weight="400" fill="#666666" text-anchor="end">$2</text>
+<line x1="855.3" x2="1152.0" y1="366.4" y2="366.4" stroke="#E6E6E6" stroke-width="1"/>
+<text x="847.3" y="371.4" font-size="14" font-weight="400" fill="#666666" text-anchor="end">$4</text>
+<line x1="855.3" x2="1152.0" y1="309.6" y2="309.6" stroke="#E6E6E6" stroke-width="1"/>
+<text x="847.3" y="314.6" font-size="14" font-weight="400" fill="#666666" text-anchor="end">$6</text>
+<line x1="855.3" x2="1152.0" y1="252.8" y2="252.8" stroke="#E6E6E6" stroke-width="1"/>
+<text x="847.3" y="257.8" font-size="14" font-weight="400" fill="#666666" text-anchor="end">$8</text>
+<line x1="855.3" x2="1152.0" y1="196.0" y2="196.0" stroke="#E6E6E6" stroke-width="1"/>
+<text x="847.3" y="201.0" font-size="14" font-weight="400" fill="#666666" text-anchor="end">$10</text>
+<rect x="868.8" y="457.6" width="34" height="22.4" fill="#948EC1"/>
+<rect x="906.8" y="471.5" width="34" height="8.5" fill="#598EBB"/>
+<rect x="906.8" y="468.1" width="34" height="3.4" fill="url(#ds)"/>
+<text x="885.8" y="450.6" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$0.79</text>
+<text x="923.8" y="461.1" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$0.42</text>
+<text x="904.8" y="504.0" font-size="15" font-weight="600" fill="#222222" text-anchor="middle">Task 1</text>
+<rect x="967.7" y="415.5" width="34" height="64.5" fill="#948EC1"/>
+<rect x="1005.7" y="471.5" width="34" height="8.5" fill="#598EBB"/>
+<rect x="1005.7" y="468.1" width="34" height="3.4" fill="url(#ds)"/>
+<text x="984.7" y="408.5" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$2.27</text>
+<text x="1022.7" y="461.1" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$0.42</text>
+<text x="1003.7" y="504.0" font-size="15" font-weight="600" fill="#222222" text-anchor="middle">Task 2</text>
+<rect x="1066.6" y="233.2" width="34" height="246.8" fill="#948EC1"/>
+<rect x="1104.6" y="434.0" width="34" height="46.0" fill="#598EBB"/>
+<rect x="1104.6" y="413.3" width="34" height="20.7" fill="url(#ds)"/>
+<text x="1083.6" y="226.2" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$8.69</text>
+<text x="1121.6" y="406.3" font-size="13" font-weight="600" fill="#222222" text-anchor="middle">$2.35</text>
+<text x="1102.6" y="504.0" font-size="15" font-weight="600" fill="#222222" text-anchor="middle">Task 3</text>
+<text x="1003.7" y="538.0" font-size="18" font-weight="700" fill="#222222" text-anchor="middle">Codex · GPT-6 Astra high</text>
+</svg>
