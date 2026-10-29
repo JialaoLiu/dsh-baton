@@ -13,7 +13,7 @@ Hand coding tasks from Claude Code or Codex to DeepSeek Harness on your machine:
 Needs DeepSeek Harness ≥ 0.2.1-rc.2 (signed in) and Claude Code or Codex; macOS / Windows, zero dependencies. [Quick start →](#quick-start)
 
 <p align="center">
-  <img src="./assets/readme/en/hero.svg" width="100%" alt="dsh-baton: pass the baton from Claude Code or Codex to DeepSeek Harness, watch it run live, and get it handed back when it's done">
+  <img src="./assets/readme/en/hero.gif" width="100%" alt="dsh-baton: pass the baton from Claude Code or Codex to DeepSeek Harness, watch it run live, and get it handed back when it's done">
 </p>
 
 ## What it is
@@ -52,6 +52,10 @@ That is all. If Harness says it could not register, run `npx -y dsh-baton-mcp se
 *Claude Code and Codex each hand DeepSeek Harness a task, and its subagents build this rainy-night street in 1 h 41 min. 40 s, sound on.*
 
 https://github.com/user-attachments/assets/72e2fdff-275e-48bc-8e5a-39ffb025a0a8
+
+<p align="center">
+  <img src="./assets/readme/en/flow.gif" width="100%" alt="Typical flow: create a workspace, send the task, wait without polling (Claude Code and Codex are woken when the run ends), follow up in the same session">
+</p>
 
 One Codex chat starts a task, queues a follow-up, steers the running turn, and waits for all three:
 

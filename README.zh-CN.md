@@ -13,7 +13,7 @@
 需要 DeepSeek Harness ≥ 0.2.1-rc.2（已登录）和 Claude Code 或 Codex；macOS / Windows，零依赖。[快速上手 →](#快速上手)
 
 <p align="center">
-  <img src="./assets/readme/zh/hero.svg" width="100%" alt="dsh-baton：让 Claude Code 或 Codex 把接力棒交给 DeepSeek Harness，界面实时可见，跑完那一刻就交回给你">
+  <img src="./assets/readme/zh/hero.gif" width="100%" alt="dsh-baton：让 Claude Code 或 Codex 把接力棒交给 DeepSeek Harness，界面实时可见，跑完那一刻就交回给你">
 </p>
 
 ## 这是什么
@@ -52,6 +52,10 @@ dsh-baton 是一个 MCP 服务器加一个 Harness 小插件。主 Agent（Claud
 *Claude Code 和 Codex 各派一个任务给 DeepSeek Harness，它的子代理用 1 小时 41 分搭出了这条雨夜街道。40 秒，建议开声音。*
 
 https://github.com/user-attachments/assets/ed931637-acb3-4c16-8c52-72298ea90485
+
+<p align="center">
+  <img src="./assets/readme/zh/flow.gif" width="100%" alt="典型流程：新建工作区、派发任务、不轮询地等待（Claude Code 和 Codex 在运行结束时被唤醒）、在同一个对话里续接追问">
+</p>
 
 一个 Codex 对话里完成新建、排队、插队和等待：
 
