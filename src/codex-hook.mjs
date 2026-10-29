@@ -5,6 +5,7 @@
 // model requests, and returns the result as dsh_wait would. One wake instead of a dsh_wait
 // call every few minutes.
 import fs from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import * as core from './core.mjs'
 import { codexConfigPath, stableNodePath, codexHookEntry, codexHookStatus, hookResultFile, HOOK_TIMEOUT_S } from './register.mjs'
@@ -94,15 +95,35 @@ export function noteOnce(thread) {
   return true
 }
 
-// The language of Codex's own interface: 'zh' when localeOverride in its config ([desktop])
-// starts with zh, else 'en' (also when it is not set or the config cannot be read).
-export function codexLang(env = process.env) {
+// The language of Codex's own interface. A language picked in Codex's settings is written as
+// localeOverride in its config ([desktop]) and wins, English included. Without one, Codex
+// (Electron) follows the system's preferred language, not its region format:
+// AppleLanguages (then AppleLocale) on macOS, the user interface language that Node's ICU
+// reports on Windows, LC_ALL / LC_MESSAGES / LANG elsewhere (C and POSIX say nothing).
+// 'zh' when that starts with zh, else 'en' (also when nothing can be read). The hook runs
+// at every Codex Stop, so the system is asked only without an override, once per process.
+const defaults = (key) => execFileSync('defaults', ['read', '-g', key], { encoding: 'utf8', timeout: 1500, stdio: ['ignore', 'pipe', 'ignore'] })
+const SYSTEM = {
+  platform: process.platform,
+  readAppleLanguages: () => /^\(\s*"?([^",\s)]+)/.exec(defaults('AppleLanguages'))?.[1],
+  readAppleLocale: () => defaults('AppleLocale').trim(),
+  intlLocale: () => Intl.DateTimeFormat().resolvedOptions().locale,
+}
+const attempt = (read) => { try { return read() || '' } catch { return '' } }
+export function systemLocale(env = process.env, sys = SYSTEM) {
+  const { platform, readAppleLanguages, readAppleLocale, intlLocale } = { ...SYSTEM, ...sys }
+  if (platform === 'darwin') return attempt(readAppleLanguages) || attempt(readAppleLocale)
+  if (platform === 'win32') return attempt(intlLocale)
+  return [env.LC_ALL, env.LC_MESSAGES, env.LANG].find((v) => v && !/^(C|POSIX)([._@]|$)/.test(v)) ?? ''
+}
+let systemCached
+export function codexLang(env = process.env, sys) {
+  let picked
   try {
-    const m = fs.readFileSync(codexConfigPath(env), 'utf8').match(/^\s*localeOverride\s*=\s*["']([^"']*)["']/m)
-    return /^zh/i.test(m?.[1] ?? '') ? 'zh' : 'en'
-  } catch {
-    return 'en'
-  }
+    picked = fs.readFileSync(codexConfigPath(env), 'utf8').match(/^\s*localeOverride\s*=\s*["']([^"']*)["']/m)?.[1]
+  } catch { /* no config: Codex follows the system */ }
+  const locale = picked || (sys ? systemLocale(env, sys) : (systemCached ??= systemLocale(env)))
+  return /^zh/i.test(locale) ? 'zh' : 'en'
 }
 
 // Codex desktop shows reason as is and folds the rest of a long message away, so it opens

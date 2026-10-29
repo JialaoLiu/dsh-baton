@@ -9,8 +9,9 @@ import path from 'node:path'
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-hook-'))
 process.env.DSH_BATON_HOME = home
-// No Codex config of this machine's: its language would change the glance in reason.
+// Not this machine's Codex config or system language, either would change the glance in reason.
 process.env.CODEX_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-codexhome-'))
+fs.writeFileSync(path.join(process.env.CODEX_HOME, 'config.toml'), '[desktop]\nlocaleOverride = "en"\n')
 const hook = await import('../src/codex-hook.mjs')
 after(() => {
   for (const d of [home, process.env.CODEX_HOME]) fs.rmSync(d, { recursive: true, force: true })
@@ -169,7 +170,7 @@ test('reason opens with a glance in Codex\'s language, then the full results for
   // The language comes from Codex's config; the JSON after the glance is unchanged.
   const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-lang-'))
   const env = { CODEX_HOME: codexHome }
-  assert.equal(hook.codexLang(env), 'en') // no config
+  assert.equal(hook.codexLang(env, { platform: 'linux', intlLocale: () => 'zh-CN' }), 'en') // no config, nothing in env
   fs.writeFileSync(path.join(codexHome, 'config.toml'), 'model = "x"\n\n[desktop]\nlocaleOverride = "zh-CN"\n')
   assert.equal(hook.codexLang(env), 'zh')
   fs.writeFileSync(path.join(codexHome, 'config.toml'), '[desktop]\nlocaleOverride = "ja-JP"\n')
@@ -189,6 +190,42 @@ test('reason opens with a glance in Codex\'s language, then the full results for
     assert.match(out.systemMessage, /^dsh-baton：2 个 Harness 任务已交回 Codex/) // as before
   } finally {
     process.env.CODEX_HOME = saved
+    fs.rmSync(codexHome, { recursive: true, force: true })
+  }
+})
+
+test('without localeOverride the language is the system\'s, read only then', () => {
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-lang-'))
+  const config = (text) => fs.writeFileSync(path.join(codexHome, 'config.toml'), text)
+  const env = { CODEX_HOME: codexHome }
+  const unused = () => assert.fail('system asked although Codex has a language')
+  const never = { platform: 'darwin', readAppleLanguages: unused, readAppleLocale: unused, intlLocale: unused }
+  const mac = (languages, locale = 'en_US') => ({ platform: 'darwin', readAppleLanguages: languages, readAppleLocale: () => locale })
+  const fail = () => { throw new Error('defaults: timed out') }
+  try {
+    config('[desktop]\nlocaleOverride = "zh-Hans"\n')
+    assert.equal(hook.codexLang(env, never), 'zh')
+    config('[desktop]\nlocaleOverride = "en-US"\n')
+    assert.equal(hook.codexLang(env, never), 'en') // English picked on a Chinese system stays English
+
+    config('model = "x"\n[desktop]\n')
+    assert.equal(hook.codexLang(env, mac(() => 'zh-Hans-AU')), 'zh')
+    assert.equal(hook.codexLang(env, mac(() => 'en-AU', 'zh_CN')), 'en') // the preferred language, not the region
+    assert.equal(hook.codexLang(env, mac(() => undefined, 'zh_CN')), 'zh') // no AppleLanguages: AppleLocale
+    assert.equal(hook.codexLang(env, mac(fail, '')), 'en')
+    assert.equal(hook.codexLang(env, { platform: 'darwin', readAppleLanguages: fail, readAppleLocale: fail }), 'en')
+
+    const linux = (vars) => hook.codexLang({ ...env, ...vars }, { platform: 'linux' })
+    assert.equal(linux({ LANG: 'zh_CN.UTF-8' }), 'zh')
+    assert.equal(linux({ LANG: 'C' }), 'en')
+    assert.equal(linux({ LC_ALL: 'C.UTF-8', LANG: 'zh_CN.UTF-8' }), 'zh') // C says nothing, LANG decides
+    assert.equal(linux({ LC_MESSAGES: 'en_US.UTF-8', LANG: 'zh_CN.UTF-8' }), 'en')
+    assert.equal(linux({}), 'en')
+
+    assert.equal(hook.codexLang(env, { platform: 'win32', intlLocale: () => 'zh-CN' }), 'zh')
+    assert.equal(hook.codexLang(env, { platform: 'win32', intlLocale: () => 'en-US' }), 'en')
+    assert.equal(hook.codexLang(env, { platform: 'win32', intlLocale: fail }), 'en')
+  } finally {
     fs.rmSync(codexHome, { recursive: true, force: true })
   }
 })
