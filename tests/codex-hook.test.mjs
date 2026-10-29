@@ -1,5 +1,5 @@
 // The Codex Stop hook: config editing, when the server trusts it, and what one hook call returns.
-import { test } from 'node:test'
+import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -12,6 +12,9 @@ process.env.DSH_BATON_HOME = home
 // No Codex config of this machine's: its language would change the glance in reason.
 process.env.CODEX_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-codexhome-'))
 const hook = await import('../src/codex-hook.mjs')
+after(() => {
+  for (const d of [home, process.env.CODEX_HOME]) fs.rmSync(d, { recursive: true, force: true })
+})
 const SERVER = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'server.mjs')
 
 test('setup adds the hook once, replaces it, and removes only its own lines', () => {
@@ -67,7 +70,7 @@ test('one hook call: nothing pending ends the turn; a finished run comes back on
   assert.match(out.reason, /"final_text":"done","hint":"shaped"/)
   // A glance for the person, then the text the model read before, word for word.
   assert.equal(out.reason, `dsh-baton · hrun-a: completed\n\ndsh-baton: the Harness run hrun-a you handed over with dsh_send has ended (completed). This is its result, as dsh_wait would return it; act on it now (follow the hints):\n${JSON.stringify({ run_id: 'hrun-a', state: 'completed', final_text: 'done', hint: 'shaped' })}`)
-  assert.equal(out.systemMessage, 'dsh-baton：Harness 任务 hrun-a（completed）已结束，结果已交回 Codex')
+  assert.equal(out.systemMessage, 'dsh-baton: Harness run hrun-a (completed) ended, result passed to Codex') // no Codex language set
   assert.deepEqual(Object.keys(out), ['decision', 'reason', 'systemMessage'])
   assert.equal(calls, 3)
   // Delivered: the continuation's own Stop lets the turn end.
@@ -78,7 +81,7 @@ test('a question is passed on once; if nobody answers, the turn ends instead of 
   const shape = (st) => st
   hook.remember('t2', 'hrun-q')
   const asking = async ({ run_id }) => ({ run_id, state: 'waiting', needs_input: 'answer', question: { count: 1, questions: [{ id: 'q1', question: 'Which?' }] } })
-  const first = await hook.runHook({ session_id: 't2' }, { shape, wait: asking })
+  const first = await hook.runHook({ session_id: 't2' }, { shape, wait: asking, lang: 'zh' })
   assert.match(first.reason, /stopped to ask a question/)
   assert.match(first.systemMessage, /^dsh-baton：Harness 任务 \S+ 在等回答，问题已交给 Codex$/)
   assert.equal(await hook.runHook({ session_id: 't2', stop_hook_active: true }, { shape, wait: asking }), null)
@@ -113,7 +116,7 @@ test('a run that asks a question or fails wakes Codex at once; the rest keep wai
     'hrun-q3': { timed_out: true, state: 'running' },
   }
   const wait = async ({ run_id }) => ({ run_id, ...states[run_id] })
-  const first = await hook.runHook({ session_id: 'tq' }, { shape: (s) => s, wait, chunk_s: 0 })
+  const first = await hook.runHook({ session_id: 'tq' }, { shape: (s) => s, wait, chunk_s: 0, lang: 'zh' })
   assert.match(first.reason, /2 Harness runs/)
   assert.match(first.reason, /Red or blue\?/)
   assert.match(first.reason, /Still running, not reviewed yet: hrun-q3/)
@@ -188,6 +191,59 @@ test('reason opens with a glance in Codex\'s language, then the full results for
     process.env.CODEX_HOME = saved
     fs.rmSync(codexHome, { recursive: true, force: true })
   }
+})
+
+test('checks: passed, failed, skipped for lack of time, and both, each said as it is', () => {
+  const line = (checks, lang) => hook.glanceFor([{ run_id: 'h', state: 'completed', evidence: { checks } }], [], lang)
+  const ok = { passed: true }, bad = { passed: false, exit_code: 1 }, skip = { command: 'npm test', skipped: 'out of time' }
+  assert.equal(line([ok, ok]), 'dsh-baton · h: completed · checks passed (2/2)')
+  assert.equal(line([ok, ok], 'zh'), 'dsh-baton · h：已完成 · 项目测试通过（2/2）')
+  assert.equal(line([ok, bad]), 'dsh-baton · h: completed · checks failed (1/2)')
+  assert.equal(line([ok, bad], 'zh'), 'dsh-baton · h：已完成 · 项目测试未通过（1/2）')
+  // Not run is not failed.
+  assert.equal(line([ok, ok, skip]), 'dsh-baton · h: completed · checks 2/3 passed, 1 skipped')
+  assert.equal(line([ok, ok, skip], 'zh'), 'dsh-baton · h：已完成 · 项目测试 2/3 通过，1 个超时未跑')
+  assert.equal(line([ok, bad, skip, skip]), 'dsh-baton · h: completed · checks 1/4 passed, 1 failed, 2 skipped')
+  assert.equal(line([ok, bad, skip, skip], 'zh'), 'dsh-baton · h：已完成 · 项目测试 1/4 通过，1 个未通过，2 个超时未跑')
+  // More files than the snapshot could hold.
+  const many = { changes: { created: [{}], modified: [{}, {}], deleted: [], truncated: true } }
+  assert.equal(hook.glanceFor([{ run_id: 'h', state: 'completed', evidence: many }]), 'dsh-baton · h: completed · 3+ files changed')
+  assert.equal(hook.glanceFor([{ run_id: 'h', state: 'completed', evidence: many }], [], 'zh'), 'dsh-baton · h：已完成 · 改动 3+ 个文件')
+})
+
+test('a question is cut by characters: an emoji or a Chinese character is never split', () => {
+  const ask = (q) => hook.glanceFor([{ run_id: 'h', state: 'waiting', needs_input: 'answer', question: { questions: [{ question: q }] } }])
+  const emoji = ask(`${'a'.repeat(99)}😀tail`)
+  assert.ok(emoji.endsWith(`${'a'.repeat(99)}😀…"`))
+  assert.doesNotMatch(emoji, /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/)
+  assert.ok(ask('中'.repeat(120)).endsWith(`"${'中'.repeat(100)}…"`))
+  assert.ok(ask('短问题？').endsWith('"短问题？"'))
+})
+
+test('systemMessage follows Codex\'s language too', async () => {
+  const runs = [{ run_id: 'hrun-1', state: 'completed' }, { run_id: 'hrun-2', state: 'waiting', needs_input: 'answer' }]
+  assert.equal(hook.summaryFor(runs, ['hrun-3']), 'dsh-baton: 2 Harness runs passed to Codex: hrun-1 (completed), hrun-2 waiting for an answer; 1 still running')
+  assert.equal(hook.summaryFor(runs.slice(1)), 'dsh-baton: Harness run hrun-2 waiting for an answer, question passed to Codex')
+  assert.equal(hook.summaryFor(runs, ['hrun-3'], 'zh'), 'dsh-baton：2 个 Harness 任务已交回 Codex：hrun-1（completed），hrun-2 在等回答；还在运行 1 个')
+  hook.remember('ts', 'hrun-s')
+  const out = await hook.runHook({ session_id: 'ts' }, { shape: (s) => s, wait: async ({ run_id }) => ({ run_id, state: 'completed' }), lang: 'zh' })
+  assert.equal(out.systemMessage, 'dsh-baton：Harness 任务 hrun-s（completed）已结束，结果已交回 Codex')
+  assert.ok(out.reason.startsWith('dsh-baton · hrun-s：已完成\n\n'))
+})
+
+test('a glance that fails leaves the results; a message that cannot be built keeps the run pending', async () => {
+  // checks that are not a list: the glance throws, JSON does not.
+  hook.remember('tf', 'hrun-f')
+  const odd = async ({ run_id }) => ({ run_id, state: 'completed', evidence: { checks: { length: 1 } } })
+  const out = await hook.runHook({ session_id: 'tf' }, { shape: (s) => s, wait: odd })
+  assert.ok(out.reason.startsWith('dsh-baton: the Harness run hrun-f you handed over with dsh_send has ended (completed).'))
+  assert.equal(await hook.runHook({ session_id: 'tf', stop_hook_active: true }, { shape: (s) => s, wait: odd }), null) // delivered
+  // The message itself fails (a value JSON cannot hold): nothing is marked delivered.
+  hook.remember('tf2', 'hrun-f2')
+  const done = async ({ run_id }) => ({ run_id, state: 'completed' })
+  await assert.rejects(hook.runHook({ session_id: 'tf2' }, { shape: (s) => ({ ...s, n: 1n }), wait: done }))
+  const again = await hook.runHook({ session_id: 'tf2' }, { shape: (s) => s, wait: done })
+  assert.match(again.reason, /hrun-f2 you handed over with dsh_send has ended \(completed\)/)
 })
 
 test('a result the model already got with dsh_wait is not delivered again', async () => {

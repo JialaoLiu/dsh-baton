@@ -20,6 +20,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A pull request's own commits are checked one by one below, so it needs the history.
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
 
       - uses: actions/setup-node@v4
         with:
@@ -27,4 +30,11 @@ jobs:
 
       - name: Privacy check (no home paths, drives, LAN addresses, session files or screenshots outside assets/)
         run: node scripts/privacy-check.mjs
+      - name: Privacy check of every line the pull request's commits add
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/privacy-check.mjs --range "$BASE..$HEAD"
       - run: npm test

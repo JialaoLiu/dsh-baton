@@ -115,7 +115,9 @@ const WORDS = {
     approval: 'waiting for an approval in Harness',
     took: (t) => ` in ${t}`, units: ['h', 'm', 's'], join: ' ',
     files: (n, more) => `${n}${more ? '+' : ''} file${n === 1 && !more ? '' : 's'} changed`,
-    checks: (ok, all, pass) => `checks ${pass ? 'passed' : 'failed'} (${ok}/${all})`,
+    checks: (ok, bad, skipped, all) => (skipped
+      ? `checks ${ok}/${all} passed${bad ? `, ${bad} failed` : ''}, ${skipped} skipped`
+      : `checks ${bad ? 'failed' : 'passed'} (${ok}/${all})`),
     many: (n) => `dsh-baton: ${n} Harness runs are back`,
     running: (ids) => `Still running: ${ids.join(', ')}`,
     sep: ': ', dot: ' · ',
@@ -126,7 +128,9 @@ const WORDS = {
     approval: '在等你在 Harness 里批准',
     took: (t) => `，用时 ${t}`, units: [' 小时', ' 分', ' 秒'], join: ' ',
     files: (n, more) => `改动 ${n}${more ? '+' : ''} 个文件`,
-    checks: (ok, all, pass) => `项目测试${pass ? '通过' : '未通过'}（${ok}/${all}）`,
+    checks: (ok, bad, skipped, all) => (skipped
+      ? `项目测试 ${ok}/${all} 通过${bad ? `，${bad} 个未通过` : ''}，${skipped} 个超时未跑`
+      : `项目测试${bad ? '未通过' : '通过'}（${ok}/${all}）`),
     many: (n) => `dsh-baton：${n} 个 Harness 任务回来了`,
     running: (ids) => `还在运行：${ids.join('、')}`,
     sep: '：', dot: ' · ',
@@ -142,9 +146,10 @@ function took(r, w) {
   return parts.filter(([v], i) => v || i === 0).map(([v, u]) => `${v}${w.units[u]}`).join(w.join)
 }
 
+// By characters, not UTF-16 units, so an emoji is never cut in half.
 const clip = (text, n = 100) => {
-  const t = String(text ?? '').replace(/\s+/g, ' ').trim()
-  return t.length > n ? `${t.slice(0, n)}…` : t
+  const t = Array.from(String(text ?? '').replace(/\s+/g, ' ').trim())
+  return t.length > n ? `${t.slice(0, n).join('')}…` : t.join('')
 }
 
 function runLine(r, w) {
@@ -156,8 +161,13 @@ function runLine(r, w) {
   const bits = [`${w.state[r.state] ?? r.state}${t ? w.took(t) : ''}`]
   const ch = r.evidence?.changes
   if (ch) bits.push(w.files((ch.created?.length ?? 0) + (ch.modified?.length ?? 0) + (ch.deleted?.length ?? 0), ch.truncated))
+  // A check skipped for lack of time did not fail: it is counted apart.
   const checks = r.evidence?.checks
-  if (checks?.length) bits.push(w.checks(checks.filter((c) => c.passed).length, checks.length, Boolean(r.evidence.all_checks_passed)))
+  if (checks?.length) {
+    const ok = checks.filter((c) => c.passed).length
+    const skipped = checks.filter((c) => c.skipped).length
+    bits.push(w.checks(ok, checks.length - ok - skipped, skipped, checks.length))
+  }
   return bits.join(w.dot)
 }
 
@@ -173,8 +183,11 @@ export function glanceFor(results, running = [], lang = 'en') {
 // What the model is told: a glance for the person first, then each run's result as
 // dsh_wait returns it, and which runs of the same batch are still going (when one came
 // back early to ask something or failed).
+// Should the glance fail on an odd result, the model still gets everything.
 function reasonFor(results, running, lang) {
-  return `${glanceFor(results, running, lang)}\n\n${modelPart(results, running)}`
+  let glance = ''
+  try { glance = `${glanceFor(results, running, lang)}\n\n` } catch { /* results only */ }
+  return `${glance}${modelPart(results, running)}`
 }
 
 function modelPart(results, running) {
@@ -190,13 +203,20 @@ function modelPart(results, running) {
 }
 
 // What Codex shows the user for the wake (systemMessage), instead of the JSON in reason:
-// a short line per run with its id and state. The model reads reason only.
-export function summaryFor(results, running = []) {
-  const one = (r) => r.needs_input ? `${r.run_id} 在等回答` : `${r.run_id}（${r.state}）`
+// a short line per run with its id and state, in Codex's language. The model reads reason only.
+export function summaryFor(results, running = [], lang = 'en') {
+  if (lang === 'zh') {
+    const one = (r) => r.needs_input ? `${r.run_id} 在等回答` : `${r.run_id}（${r.state}）`
+    const head = results.length === 1
+      ? (results[0].needs_input ? `dsh-baton：Harness 任务 ${one(results[0])}，问题已交给 Codex` : `dsh-baton：Harness 任务 ${one(results[0])}已结束，结果已交回 Codex`)
+      : `dsh-baton：${results.length} 个 Harness 任务已交回 Codex：${results.map(one).join('，')}`
+    return running.length ? `${head}；还在运行 ${running.length} 个` : head
+  }
+  const one = (r) => r.needs_input ? `${r.run_id} waiting for an answer` : `${r.run_id} (${r.state})`
   const head = results.length === 1
-    ? (results[0].needs_input ? `dsh-baton：Harness 任务 ${one(results[0])}，问题已交给 Codex` : `dsh-baton：Harness 任务 ${one(results[0])}已结束，结果已交回 Codex`)
-    : `dsh-baton：${results.length} 个 Harness 任务已交回 Codex：${results.map(one).join('，')}`
-  return running.length ? `${head}；还在运行 ${running.length} 个` : head
+    ? (results[0].needs_input ? `dsh-baton: Harness run ${one(results[0])}, question passed to Codex` : `dsh-baton: Harness run ${one(results[0])} ended, result passed to Codex`)
+    : `dsh-baton: ${results.length} Harness runs passed to Codex: ${results.map(one).join(', ')}`
+  return running.length ? `${head}; ${running.length} still running` : head
 }
 
 // The JSON Codex writes to the hook's stdin, or null. A leading BOM is dropped (seen on
@@ -257,9 +277,12 @@ export async function runHook(input, { shape, wait = core.api.wait, now = Date.n
       if (st.needs_input || st.state !== 'completed') urgent = true
     }
     if (ended.size && (urgent || !running.length)) {
-      for (const [runId, st] of ended) delivered(runId, st)
+      // Marked delivered only once the message exists, so a failure here loses no result.
       const results = [...ended].map(([run_id, st]) => ({ run_id, ...shape(st) }))
-      return { decision: 'block', reason: reasonFor(results, running, lang ?? codexLang()), systemMessage: summaryFor(results, running) }
+      const language = lang ?? codexLang()
+      const out = { decision: 'block', reason: reasonFor(results, running, language), systemMessage: summaryFor(results, running, language) }
+      for (const [runId, st] of ended) delivered(runId, st)
+      return out
     }
     if (!running.length) return null
     if (now() > deadline) return null
