@@ -84,7 +84,7 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 
 ## Token 用量实测
 
-**一句话：大活、长活交给它**。一次性做一个跨很多文件的功能、一次大重构、一整个小应用，这种时候最省：Claude Code 连 DeepSeek 一起算，总花费少 51–72%。Codex 现在两个案例都省（案例 2 任务管理网页，Sol 少 40%，Astra 少 81%）；GPT-6 Astra 做案例 2，ChatGPT Plus 5 小时额度从占 22% 降到 3%。更长的活，比如分三个阶段的看板应用（案例 4），Astra 总花费少 73%，额度从 86% 降到约 16%。
+**一句话：大活、长活交给它**。一次性做一个跨很多文件的功能、一次大重构、一整个小应用，这种时候最省：Claude Code 连 DeepSeek 一起算，总花费少 51–72%。Codex 现在两个案例都省（案例 2 任务管理网页，Sol 少 40%，Astra 少 81%）；GPT-6 Astra 做案例 2，ChatGPT Plus 5 小时额度从占 22% 降到 3%。更长的活，比如分三个阶段的看板应用：Claude Code 总花费少 79%（案例 3）；Astra 总花费少 73%，额度从 86% 降到约 16%（案例 4）。
 
 **说实话**：案例 1 这种小的命令行工具，Codex 用 GPT-6.1 Sol 自己做，总价还略便宜一点：转交反而多花 15%，多出来的几乎全是 DeepSeek 那部分。转交值得的场景是：你想让 Claude 或 GPT 负责规划和把关，让更便宜的模型去动手写，又不想老是撞上 5 小时额度上限。
 
@@ -117,7 +117,20 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 
 **为什么更省了**：0.6.1 起 Codex 由 Stop 钩子唤醒，不再用 `dsh_wait` 轮询；0.6.2 把 MCP 说明缩成一句话，Codex 每次转交少读几千到一万多个新输入 token。
 
-**案例 4 · 看板应用（分阶段）**：只用 Node 内置模块和原生前端的看板应用，分三个阶段在同一个对话里依次给：① 主体（REST 接口、持久化、前端拖拽）；② 标签、截止日期、搜索语法、归档、撤销重做、活动日志、导入导出；③ 版本冲突检测、WIP 上限、批量操作、SSE 实时同步、统计。每个阶段都有事先写好的验收测试，两组用同一套，共 55 项。需求原文：[阶段 1](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase1.md) · [阶段 2](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase2.md) · [阶段 3](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase3.md)
+**案例 3 · 看板应用（一次给完）**：只用 Node 内置模块和原生前端的看板应用，分三个阶段：① 主体（REST 接口、持久化、前端拖拽）；② 标签、截止日期、搜索语法、归档、撤销重做、活动日志、导入导出；③ 版本冲突检测、WIP 上限、批量操作、SSE 实时同步、统计。这个案例把三个阶段的需求放在一条消息里一次给完。每个阶段都有事先写好的验收测试，两组用同一套，共 55 项。需求原文：[阶段 1](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase1.md) · [阶段 2](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase2.md) · [阶段 3](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase3.md)
+
+<p align="center">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/task3-kanban.zh.svg" width="100%" alt="案例 3 · 看板应用（一次给完），自己做与用 0.6.2 转交：Claude Code Opus 5.5 $4.30 对 $0.91（−79%）；Codex GPT-6.1 Sol $0.70 对 $0.79（+13%，主 Agent $0.15，−79%），5 小时额度 9% 对 2%">
+</p>
+
+| 案例 3 | 自己做 | 转交（0.6.2） |
+|---|---|---|
+| Claude Code · Opus 5.5 high | $4.30，约 20 分钟 | $0.91（−79%；主 Agent $0.56，DeepSeek $0.35），约 38 分钟 |
+| Codex · GPT-6.1 Sol high | $0.70，额度 9%，约 11 分钟 | $0.79（+13%；主 Agent $0.15，DeepSeek $0.65），额度 2%（−78%），约 38 分钟 |
+
+四组都 55/55 通过，没有返工。Sol 本身很便宜，转交时多出来的是 DeepSeek 写代码的钱；但 Codex 自己的花费和 5 小时额度都省了约八成。
+
+**案例 4 · 看板应用（分阶段）**：同一个应用，区别是三个阶段在同一个对话里依次给。Codex · GPT-6 Astra high：
 
 <p align="center">
   <img src="./docs/benchmarks/token-usage-2026-10/charts/task4-kanban.zh.svg" width="100%" alt="案例 4 · 看板应用（分阶段），Codex GPT-6 Astra high：自己做 $8.69，用 0.6.2 转交 $2.36（主 Agent $1.62，−81%）；5 小时额度 86% 对约 16%">
@@ -132,8 +145,6 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 | 验收测试 | 55/55，一次通过 | 55/55，一次通过 |
 | 用时 | 约 31 分钟 | 约 87 分钟 |
 | 代码量 | 1,876 行 | 9,953 行 |
-
-案例 3 是同一个看板应用、三个阶段一次给完的版本，Opus 和 Sol 正在测，结果下一次更新补上。
 
 <details>
 <summary>测了什么、怎么测的</summary>

@@ -28,6 +28,8 @@ docs/benchmarks/**
 !docs/benchmarks/token-usage-2026-10/charts/natural-quota-combined.zh.svg
 !docs/benchmarks/token-usage-2026-10/charts/task4-kanban.svg
 !docs/benchmarks/token-usage-2026-10/charts/task4-kanban.zh.svg
+!docs/benchmarks/token-usage-2026-10/charts/task3-kanban.svg
+!docs/benchmarks/token-usage-2026-10/charts/task3-kanban.zh.svg
 !docs/benchmarks/token-usage-2026-10/natural/medium.md
 !docs/benchmarks/token-usage-2026-10/natural/large.md
 !docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase*.md

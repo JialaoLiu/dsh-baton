@@ -84,7 +84,7 @@ You don't have to take DeepSeek's word for it. Before the run, dsh-baton notes w
 
 ## Token usage
 
-**In short: hand over the big, long jobs.** A feature that spans many files, a large refactor, a whole small app: that is where it saves the most. Claude Code spends 51–72% less in total, DeepSeek included. Codex now saves on both test tasks (Sol 40% and Astra 81% less on the web app), and a GPT-6 Astra web-app task takes 3% of a ChatGPT Plus 5-hour window instead of 22%. On a longer job, a three-phase kanban app (Task 4), Astra spends 73% less in total and uses about 16% of the window instead of 86%.
+**In short: hand over the big, long jobs.** A feature that spans many files, a large refactor, a whole small app: that is where it saves the most. Claude Code spends 51–72% less in total, DeepSeek included. Codex now saves on both test tasks (Sol 40% and Astra 81% less on the web app), and a GPT-6 Astra web-app task takes 3% of a ChatGPT Plus 5-hour window instead of 22%. On a longer job, a three-phase kanban app, Claude Code spends 79% less in total (Task 3), and Astra spends 73% less and uses about 16% of the window instead of 86% (Task 4).
 
 **The honest part:** on the small CLI task, Codex on GPT-6.1 Sol is cheap enough that doing it alone costs a little less in total: the hand-over came out 15% more, almost all of it DeepSeek's share. The hand-over pays off when you want Claude or GPT to plan and review, a cheaper model to do the typing, and you'd rather not keep hitting the 5-hour limit.
 
@@ -117,7 +117,20 @@ Share of the ChatGPT Plus 5-hour window per task: Task 1 Sol 1.9% → ≈0.6%, T
 
 **Why it got cheaper:** from 0.6.1 Codex is woken by its Stop hook instead of polling with `dsh_wait`, and 0.6.2 cuts the MCP instructions to one sentence, so Codex reads a few thousand to over ten thousand fewer new input tokens per hand-over.
 
-**Task 4 · Kanban app (phased):** a kanban board in plain Node and a plain front end, given in three phases in the same conversation: ① the core (REST API, storage, drag and drop); ② labels, due dates, search syntax, archive, undo and redo, activity log, import and export; ③ version conflicts, WIP limits, bulk actions, live sync over SSE, stats. Each phase has acceptance tests written beforehand, the same for both arms, 55 in all. Requests: [phase 1](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase1.md) · [phase 2](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase2.md) · [phase 3](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase3.md)
+**Task 3 · Kanban app (all at once):** a kanban board in plain Node and a plain front end, in three phases: ① the core (REST API, storage, drag and drop); ② labels, due dates, search syntax, archive, undo and redo, activity log, import and export; ③ version conflicts, WIP limits, bulk actions, live sync over SSE, stats. Here all three phases come in one request. Each phase has acceptance tests written beforehand, the same for both arms, 55 in all. Requests: [phase 1](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase1.md) · [phase 2](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase2.md) · [phase 3](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase3.md)
+
+<p align="center">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/task3-kanban.svg" width="100%" alt="Task 3 · Kanban app (all at once), working alone vs handed over with 0.6.2: Claude Code Opus 5.5 $4.30 vs $0.91 (−79%); Codex GPT-6.1 Sol $0.70 vs $0.79 (+13%, client $0.15, −79%), 9% vs 2% of the 5-hour window">
+</p>
+
+| Task 3 | Alone | Handed over (0.6.2) |
+|---|---|---|
+| Claude Code · Opus 5.5 high | $4.30, about 20 min | $0.91 (−79%; client $0.56, DeepSeek $0.35), about 38 min |
+| Codex · GPT-6.1 Sol high | $0.70, 9% of the window, about 11 min | $0.79 (+13%; client $0.15, DeepSeek $0.65), 2% of the window (−78%), about 38 min |
+
+All four runs passed 55/55 with no rework. Sol is cheap on its own, so the extra cost is the code DeepSeek writes; Codex's own spend and its 5-hour window still drop by about four fifths.
+
+**Task 4 · Kanban app (phased):** the same app, but the three phases are given one after another in the same conversation. Codex · GPT-6 Astra high:
 
 <p align="center">
   <img src="./docs/benchmarks/token-usage-2026-10/charts/task4-kanban.svg" width="100%" alt="Task 4 · Kanban app (phased), Codex GPT-6 Astra high: $8.69 alone vs $2.36 handed over with 0.6.2 ($1.62 client, −81%); 86% of the 5-hour window vs about 16%">
@@ -132,8 +145,6 @@ Share of the ChatGPT Plus 5-hour window per task: Task 1 Sol 1.9% → ≈0.6%, T
 | Acceptance tests | 55/55, first try | 55/55, first try |
 | Time | about 31 min | about 87 min |
 | Lines of code | 1,876 | 9,953 |
-
-Task 3, the same kanban app with all three phases in one request, is being measured with Opus and Sol; its results come in the next update.
 
 <details>
 <summary>What was tested, and how</summary>
