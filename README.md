@@ -6,8 +6,8 @@
 
 Hand coding tasks from Claude Code or Codex to DeepSeek Harness on your machine: the task runs live in the Harness window, the main agent is woken when it ends, and it gets back the files that changed, the project's own test results and a requirement-by-requirement checklist.
 
-- **Cheaper on big jobs:** with Claude Code, the total cost, DeepSeek included, is 51–72% lower.
-- **Less of the 5-hour window:** on a long Codex job, a ChatGPT Plus 5-hour window goes from 86% used to about 16%.
+- **Cheaper on big jobs:** with Claude Code, the total cost, DeepSeek included, is 51–78% lower.
+- **Less of the 5-hour window:** on a long Codex job, a ChatGPT Plus 5-hour window goes from 86.01% used to 16.01% with GPT-6 Astra, and from 13.71% to 2.67% with GPT-6.1 Sol.
 - **Nothing to watch or poll:** the agent is woken once when the run ends, and the result already holds the changed files, the test output and the requirement checklist.
 
 Needs DeepSeek Harness ≥ 0.2.1-rc.2 (signed in) and Claude Code or Codex; macOS / Windows, zero dependencies. [Quick start →](#quick-start)
@@ -73,67 +73,60 @@ Codex and Claude take turns in the same Harness session, and every message is la
 
 ## Token usage
 
-**In short: hand over the big, long jobs.** A feature that spans many files, a large refactor, a whole small app: that is where it saves the most. Claude Code spends 51–72% less in total, DeepSeek included. On the web app (Task 2), Codex spends 40% less with GPT-6.1 Sol and 81% less with GPT-6 Astra, and an Astra web-app task takes 3% of a ChatGPT Plus 5-hour window instead of 22%. On a longer job, a three-phase kanban app, Claude Code spends 79% less in total (Task 3), and Astra spends 73% less and uses about 16% of the window instead of 86% (Task 4).
+**In short: hand over the big, long jobs.** With Claude Code the total cost, DeepSeek included, is 51–78% lower. With Codex on GPT-6 Astra it is 47–81% lower, and the long kanban app takes 16.01% of a ChatGPT Plus 5-hour window instead of 86.01%.
 
-**The honest part:** on the small CLI task, Codex on GPT-6.1 Sol is cheap enough that doing it alone costs a little less in total: the hand-over came out 15% more, almost all of it DeepSeek's share. The hand-over pays off when you want Claude or GPT to plan and review, a cheaper model to do the typing, and you'd rather not keep hitting the 5-hour limit.
-
-**Who this is for:** most of us pay for Claude or ChatGPT with a plan (Plus, Pro, Max 5x…), while DeepSeek is pay-as-you-go from a balance you top up, so every hand-over is money spent outside your plan. If your plan's limits already cover how you work, you don't need this: keep it simple and keep the money. If you're like me and keep running long, messy jobs with round after round of changes, and keep hitting the limit, a little DeepSeek spend gets you a lot more out of the plan you already pay for.
-
-**The two test tasks**, asked the way a user would (the requests are in Chinese, linked as written):
+**The three test tasks**, asked the way a user would (the requests are in Chinese, linked as written):
 - **Task 1 · CLI tool:** a command-line task manager in Node, no dependencies, split into modules, with tests. [Request](docs/benchmarks/token-usage-2026-10/natural/medium.md)
 - **Task 2 · Web app:** a task manager with a Node server and a page, REST API, stats, tests and a README. [Request](docs/benchmarks/token-usage-2026-10/natural/large.md)
+- **Task 3 · Kanban app (phased):** a kanban board in plain Node and a plain front end, in three phases given one after another in the same conversation: ① the core (REST API, storage, drag and drop); ② labels, due dates, search syntax, archive, undo and redo, activity log, import and export; ③ version conflicts, WIP limits, bulk actions, live sync over SSE, stats. 55 acceptance tests written beforehand, the same for both arms. Requests: [phase 1](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase1.md) · [phase 2](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase2.md) · [phase 3](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase3.md)
 
-<p align="center">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-combined.svg" width="100%" alt="Cost per task, working alone vs handed over with 0.6.2, Task 1 · CLI tool and Task 2 · Web app: Claude Code (Opus 5.5) and Codex (GPT-6.1 Sol, GPT-6 Astra), each on its own scale">
-</p>
-
-Cost per task at list price, DeepSeek V4.1 Flash 1017 at its peak price:
-
-| Client · model | Task | Alone | Handed over, client only | Handed over, with DeepSeek |
-|---|---|---|---|---|
-| Claude Code · Opus 5.5 high | Task 1 · CLI tool | $1.07 | $0.42 (−61%) | $0.52 (−51%) |
-| Claude Code · Opus 5.5 high | Task 2 · Web app | $2.13 | $0.47 (−78%) | $0.60 (−72%) |
-| Codex · GPT-6.1 Sol high | Task 1 · CLI tool | $0.17 | $0.06 (−63%) | $0.20 (+15%) |
-| Codex · GPT-6.1 Sol high | Task 2 · Web app | $0.41 | $0.06 (−84%) | $0.25 (−40%) |
-| Codex · GPT-6 Astra high | Task 1 · CLI tool | $0.79 | $0.30 (−62%) | $0.42 (−47%) |
-| Codex · GPT-6 Astra high | Task 2 · Web app | $2.27 | $0.30 (−87%) | $0.42 (−81%) |
-
-<p align="center">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/natural-quota-combined.svg" width="80%" alt="Share of the ChatGPT Plus 5-hour window per task in Codex, working alone vs handed over with 0.6.2: GPT-6.1 Sol and GPT-6 Astra">
-</p>
-
-Share of the ChatGPT Plus 5-hour window per task: Task 1 Sol 1.9% → ≈0.6%, Task 2 Sol 4.3% → ≈0.6%, Task 1 Astra 7% → 3%, Task 2 Astra 22% → 3% (≈ estimated from cost).
-
-**Why it got cheaper:** from 0.6.1 Codex is woken by its Stop hook instead of polling with `dsh_wait`, and 0.6.2 cuts the MCP instructions to one sentence, so Codex reads a few thousand to over ten thousand fewer new input tokens per hand-over.
-
-**Task 3 · Kanban app (all at once):** a kanban board in plain Node and a plain front end, in three phases: ① the core (REST API, storage, drag and drop); ② labels, due dates, search syntax, archive, undo and redo, activity log, import and export; ③ version conflicts, WIP limits, bulk actions, live sync over SSE, stats. Here all three phases come in one request. Each phase has acceptance tests written beforehand, the same for both arms, 55 in all. Requests: [phase 1](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase1.md) · [phase 2](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase2.md) · [phase 3](docs/benchmarks/token-usage-2026-10/xxl/seed/docs/phase3.md)
-
-<p align="center">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/task3-kanban.svg" width="100%" alt="Task 3 · Kanban app (all at once), working alone vs handed over with 0.6.2: Claude Code Opus 5.5 $4.30 vs $0.91 (−79%); Codex GPT-6.1 Sol $0.70 vs $0.79 (+13%, client $0.15, −79%), 9% vs 2% of the 5-hour window">
-</p>
-
-| Task 3 | Alone | Handed over (0.6.2) |
+| Task 3 | Alone | Handed over |
 |---|---|---|
-| Claude Code · Opus 5.5 high | $4.30, about 20 min | $0.91 (−79%; client $0.56, DeepSeek $0.35), about 38 min |
-| Codex · GPT-6.1 Sol high | $0.70, 9% of the window, about 11 min | $0.79 (+13%; client $0.15, DeepSeek $0.65), 2% of the window (−78%), about 38 min |
+| Opus 5.5 | 55/55, 39 min | 55/55, 93 min |
+| GPT-6.1 Sol | 55/55, 18 min | 55/55, 101 min |
+| GPT-6 Astra | 55/55, about 31 min | 55/55, about 87 min |
 
-All four runs passed 55/55 with no rework. Sol is cheap on its own, so the extra cost is the code DeepSeek writes; Codex's own spend and its 5-hour window still drop by about four fifths.
+Cost per task at list price, DeepSeek V4.1 Flash 1017 at its peak price. Opus 5.5 runs in Claude Code, GPT-6.1 Sol and GPT-6 Astra in Codex, all at high effort:
 
-**Task 4 · Kanban app (phased):** the same app, but the three phases are given one after another in the same conversation. Codex · GPT-6 Astra high:
+| Task | Model | Alone | Handed over: main agent | Handed over: DeepSeek | Handed over: total | Total | Main agent | 5-hour window, alone → handed over |
+|---|---|---|---|---|---|---|---|---|
+| Task 1 · CLI tool | Opus 5.5 | $1.07 | $0.42 | $0.10 | $0.52 | −51.2% | −60.8% | — |
+| | GPT-6.1 Sol | $0.17 | $0.06 | $0.13 | $0.20 | +15.3% | −62.9% | 2.08% → 0.77% |
+| | GPT-6 Astra | $0.79 | $0.30 | $0.12 | $0.42 | −47.4% | −62.0% | 7.83% → 2.98% |
+| Task 2 · Web app | Opus 5.5 | $2.13 | $0.47 | $0.13 | $0.60 | −71.7% | −77.7% | — |
+| | GPT-6.1 Sol | $0.41 | $0.06 | $0.18 | $0.25 | −40.2% | −84.5% | 5.08% → 0.79% |
+| | GPT-6 Astra | $2.27 | $0.30 | $0.13 | $0.42 | −81.4% | −86.9% | 22.43% → 2.94% |
+| Task 3 · Kanban app (phased) | Opus 5.5 | $14.18 | $2.32 | $0.84 | $3.16 | −77.7% | −83.6% | — |
+| | GPT-6.1 Sol | $1.12 | $0.22 | $0.81 | $1.03 | −8.1% | −80.5% | 13.71% → 2.67% |
+| | GPT-6 Astra | $8.69 | $1.62 | $0.74 | $2.35 | −72.9% | −81.4% | 86.01% → 16.01% |
 
 <p align="center">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/task4-kanban.svg" width="100%" alt="Task 4 · Kanban app (phased), Codex GPT-6 Astra high: $8.69 alone vs $2.36 handed over with 0.6.2 ($1.62 client, −81%); 86% of the 5-hour window vs about 16%">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/cost-change.svg" width="100%" alt="Total cost handed over compared with working alone, DeepSeek included. Task 1: Opus −51.2%, Sol +15.3%, Astra −47.4%. Task 2: Opus −71.7%, Sol −40.2%, Astra −81.4%. Task 3: Opus −77.7%, Sol −8.1%, Astra −72.9%">
 </p>
 
-| Codex · GPT-6 Astra high | Alone | Handed over (0.6.2) |
-|---|---|---|
-| Client | $8.69 | $1.62 (−81%) |
-| DeepSeek | – | $0.74 |
-| Total | $8.69 | $2.36 (−73%) |
-| 5-hour window | 86% | about 16% (−81%) |
-| Acceptance tests | 55/55, first try | 55/55, first try |
-| Time | about 31 min | about 87 min |
-| Lines of code | 1,876 | 9,953 |
+<p align="center">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/quota.svg" width="100%" alt="Share of a ChatGPT Plus 5-hour window in Codex, alone vs handed over. Task 1: Sol 2.08% → 0.77%, Astra 7.83% → 2.98%. Task 2: Sol 5.08% → 0.79%, Astra 22.43% → 2.94%. Task 3: Sol 13.71% → 2.67%, Astra 86.01% → 16.01%">
+</p>
+
+<p align="center">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/handover-split.svg" width="100%" alt="What a hand-over costs, split between the main agent and DeepSeek. Opus: $0.52, $0.60, $3.16, DeepSeek about a fifth to a quarter. Sol: $0.20, $0.25, $1.03, DeepSeek 68–79%. Astra: $0.42, $0.42, $2.35, DeepSeek about 30%">
+</p>
+
+**Hand it over:** big jobs, long jobs, and whenever the 5-hour window is running low. The main agent's own spend drops 61–87% on every task and model.
+
+**Do it yourself:** small tasks on Codex with GPT-6.1 Sol. Sol is cheap enough that DeepSeek's part of a hand-over, two thirds or more, outweighs what Sol saves.
+
+<details>
+<summary>What was tested, and how</summary>
+
+- **The only difference** in the hand-over runs is one line added at the end of the request: 交给 DeepSeek Harness 去做。 ("Hand it to DeepSeek Harness.")
+- Same model and effort in both arms, and every run judged by the same acceptance check, which the model never sees.
+- Tasks 1 and 2: the mean of three runs per cell. Task 3: one run per cell. Every run passed its acceptance check, with no rework.
+- Prices are list prices. DeepSeek is counted at its peak price; the real DeepSeek bill came to about 58% of that.
+- The 5-hour window share is worked out from each run's cost: 12.27 points per $1 for GPT-6.1 Sol, 9.90 for GPT-6 Astra.
+- From 0.6.1 Codex is woken by its Stop hook instead of polling with `dsh_wait`, and 0.6.2 cuts the MCP instructions to one sentence, so Codex reads a few thousand to over ten thousand fewer new input tokens per hand-over.
+
+</details>
 
 ## How it works
 
