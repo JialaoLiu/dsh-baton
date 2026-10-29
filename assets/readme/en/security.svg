@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title desc">
+  <title id="title">Security</title>
+  <desc id="desc">The socket is 0600 on macOS and Linux and a per-user named pipe on Windows, so only your OS user can drive it; the plugin opens no network port and contacts no external service; runs follow Harness sandbox and approval settings.</desc>
+  <rect width="1200" height="320" rx="24" fill="#FFFFFF"/>
+<text x="64" y="76" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="30" fill="#0F172A" font-weight="700">Security</text>
+<rect x="64" y="104" width="341" height="180" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
+<rect x="64" y="130" width="4" height="30" fill="#2563EB"/>
+<text x="90" y="154" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#0F172A" font-weight="700">Owner-only channel</text>
+<text x="90" y="196" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">Socket 0600 on macOS/Linux,</text>
+<text x="90" y="224" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">per-user pipe on Windows.</text>
+<rect x="429" y="104" width="341" height="180" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
+<rect x="429" y="130" width="4" height="30" fill="#2563EB"/>
+<text x="455" y="154" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#0F172A" font-weight="700">No network port</text>
+<text x="455" y="196" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">Contacts no external</text>
+<text x="455" y="224" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">service at all.</text>
+<rect x="794" y="104" width="341" height="180" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
+<rect x="794" y="130" width="4" height="30" fill="#2563EB"/>
+<text x="820" y="154" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#0F172A" font-weight="700">Harness rules apply</text>
+<text x="820" y="196" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">Runs use Harness's own</text>
+<text x="820" y="224" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">sandbox and approvals.</text>
+</svg>

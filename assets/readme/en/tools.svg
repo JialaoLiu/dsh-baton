@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">dsh-baton MCP tools</title>
+  <desc id="desc">Listed: list workspaces, list sessions, read session, list models, send, status, wait, answer, cancel, call. Less used, reached through dsh_call: create and rename workspace, session activity, rename session, update queued, list runs.</desc>
+  <rect width="1200" height="720" rx="24" fill="#FFFFFF"/>
+<text x="64" y="76" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="30" fill="#0F172A" font-weight="700">10 tools listed, 6 more through dsh_call</text>
+<rect x="64" y="104" width="341" height="340" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
+<text x="90" y="146" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#2563EB" letter-spacing="2">FIND</text>
+<text x="90" y="196" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#0F172A" font-weight="600">dsh_list_workspaces</text>
+<text x="90" y="224" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">sidebar workspaces</text>
+<text x="90" y="260" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#0F172A" font-weight="600">dsh_list_sessions</text>
+<text x="90" y="288" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">newest first, with model</text>
+<text x="90" y="324" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#0F172A" font-weight="600">dsh_read_session</text>
+<text x="90" y="352" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">recent prompts + replies</text>
+<text x="90" y="388" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#0F172A" font-weight="600">dsh_list_models</text>
+<text x="90" y="416" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">models Harness can run</text>
+<rect x="429" y="104" width="341" height="340" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
+<text x="455" y="146" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#2563EB" letter-spacing="2">RUNS</text>
+<text x="455" y="196" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#0F172A" font-weight="600">dsh_send</text>
+<text x="455" y="224" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">start a run, pick a model</text>
+<text x="455" y="260" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#0F172A" font-weight="600">dsh_status</text>
+<text x="455" y="288" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">progress + final reply</text>
+<text x="455" y="324" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#0F172A" font-weight="600">dsh_wait</text>
+<text x="455" y="352" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">until it ends, with evidence</text>
+<rect x="794" y="104" width="341" height="340" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
+<text x="820" y="146" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#2563EB" letter-spacing="2">CONTROL</text>
+<text x="820" y="196" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#0F172A" font-weight="600">dsh_answer</text>
+<text x="820" y="224" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">answer a run's questions</text>
+<text x="820" y="260" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#0F172A" font-weight="600">dsh_cancel</text>
+<text x="820" y="288" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">stop turn, agents, jobs</text>
+<text x="820" y="324" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#2563EB" font-weight="600">dsh_call</text>
+<text x="820" y="352" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">reaches the six below</text>
+<rect x="64" y="468" width="1071" height="212" rx="16" fill="#F8FAFC" stroke="#C9D2DF" stroke-width="1.5" stroke-dasharray="8 6"/>
+<text x="90" y="510" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#5B6577" letter-spacing="2">LESS USED · NOT IN THE TOOL LIST</text>
+<text x="90" y="560" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#5B6577" font-weight="600">dsh_create_workspace</text>
+<text x="90" y="588" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577" opacity="0.800">register a folder</text>
+<text x="455" y="560" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#5B6577" font-weight="600">dsh_rename_workspace</text>
+<text x="455" y="588" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577" opacity="0.800">sidebar title only</text>
+<text x="820" y="560" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#5B6577" font-weight="600">dsh_session_activity</text>
+<text x="820" y="588" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577" opacity="0.800">turn, sub-agents, jobs</text>
+<text x="90" y="624" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#5B6577" font-weight="600">dsh_rename_session</text>
+<text x="90" y="652" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577" opacity="0.800">rename a session</text>
+<text x="455" y="624" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#5B6577" font-weight="600">dsh_update_queued</text>
+<text x="455" y="652" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577" opacity="0.800">edit a queued message</text>
+<text x="820" y="624" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" fill="#5B6577" font-weight="600">dsh_list_runs</text>
+<text x="820" y="652" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577" opacity="0.800">recent runs</text>
+</svg>

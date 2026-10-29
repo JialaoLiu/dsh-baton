@@ -1,28 +1,57 @@
 <p align="center">
-  <img src="./assets/readme/hero.gif" width="100%" alt="dsh-baton: pass the baton from Claude Code or Codex to DeepSeek Harness, watch it run live, and get it handed back when it's done">
+  English | <a href="README.zh-CN.md">中文</a> · macOS · Windows (<a href="WINDOWS.md">guide</a>) · no Node.js needed · zero dependencies · MIT
 </p>
+
+# dsh-baton
+
+Hand coding tasks from Claude Code or Codex to DeepSeek Harness on your machine: the task runs live in the Harness window, the main agent is woken when it ends, and it gets back the files that changed, the project's own test results and a requirement-by-requirement checklist.
+
+- **Cheaper on big jobs:** with Claude Code, the total cost, DeepSeek included, is 51–72% lower.
+- **Less of the 5-hour window:** on a long Codex job, a ChatGPT Plus 5-hour window goes from 86% used to about 16%.
+- **Nothing to watch or poll:** the agent is woken once when the run ends, and the result already holds the changed files, the test output and the requirement checklist.
+
+Needs DeepSeek Harness ≥ 0.2.1-rc.2 (signed in) and Claude Code or Codex; macOS / Windows, zero dependencies. [Quick start →](#quick-start)
 
 <p align="center">
-  English | <a href="README.zh-CN.md">中文</a>
+  <img src="./assets/readme/en/hero.svg" width="100%" alt="dsh-baton: pass the baton from Claude Code or Codex to DeepSeek Harness, watch it run live, and get it handed back when it's done">
 </p>
+
+## What it is
+
+dsh-baton is an MCP server plus a small Harness plugin. Your main agent, Claude Code or Codex, writes the task and hands it over with one tool call. The task runs in a normal Harness session that you can watch, and step into, in the Harness window while it works. When it ends, the main agent is woken once instead of polling. It gets back evidence rather than a summary: which files were created, changed or deleted, the output of your project's own tests, and a point-by-point check against the request. Unlike a plain MCP bridge to another model, the work stays visible in the Harness UI and the proof comes back with the result.
+
+## Quick start
 
 <p align="center">
-  macOS · Windows (<a href="WINDOWS.md">guide</a>) · no Node.js needed · zero dependencies · MIT
+  <img src="./assets/readme/en/install.svg" width="100%" alt="Step 1: in Harness open Plugins, Add plugin, enter dsh-baton-host, Install, Enable now; it registers dsh-baton for Claude Code and Codex. Step 2, Codex only, once: Settings, Hooks, trust dsh-baton: waiting for the Harness run. Step 3: in a new chat, ask for dsh_list_workspaces">
 </p>
 
-Claude Code and Codex each hand a task to DeepSeek Harness, and its subagents build this rainy-night street in 1 h 41 min (40 s, sound on):
+Nothing else to install: no Node.js, no terminal. The steps are the same on macOS and Windows.
 
-https://github.com/user-attachments/assets/72e2fdff-275e-48bc-8e5a-39ffb025a0a8
+**1. Add the plugin in Harness:** **Plugins** (插件) → **Add plugin** (添加插件) → type `dsh-baton-host` → **Install** (安装) → **Enable now** (立即启用).
 
-<p align="center">
-  <img src="./assets/readme/features.svg" width="100%" alt="Create workspaces and sessions, continue a session, run live in the Harness UI labelled with the sender, Claude Code and Codex woken when a run ends, no extra API key and any Harness model, macOS and Windows with zero dependencies">
-</p>
+Switched on, the plugin registers dsh-baton for Claude Code and Codex, for every folder, and Harness says so.
 
-<p align="center">
-  <img src="./assets/readme/flow.gif" width="100%" alt="Typical flow: create a workspace, send the task, wait without polling (Claude Code and Codex are woken when the run ends), follow up in the same session">
-</p>
+**2. Codex only, once:** Codex **Settings → Hooks** → **Trust** **dsh-baton: waiting for the Harness run**.
+
+If the hook is not in the list yet, or you want to know what trusting it changes:
+
+<details>
+<summary>The Codex hook</summary>
+
+The hook comes with plugin 0.6.0 and later (0.6.2 and later when you have no Node.js), and shows up in that list only after you restart Harness and then Codex once, after installing or updating the plugin. Node.js is not required: without one it runs on Harness's own runtime, like the server. Codex is then woken when a run ends instead of checking every 270 s. You trust it once: updates and Harness restarts do not ask again. Skip it and Codex waits with `dsh_wait` instead; the first hand-over reminds you.
+
+</details>
+
+**3. Check:** in a **new** Claude Code or Codex conversation, ask it to call `dsh_list_workspaces`. It lists your Harness workspaces. Codex asks you to approve MCP tool calls: approve the `dsh-baton` tools (for unattended `codex exec` runs, add `--approve-for-me`).
+
+That is all. If Harness says it could not register, run `npx -y dsh-baton-mcp setup` in a terminal (this needs Node.js ≥ 22.15); it does the same registration. Updating, removing and Windows details are [further down](#install-details).
 
 ## See it run
+
+*Claude Code and Codex each hand DeepSeek Harness a task, and its subagents build this rainy-night street in 1 h 41 min. 40 s, sound on.*
+
+https://github.com/user-attachments/assets/72e2fdff-275e-48bc-8e5a-39ffb025a0a8
 
 One Codex chat starts a task, queues a follow-up, steers the running turn, and waits for all three:
 
@@ -38,53 +67,9 @@ Codex and Claude take turns in the same Harness session, and every message is la
 
 <p align="center"><a href="docs/demos.md">More demos →</a></p>
 
-## Quick start
-
-<p align="center">
-  <img src="./assets/readme/install.svg" width="100%" alt="Step 1: in Harness open Plugins, Add plugin, enter dsh-baton-host, Install, Enable now; it registers dsh-baton for Claude Code and Codex. Step 2, Codex only, once: Settings, Hooks, trust dsh-baton: waiting for the Harness run. Step 3: in a new chat, ask for dsh_list_workspaces">
-</p>
-
-Requires DeepSeek Harness ≥ 0.2.1-rc.2 (signed in) and Claude Code or Codex. Nothing else: no Node.js, no terminal. The steps are the same on macOS and Windows.
-
-**1. Add the plugin in Harness:** **Plugins** (插件) → **Add plugin** (添加插件) → type `dsh-baton-host` → **Install** (安装) → **Enable now** (立即启用).
-
-Switched on, the plugin registers dsh-baton for Claude Code and Codex, for every folder, and Harness says so.
-
-**2. Codex only, once:** Codex **Settings → Hooks** → **Trust** **dsh-baton: waiting for the Harness run**. The hook comes with plugin 0.6.0 and later (0.6.2 and later when you have no Node.js), and shows up in that list only after you restart Harness and then Codex once, after installing or updating the plugin. Node.js is not required: without one it runs on Harness's own runtime, like the server. Codex is then woken when a run ends instead of checking every 270 s. You trust it once: updates and Harness restarts do not ask again. Skip it and Codex waits with `dsh_wait` as before; the first hand-over reminds you.
-
-**3. Check:** in a **new** Claude Code or Codex conversation, ask it to call `dsh_list_workspaces`. It lists your Harness workspaces.
-
-That is all. If Harness says it could not register, run `npx -y dsh-baton-mcp setup` in a terminal (this needs Node.js ≥ 22.15); it does the same registration. Updating, removing and Windows details are [further down](#install-details).
-
-## How it works
-
-<p align="center">
-  <img src="./assets/readme/architecture.svg" width="100%" alt="MCP clients call dsh-baton-mcp over stdio; it reaches the dsh-baton-host plugin inside Harness through an owner-only local socket; the plugin drives Harness sessions live, with dsh headless as fallback">
-</p>
-
-<p align="center">
-  <img src="./assets/readme/comparison.svg" width="100%" alt="Plugin vs headless: only the plugin shows runs live in the Harness UI, continues desktop sessions and uses desktop agent presets; both reuse the desktop sign-in">
-</p>
-
-**How each client waits** (nothing to configure):
-- **Claude Code** waits for a run in the background (the `wait_command` that `dsh_send` returns) and is woken once, when the run ends.
-- **Codex** with the dsh-baton Stop hook trusted (from 0.6.1): after `dsh_send` it ends its turn; the hook waits for the run outside the model and, when the run ends or asks something, continues the same conversation with the result. One model request per run instead of one every 270 s.
-- **Codex** without the hook waits inside `dsh_wait`, up to 270 s per call, just under its 300 s tool timeout. An unfinished wait returns only the state, so Codex calls again without summarising. Codex gets no `wait_command`: its terminal cannot wake it, so it would poll.
-- Codex asks you to approve MCP tool calls: approve the `dsh-baton` tools. For unattended `codex exec` runs, add `--approve-for-me`.
-
-**Pick a model** (from 0.6.1): just say which one, for example "hand it to DeepSeek, V4 Pro". `dsh_send` passes it as `model` (and `reasoning_effort`), matched against the models Harness lists, so a model Harness adds later works as soon as it shows up. It applies to that session only; Harness's default model stays as it was. `dsh_list_models` shows what is available.
-
-**How a hand-over is checked** (from 0.6.0)
-
-You don't have to take DeepSeek's word for it. Before the run, dsh-baton notes what is in the folder. When the run ends it shows exactly which files were created, changed or deleted, and runs your project's own tests itself (`npm test`, or whatever the client passes as `checks`). A second, read-only DeepSeek agent then goes through the request point by point and ends with a table: requirement, met or not, and where (file:line). Claude or GPT reads just that, sends anything missing back in one message, and opens code only where a row says "not met". Unless `cwd` names another folder, the new Harness session starts in the folder you're already working in.
-
-<p align="center">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/evidence-chain.svg" width="100%" alt="Evidence chain of one real hand-over: the user asks, Codex writes the spec and checks, dsh-baton snapshots the folder, DeepSeek Harness writes 11 files, dsh-baton lists the changed files and runs npm test itself, Codex sends one fix back on its own, dsh-baton checks again, Codex accepts, and the benchmark's own test passes 13 of 13">
-</p>
-
 ## Token usage
 
-**In short: hand over the big, long jobs.** A feature that spans many files, a large refactor, a whole small app: that is where it saves the most. Claude Code spends 51–72% less in total, DeepSeek included. Codex now saves on both test tasks (Sol 40% and Astra 81% less on the web app), and a GPT-6 Astra web-app task takes 3% of a ChatGPT Plus 5-hour window instead of 22%. On a longer job, a three-phase kanban app, Claude Code spends 79% less in total (Task 3), and Astra spends 73% less and uses about 16% of the window instead of 86% (Task 4).
+**In short: hand over the big, long jobs.** A feature that spans many files, a large refactor, a whole small app: that is where it saves the most. Claude Code spends 51–72% less in total, DeepSeek included. On the web app (Task 2), Codex spends 40% less with GPT-6.1 Sol and 81% less with GPT-6 Astra, and an Astra web-app task takes 3% of a ChatGPT Plus 5-hour window instead of 22%. On a longer job, a three-phase kanban app, Claude Code spends 79% less in total (Task 3), and Astra spends 73% less and uses about 16% of the window instead of 86% (Task 4).
 
 **The honest part:** on the small CLI task, Codex on GPT-6.1 Sol is cheap enough that doing it alone costs a little less in total: the hand-over came out 15% more, almost all of it DeepSeek's share. The hand-over pays off when you want Claude or GPT to plan and review, a cheaper model to do the typing, and you'd rather not keep hitting the 5-hour limit.
 
@@ -146,25 +131,48 @@ All four runs passed 55/55 with no rework. Sol is cheap on its own, so the extra
 | Time | about 31 min | about 87 min |
 | Lines of code | 1,876 | 9,953 |
 
-<details>
-<summary>What was tested, and how</summary>
+## How it works
 
-- **The only difference** in the hand-over runs is one line added at the end of the request: 交给 DeepSeek Harness 去做。 ("Hand it to DeepSeek Harness.")
-- Same model and effort in both arms, and every run judged by the same acceptance check, which the model never sees.
-- Working alone: the earlier mean of three runs per cell (Astra: one run each). Handed over with 0.6.2: one run per cell; all six passed the first time, with no rework and no `dsh_wait` call.
-- Prices are list prices. DeepSeek is counted at its peak price, the most conservative case; the real DeepSeek bill came to about 58% of that.
+<p align="center">
+  <img src="./assets/readme/en/architecture.svg" width="100%" alt="MCP clients call dsh-baton-mcp over stdio; it reaches the dsh-baton-host plugin inside Harness through an owner-only local socket; the plugin drives Harness sessions live, with dsh headless as fallback">
+</p>
+
+<p align="center">
+  <img src="./assets/readme/en/comparison.svg" width="100%" alt="Plugin vs headless: only the plugin shows runs live in the Harness UI, continues desktop sessions and uses desktop agent presets; both reuse the desktop sign-in">
+</p>
+
+**Pick a model:** just say which one, for example "hand it to DeepSeek, V4 Pro". `dsh_send` passes it as `model` (and `reasoning_effort`), matched against the models Harness lists, so a model Harness adds later works as soon as it shows up. It applies to that session only; Harness's default model stays as it was. `dsh_list_models` shows what is available.
+
+Nothing to configure for waiting; if you want to know what each client does while a run is going:
+
+<details>
+<summary>How each client waits</summary>
+
+- **Claude Code** waits for a run in the background (the `wait_command` that `dsh_send` returns) and is woken once, when the run ends.
+- **Codex** with the dsh-baton Stop hook trusted (from 0.6.1): after `dsh_send` it ends its turn; the hook waits for the run outside the model and, when the run ends or asks something, continues the same conversation with the result. One model request per run instead of one every 270 s.
+- **Codex** without the hook waits inside `dsh_wait`, up to 270 s per call, just under its 300 s tool timeout. An unfinished wait returns only the state, so Codex calls again without summarising. Codex gets no `wait_command`: its terminal cannot wake it, so it would poll.
 
 </details>
+
+### How a hand-over is checked
+
+You don't have to take DeepSeek's word for it. Before the run, dsh-baton notes what is in the folder. When the run ends it shows exactly which files were created, changed or deleted, and runs your project's own tests itself (`npm test`, or whatever the client passes as `checks`). A second, read-only DeepSeek agent then goes through the request point by point and ends with a table: requirement, met or not, and where (file:line). Claude or GPT reads just that, sends anything missing back in one message, and opens code only where a row says "not met". Unless `cwd` names another folder, the new Harness session starts in the folder you're already working in.
+
+<p align="center">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/evidence-chain.svg" width="100%" alt="Evidence chain of one real hand-over: the user asks, Codex writes the spec and checks, dsh-baton snapshots the folder, DeepSeek Harness writes 11 files, dsh-baton lists the changed files and runs npm test itself, Codex sends one fix back on its own, dsh-baton checks again, Codex accepts, and the benchmark's own test passes 13 of 13">
+</p>
 
 ## Tools
 
 <p align="center">
-  <img src="./assets/readme/tools.svg" width="100%" alt="Ten tools in the tool list: list workspaces, list sessions, read session, list models, send, status, wait, answer, cancel, call. Six less used tools are reached through dsh_call: create and rename workspace, session activity, rename session, update queued, list runs">
+  <img src="./assets/readme/en/tools.svg" width="100%" alt="Ten tools in the tool list: list workspaces, list sessions, read session, list models, send, status, wait, answer, cancel, call. Six less used tools are reached through dsh_call: create and rename workspace, session activity, rename session, update queued, list runs">
 </p>
 
 <p align="center">
-  <img src="./assets/readme/states.svg" width="100%" alt="Run states: queued, running, waiting, completed, failed, cancelled, and interrupted when Harness restarts mid-run. A busy session takes followup (queued) or steer (interjects) messages">
+  <img src="./assets/readme/en/states.svg" width="100%" alt="Run states: queued, running, waiting, completed, failed, cancelled, and interrupted when Harness restarts mid-run. A busy session takes followup (queued) or steer (interjects) messages">
 </p>
+
+When you want the exact parameters and return fields of each tool:
 
 <details>
 <summary>Full tool reference</summary>
@@ -178,7 +186,7 @@ The server's MCP instructions are a single sentence (from 0.6.2); how to hand ov
 | `dsh_list_sessions` | Sessions newest first, with title, folder, running state and `model` (what its next request uses); filter by folder or text. Archived sessions are left out |
 | `dsh_list_models` | The models Harness can run (provider, id, name, reasoning efforts) and its default model |
 | `dsh_read_session` | Recent prompts and replies of one session (with tool names); `archived: true` for an archived session |
-| `dsh_send` | Send a message: `session_id` continues that session; otherwise a new one starts in `cwd` or `workspace_id`, or, with neither, in the folder the conversation works in (a `cwd` that is not a workspace yet is registered first; a `cwd` outside the conversation's folder is allowed and noted in `folder_note`). `checks`: test commands dsh-baton runs itself when the run ends (see How a hand-over is checked). Returns a `run_id` at once. In Harness the message is marked "Sent by Claude / ChatGPT from another chat". An archived session is refused: unarchive it in Harness, or start a new session. To a busy session, `mode` `followup` queues the message after the current turn and `steer` adds it to the running turn; left out, it does what Harness's own setting says (Settings → sending while busy: queue or steer), and `followup` when that cannot be read. `mode_source` says which applied. `model` only when the user names one ("DeepSeek-V4 Pro", "v4-pro"; `reasoning_effort` likewise): it is matched against Harness's own model list, ignoring case, spaces, hyphens and a leading DeepSeek, so a model Harness adds later (V4.1 Pro) works as soon as Harness lists it; a name that matches nothing or several fails the send, before anything is created, with the list (`provider/model` picks one). It is set on that session before the message goes in, and Harness's default model is put back as it was (Harness saves a session's pick as the default too). Left out, a continued session keeps its own model and a new one uses Harness's default. The reply says which in `model` and `model_source` |
+| `dsh_send` | Send a message: `session_id` continues that session; otherwise a new one starts in `cwd` or `workspace_id`, or, with neither, in the folder the conversation works in (a `cwd` that is not a workspace yet is registered first; a `cwd` outside the conversation's folder is allowed and noted in `folder_note`). `checks`: test commands dsh-baton runs itself when the run ends (see [How a hand-over is checked](#how-a-hand-over-is-checked)). Returns a `run_id` at once. In Harness the message is marked "Sent by Claude / ChatGPT from another chat". An archived session is refused: unarchive it in Harness, or start a new session. To a busy session, `mode` `followup` queues the message after the current turn and `steer` adds it to the running turn; left out, it does what Harness's own setting says (Settings → sending while busy: queue or steer), and `followup` when that cannot be read. `mode_source` says which applied. `model` only when the user names one ("DeepSeek-V4 Pro", "v4-pro"; `reasoning_effort` likewise): it is matched against Harness's own model list, ignoring case, spaces, hyphens and a leading DeepSeek, so a model Harness adds later (V4.1 Pro) works as soon as Harness lists it; a name that matches nothing or several fails the send, before anything is created, with the list (`provider/model` picks one). It is set on that session before the message goes in, and Harness's default model is put back as it was (Harness saves a session's pick as the default too). Left out, a continued session keeps its own model and a new one uses Harness's default. The reply says which in `model` and `model_source` |
 | `dsh_status` | Run progress: state, recent text and tool calls, final reply; `waiting_on` when the turn is over but sub-agents or jobs still run; `human_interjections` when someone typed in the Harness UI mid-run; state `interrupted` for a run cut short by a Harness restart; `model` the run was sent with |
 | `dsh_wait` | Codex with the Stop hook trusted does not need it. Wait for the run to end; a finished run carries `evidence` (files changed, check results) when the message was sent with `checks` (or until it stops to ask a person, see `dsh_answer`): up to 270 s per call for Codex, 50 s for other clients. Still going: returns `timed_out` with just the state; call it again. Clients that can wait in the background use `dsh_send`'s `wait_command` instead. `dsh_status` is a one-off look, not a way to wait |
 | `dsh_answer` | Answer the questions a run stopped to ask (Harness's ask_user_question): per question, an option number or label, free text, or skip; one at a time or all at once. `dsh_wait` and `wait_command` return as soon as a run asks, with the questions (`needs_input`, `question`; the option Harness's model would pick is in `harness_suggested`, apart from the labels). The assistant answers by its own judgment only when you told it to decide, and then passes `reason` and tells you what it chose and why; otherwise it brings you the questions, starting with its own recommendation and reason. You can also answer in the Harness window: whoever answers first wins |
@@ -192,7 +200,12 @@ The server's MCP instructions are a single sentence (from 0.6.2); how to hand ov
 
 </details>
 
-## CLI
+## Command line and configuration
+
+When you want to drive Harness from a terminal or a script instead of a chat:
+
+<details>
+<summary>CLI commands</summary>
 
 ```bash
 dsh-baton workspaces
@@ -209,19 +222,30 @@ dsh-baton rename session-xxxx "New title"
 dsh-baton rename-workspace ~/code/new-app "New name"
 ```
 
-## Configuration
+(From source, use `node src/cli.mjs …`.)
+
+</details>
+
+When the defaults don't fit, for example a different socket path or forcing headless mode:
+
+<details>
+<summary>Environment variables</summary>
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `DSH_BATON_BACKEND` | `auto` | `auto`, `host` or `headless` |
 | `DSH_BATON_HOME` | `~/.dsh-baton` | Socket and headless run records |
-| `DSH_BATON_SOCKET` | `$DSH_BATON_HOME/host.sock` | Plugin socket path (must match on both sides); on Windows mapped to a per-user named pipe |
+| `DSH_BATON_SOCKET` | `$DSH_BATON_HOME/host.sock` | Plugin socket path (must match on both sides); on Windows mapped to a per-user named pipe, see [WINDOWS.md](WINDOWS.md) |
 | `DSH_BATON_WAIT_S` | `270` for Codex, else `50` | How long one `dsh_wait` call waits; set it only if you raised the client's tool timeout, and keep it below that |
 | `DSH_BATON_CODEX_HOOK` | `1` | `0` (set for Harness) stops the plugin adding the Codex Stop hook |
 | `DSH_BIN` | the `dsh` inside the macOS app, else `PATH` | Harness CLI for headless mode |
 | `DSH_HOME` | `~/.dsh` | Harness data folder (headless session reads) |
 | `DSH_BATON_ACCOUNT` | `1` | `0` uses the API-key route in headless mode |
 | `DSH_BATON_PATCHES` | empty | Extra headless `--patch` overlays, `:`-separated |
+
+</details>
+
+When the Harness plugin is not reachable:
 
 <details>
 <summary>Headless fallback details</summary>
@@ -232,6 +256,8 @@ When the plugin is unreachable, the MCP server falls back to Harness's `dsh head
 
 ## Install details
 
+When you update or remove the plugin, come from dsh-bridge, run from source, or the plugin could not register:
+
 <details>
 <summary>What the plugin does, updating, removing, upgrading from dsh-bridge, installing from source, Windows</summary>
 
@@ -239,7 +265,7 @@ When the plugin is unreachable, the MCP server falls back to Harness's `dsh head
 
 **The Codex Stop hook.** The plugin adds one `[[hooks.Stop]]` block, marked `# dsh-baton`, to `~/.codex/config.toml`; Codex shows it as **dsh-baton: waiting for the Harness run** and runs it only once you trust it (dsh-baton never trusts it for you). The block only names a small script, `~/.dsh-baton/bin/codex-stop-hook` (`codex-stop-hook.cmd` on Windows), and everything that can move, Node.js and the server, lives in that script. So the block itself never changes: updates, same-version refreshes and Harness restarts leave it as it is, and your trust stays. If the block is ever rewritten, dsh-baton drops the old trust record, and Codex asks you to trust it again. Windows uses a `.cmd` because Codex runs hooks through `PowerShell -Command`, which cannot start a quoted program path. Without a Node.js of your own, the script runs Harness's own app in Node mode (`ELECTRON_RUN_AS_NODE=1`), as the server does; the plugin rewrites it on each start, so it follows Harness updates. Not added without Codex, with `DSH_BATON_CODEX_HOOK=0`, or when Codex's dsh-baton entry names no server folder (a bare `npx` command); the first hand-over in a Codex conversation then says why. `dsh-baton setup --codex-hook` adds it by hand, `setup --remove` takes it out, `DSH_BATON_CODEX_HOOK=0` for Harness stops the plugin adding it.
 
-**Updates need no restart.** When a newer version lands in `~/.dsh-baton/app` (a plugin update, `setup`, or a copy by hand), or the same version with changed files, conversations already open in Claude Code and Codex use it from their next `dsh_*` call: the server checks the folder before each call, starts the new version, and says once in that call's result that it was updated. A `dsh_wait` that is already running finishes on the old version first. If the new version cannot start, the old one keeps working and the result says why. A tool added in the new version shows up in Claude Code at once (the server tells the client its tool list changed); Codex keeps the tool list a conversation started with, so it does not show a new tool until the next conversation; from 0.5.9 on it can still use one at once through `dsh_call`, which the update note points to, and the tools it already has run the new code right away. This works from the version after 0.5.8 on; a server started from 0.5.8 or earlier needs one last restart (or `/mcp` reconnect) to pick it up.
+**Updates need no restart.** When a newer version lands in `~/.dsh-baton/app` (a plugin update, `setup`, or a copy by hand), or the same version with changed files, conversations already open in Claude Code and Codex use it from their next `dsh_*` call: the server checks the folder before each call, starts the new version, and says once in that call's result that it was updated. A `dsh_wait` that is already running finishes on the old version first. If the new version cannot start, the old one keeps working and the result says why. A tool added in the new version shows up in Claude Code at once (the server tells the client its tool list changed); Codex keeps the tool list a conversation started with, so it does not show a new tool until the next conversation; it can still use one at once through `dsh_call`, which the update note points to, and the tools it already has run the new code right away.
 
 **`npx -y dsh-baton-mcp setup`** does the same registration from a terminal: for a plugin that could not register, or when you come from an MCP directory. With the plugin already registered it changes nothing, then points you to the plugin if it is missing.
 
@@ -252,6 +278,10 @@ When the plugin is unreachable, the MCP server falls back to Harness's `dsh head
 **From source** (to follow `main` or change the code): `git clone https://github.com/JialaoLiu/dsh-baton.git`, then in Harness add the plugin from the clone's `host` folder (Add plugin → paste the path). Switched on, it registers the clone itself, so changes run before they are published. Update with `git pull`. `node dsh-baton/src/cli.mjs setup` registers the clone from a terminal.
 
 **Windows.** Same steps; [WINDOWS.md](WINDOWS.md) covers what differs (a named pipe instead of a socket file) and fixes for a Plugins page that cannot install or uninstall.
+
+</details>
+
+When you register by hand, or want dsh-baton in the Claude desktop chat app (not Claude Code):
 
 <details>
 <summary>Manual registration and the Claude desktop app</summary>
@@ -273,21 +303,17 @@ codex mcp add dsh-baton -- "$(command -v node)" "$PWD/dsh-baton/src/server.mjs"
 
 </details>
 
-</details>
-
 ## Security and limits
 
 <p align="center">
-  <img src="./assets/readme/security.svg" width="100%" alt="Owner-only channel (socket 0600 on macOS and Linux, per-user named pipe on Windows), no network port, Harness sandbox and approvals apply">
+  <img src="./assets/readme/en/security.svg" width="100%" alt="Owner-only channel (socket 0600 on macOS and Linux, per-user named pipe on Windows), no network port, Harness sandbox and approvals apply">
 </p>
 
 <p align="center">
-  <img src="./assets/readme/limits.svg" width="100%" alt="Good to know: a message typed in the UI mid-run is flagged on the run as a human interjection, run records survive a Harness restart (cut-short runs show interrupted), Claude Code and Codex are woken once when a run ends">
+  <img src="./assets/readme/en/limits.svg" width="100%" alt="Good to know: a message typed in the UI mid-run is flagged on the run as a human interjection, run records survive a Harness restart (cut-short runs show interrupted), Claude Code and Codex are woken once when a run ends">
 </p>
 
 Any process running as your OS user can drive Harness through the socket, the same as running `dsh` directly. dsh-baton relies on Harness 0.2.1-series internal service APIs, so a major Harness update may need a follow-up release.
-
-<p align="center"><a href="docs/demos.md">More demos →</a></p>
 
 ## License
 
