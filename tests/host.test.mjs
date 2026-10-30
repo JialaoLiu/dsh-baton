@@ -15,7 +15,7 @@ const IS_WIN = process.platform === 'win32'
 // here, except in the test that points it at a throwaway home.
 process.env.DSH_BATON_AUTO_REGISTER = '0'
 
-function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web, settings, queue = false, recheckMs = 300, models } = {}) {
+function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web, settings, queue = false, recheckMs = 300, models, account } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-'))
   // Run records go to the bridge home: keep them out of the real ~/.dsh-baton.
   process.env.DSH_BATON_HOME = home ?? path.join(dir, 'bridge')
@@ -34,9 +34,9 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
     effect: (fn) => disposers.push(fn()),
     waterfall: async (ev, { sessionId }) => activity(sessionId),
     logger: { info: () => {}, error: (m) => logs.push(m) },
-    ...(web || settings || models?.viaInject ? {
+    ...(web || settings || models?.viaInject || account ? {
       inject: (deps, fn) => {
-        const services = { webServer: web, settings, agentDefaultModel: models?.viaInject ? models.agentDefaultModel : undefined }
+        const services = { webServer: web, settings, agentDefaultModel: models?.viaInject ? models.agentDefaultModel : undefined, accountController: account }
         if (deps.every((d) => services[d])) fn({ effect: (f) => disposers.push(f()), ...services })
       },
     } : {}),
@@ -700,6 +700,34 @@ function fakeModels({ groups = CATALOG, saveMs = () => 20, selectModel = true, d
   }
   return fake
 }
+
+test('a send on the DeepSeek account is refused when every wallet is empty; any balance, a failed read or another provider lets it through', async (t) => {
+  const m = fakeModels({ groups: [...CATALOG, { id: 'deepseek-api', name: 'DeepSeek API', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] }] })
+  let balance = { status: 'ready', value: [{ currency: 'CNY', balance: '0.00' }], bonusWallets: [{ currency: 'CNY', balance: '0' }] }
+  const reads = []
+  const account = { getBalance: async (client) => { reads.push(client); if (balance instanceof Error) throw balance; return balance } }
+  const h = startHost({ models: m, account }); t.after(h.close); await h.ready
+  await assert.rejects(h.call('send', { message: 'go', session_id: 's1' }), /No message was sent: the DeepSeek account has no balance left \(CNY 0\.00, CNY 0\)/)
+  await assert.rejects(h.call('send', { message: 'go', cwd: '/w' }), /Session new-1 was created, but no message was sent: the DeepSeek account has no balance left/)
+  assert.equal(m.calls.prompt.length, 0, 'nothing reached Harness')
+  assert.equal(typeof reads[0].version, 'string')
+  assert.equal(typeof reads[0].timezoneOffsetSeconds, 'number')
+  // Another provider: the account balance is not its business.
+  await h.call('send', { message: 'go', session_id: 's2', model: 'deepseek-api/deepseek-chat' })
+  assert.equal(m.calls.prompt.length, 1)
+  for (const b of [null, { status: 'failed' }, new Error('platform down')]) {
+    balance = b
+    await h.call('send', { message: 'go', session_id: 's1' })
+  }
+  assert.equal(m.calls.prompt.length, 4, 'not signed in, a failed read or an error: sent')
+  balance = { status: 'ready', value: [{ currency: 'CNY', balance: '0.00' }], bonusWallets: [{ currency: 'CNY', balance: '5.00' }] }
+  await h.call('send', { message: 'go', session_id: 's1' })
+  const before = reads.length
+  balance = { status: 'ready', value: [], bonusWallets: [] }
+  await h.call('send', { message: 'go', session_id: 's1' })
+  assert.equal(reads.length, before, 'a balance seen in the last minute is not read again')
+  assert.equal(m.calls.prompt.length, 6)
+})
 
 test('model matches Harness\'s catalog by id or name, ignoring case, spaces, hyphens and a DeepSeek prefix', async (t) => {
   const m = fakeModels()

@@ -545,6 +545,10 @@ export function reviewRequest(message) {
 
 export const ENDED_HINT = 'evidence is produced by dsh-baton (files changed, checks it ran), not by the Harness reply: trust it over final_text. If a check failed, a requirement has no check, or a file the task needs is missing from evidence.changes, send all fixes back in one message to the same session, quoting the failing output; do not reproduce failures or write test scripts yourself. If every check passed and final_text ends with a review table whose rows are all met, accept it without reading code; read code only for rows marked no or unclear.'
 
+// A run that stopped because the DeepSeek balance ran out: sending again fails the same way.
+export const QUOTA_HINT = 'The run stopped because the DeepSeek account has no balance left. Do not send again or retry: every send fails the same way until the balance is topped up. Tell the user, in their language, to top up (Harness → Settings → Account, or platform.deepseek.com), then send to the same session to continue where it stopped.'
+const outOfBalance = (st) => st.state === 'failed' && (['ACCOUNT_QUOTA', 'QUOTA'].includes(st.turn_end?.error?.code) || st.turn_end?.error?.status === 402 || /insufficient balance/i.test(st.error ?? ''))
+
 // What to do when a run stops to ask a person (dsh_wait, wait_command and the instructions say it).
 export const ASKED = 'If the user told you to decide such questions yourself, choose by your own judgment of the question and the task, call dsh_answer with reason (one sentence on why), then tell the user what you chose and why. Otherwise relay the questions to the user and start with your own advice, on a line of its own: "My recommendation: <option>, because <reason>", the reason drawn from your own judgment of the question and the task (harness_suggested only shows what the asking model would pick; it is never a reason by itself, and your pick may differ). Then list the options, wait for the user\'s decision and submit it with dsh_answer. Never answer on the user\'s behalf without that permission.'
 export const DECIDED_HINT = 'Required in your reply: you chose an answer for the user during this run, so start your reply by telling the user, in their language, what you chose and why (decided_for_user: answers and reason), then give the result. Passing on only final_text is not enough.'
@@ -557,6 +561,7 @@ const NEEDS_INPUT_HINT = (st) => st.question
 // A run that did not complete keeps its last events, to show where it stopped.
 function ended({ recent_events, message_preview, backend, ...st }) {
   const out = { ...st, ...(st.state !== 'completed' && recent_events?.length ? { recent_events: recent_events.slice(-5) } : {}) }
+  if (outOfBalance(st)) return { ...out, hint: QUOTA_HINT }
   // decided_for_user first, so a client that skims to final_text still meets it.
   return st.decided_for_user
     ? { hint: `${DECIDED_HINT} ${ENDED_HINT}`, decided_for_user: st.decided_for_user, ...out }

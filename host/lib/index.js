@@ -134,6 +134,8 @@ export function apply(ctx) {
   let settings = null
   // Harness's default-model service (see defaultModel()), when this Harness has one.
   let defaultModelService = null
+  // Harness's DeepSeek account service, when this Harness has one: read for the balance.
+  let accountService = null
   const runs = new Map() // runId -> run
   let stopping = false // set when the plugin unloads: release every wait()
   const waiters = new Map() // runId -> Set<resolve>
@@ -834,6 +836,30 @@ export function apply(ctx) {
     return { model: shownModel(await sessionModel(sessionId)), source: isNew ? 'default' : 'session' }
   }
 
+  // --- balance ------------------------------------------------------------------
+  // A run on the DeepSeek account with no balance fails within a second, and clients
+  // tended to send it again and again. So the send is refused up front when Harness's
+  // account service says every wallet is empty. Anything else (not signed in, an API key
+  // provider, the read failing) lets the send go ahead. A balance that was there is
+  // trusted for a minute.
+  const ACCOUNT_PROVIDER = 'deepseek-account'
+  const BALANCE_TTL_MS = 60_000
+  let balanceSeen = 0
+  async function emptyBalance() {
+    if (!accountService || typeof accountService.getBalance !== 'function' || Date.now() - balanceSeen < BALANCE_TTL_MS) return null
+    try {
+      const client = { version: VERSION, locale: 'en', timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60 }
+      const b = await Promise.race([accountService.getBalance(client), new Promise((resolve) => setTimeout(resolve, 5000, null))])
+      if (b?.status !== 'ready') return null
+      const wallets = [...(b.value ?? []), ...(b.bonusWallets ?? [])]
+      if (wallets.some((w) => Number(w.balance) > 0)) { balanceSeen = Date.now(); return null }
+      return wallets.map((w) => `${w.currency} ${w.balance}`).join(', ') || 'none'
+    } catch (error) {
+      logError('read balance', error)
+      return null
+    }
+  }
+
   async function send({ message, session_id, cwd, workspace_id, mode: asked, sender, model, reasoning_effort }) {
     if (!message || !message.trim()) throw new Error('message is required')
     if (asked != null && asked !== 'followup' && asked !== 'steer') throw new Error('mode must be followup or steer')
@@ -860,6 +886,13 @@ export function apply(ctx) {
     const chosen = await applyModel(sessionId, plan, isNew).catch((error) => {
       throw new Error(`${isNew ? `Session ${sessionId} was created, but no message was sent: ` : 'No message was sent: '}the model could not be set (${error?.message ?? error})`)
     })
+    // A session that never picked a model runs on Harness's default.
+    let provider = chosen.model?.provider
+    if (!provider) try { provider = defaultModel()?.currentSelection?.()?.provider } catch { /* unknown: no check */ }
+    if (provider === ACCOUNT_PROVIDER) {
+      const empty = await emptyBalance()
+      if (empty) throw new Error(`${isNew ? `Session ${sessionId} was created, but no message was sent` : 'No message was sent'}: the DeepSeek account has no balance left (${empty}), so the run would fail at once. Do not send again until the user has topped up (Harness → Settings → Account, or platform.deepseek.com).`)
+    }
     const ahead = activeRunsFor(sessionId).map((r) => r.id)
     const run = {
       id: `hrun-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`,
@@ -1084,6 +1117,10 @@ export function apply(ctx) {
     ctx.inject(['settings'], (child) => {
       settings = child.settings
       child.effect(() => () => { if (settings === child.settings) settings = null }, 'dsh-baton-host settings')
+    })
+    ctx.inject(['accountController'], (child) => {
+      accountService = child.accountController
+      child.effect(() => () => { if (accountService === child.accountController) accountService = null }, 'dsh-baton-host account')
     })
     ctx.inject(['agentDefaultModel'], (child) => {
       defaultModelService = child.agentDefaultModel

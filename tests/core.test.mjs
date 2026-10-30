@@ -214,3 +214,11 @@ test('relay lays the question out with the first line left for the client\'s own
   assert.equal(text, 'My recommendation: <your pick>, because <your own reason>\n\nWhich name?\n  1. csvmd - short\n  2. tabula\n  (The model in Harness that asked would pick: csvmd)')
   assert.equal(core.relayText(undefined), undefined)
 })
+
+test('a run that ran out of DeepSeek balance says not to send again; other failures keep the usual hint', () => {
+  const quota = { run_id: 'r1', state: 'failed', error: 'Insufficient Balance (request_id: x)', turn_end: { kind: 'error', error: { message: 'Insufficient Balance', code: 'ACCOUNT_QUOTA', status: 402 } } }
+  assert.equal(core.waitResult(quota).hint, core.QUOTA_HINT)
+  assert.equal(core.waitResult({ run_id: 'r2', state: 'failed', error: 'Insufficient Balance' }).hint, core.QUOTA_HINT, 'the headless backend only has the text')
+  assert.equal(core.waitResult({ run_id: 'r3', state: 'failed', error: 'network down' }).hint, core.ENDED_HINT)
+  assert.equal(core.waitResult({ run_id: 'r4', state: 'completed', final_text: 'done' }).hint, core.ENDED_HINT)
+})
