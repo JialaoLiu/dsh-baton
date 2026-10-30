@@ -84,27 +84,14 @@ test('Codex: no cwd means the thread cwd from its rollout, not the server folder
   rm(codexHome)
 })
 
-test('a hand-over with checks asks for a sub-agent review table; a plain message is sent verbatim', async () => {
+test('a hand-over with checks asks for a sub-agent review table in its language; a plain message is sent verbatim', async () => {
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
   const handover = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'build it', checks: ['npm test'] } })
   assert.match(handover.host.message, /^build it\n\n---\nWhen the work is done, start a read-only sub-agent/)
+  const zh = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: '做一个看板', checks: ['npm test'] } })
+  assert.match(zh.host.message, /^做一个看板\n\n---\n完成后，启动一个只读子代理/)
   const plain = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'what changed?', session_id: 's1' } })
   assert.equal(plain.host.message, 'what changed?')
-  rm(project)
-})
-
-test('a file size limit, from max_file_lines or the setting, asks Harness to keep new files small; 0 or none adds nothing', async () => {
-  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
-  const off = { DSH_BATON_MAX_FILE_LINES: '' }
-  const param = await sendFrom({ clientName: 'claude-code', cwd: project, env: off, args: { message: 'build it', max_file_lines: 500, checks: ['npm test'] } })
-  assert.match(param.host.message, /^build it\n\n---\nCode layout: .* under 500 lines\. .*\n\n---\nWhen the work is done, .*split by responsibility/s)
-  assert.equal(param.host.max_file_lines, undefined, 'the limit stays in dsh-baton')
-  const zh = await sendFrom({ clientName: 'claude-code', cwd: project, env: { DSH_BATON_MAX_FILE_LINES: '600' }, args: { message: '做一个看板', checks: ['npm test'] } })
-  assert.match(zh.host.message, /^做一个看板\n\n---\n代码结构：.*不超过 600 行.*\n\n---\n完成后，启动一个只读子代理/s)
-  const zero = await sendFrom({ clientName: 'claude-code', cwd: project, env: { DSH_BATON_MAX_FILE_LINES: '600' }, args: { message: 'hi', max_file_lines: 0 } })
-  assert.equal(zero.host.message, 'hi')
-  const none = await sendFrom({ clientName: 'claude-code', cwd: project, env: off, args: { message: 'hi' } })
-  assert.equal(none.host.message, 'hi')
   rm(project)
 })
 

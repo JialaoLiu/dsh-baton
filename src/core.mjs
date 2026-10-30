@@ -10,7 +10,6 @@ import { spawn, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { setting, batonHome, socketEndpoint, hostEndpoints } from '../host/lib/socket.js'
 import * as evidence from './evidence.mjs'
-import { fileLimit, layoutRequest, reviewRequest } from './structure.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 export const ROOT = path.resolve(HERE, '..')
@@ -535,6 +534,15 @@ async function useHost() {
   return up
 }
 
+// Said with a finished run's reply: review from the evidence dsh-baton produced, read code only
+// where it points, and send every fix back in one message. In the message's language: Chinese
+// when it has CJK characters, else English.
+export function reviewRequest(message) {
+  return /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff]/.test(message)
+    ? '\n\n---\n完成后，启动一个只读子代理，对照上面的每一项需求检查，然后在最终回复末尾附上它的表格：需求 | 是否满足（是 / 否 / 不确定）| 证据（文件:行 或测试名）。标为"否"的先修好再回复。'
+    : '\n\n---\nWhen the work is done, start a read-only sub-agent to check it against every requirement above, then end your final reply with its table: requirement | met (yes / no / unclear) | evidence (file:line or test name). Fix anything marked no before replying.'
+}
+
 export const ENDED_HINT = 'evidence is produced by dsh-baton (files changed, checks it ran), not by the Harness reply: trust it over final_text. If a check failed, a requirement has no check, or a file the task needs is missing from evidence.changes, send all fixes back in one message to the same session, quoting the failing output; do not reproduce failures or write test scripts yourself. If every check passed and final_text ends with a review table whose rows are all met, accept it without reading code; read code only for rows marked no or unclear.'
 
 // What to do when a run stops to ask a person (dsh_wait, wait_command and the instructions say it).
@@ -667,14 +675,9 @@ export const api = {
   // checks stay here: dsh-baton runs them itself when the run ends (see evidence.mjs).
   // A hand-over (a message with checks) also asks Harness to have a read-only sub-agent
   // review the work against the spec and end with a table, so the client can decide from
-  // that table and the evidence instead of reading the code itself. With a file size limit,
-  // Harness is asked to keep new source files under it (see structure.mjs).
-  async send({ checks, max_file_lines, ...a }) {
-    const limit = fileLimit(max_file_lines)
-    if (typeof a.message === 'string') {
-      const review = Array.isArray(checks) && checks.length ? reviewRequest(a.message) : ''
-      a = { ...a, message: `${a.message}${layoutRequest(a.message, limit)}${review}` }
-    }
+  // that table and the evidence instead of reading the code itself.
+  async send({ checks, ...a }) {
+    if (Array.isArray(checks) && checks.length && typeof a.message === 'string') a = { ...a, message: `${a.message}${reviewRequest(a.message)}` }
     const host = await useHost()
     if (a.model != null || a.reasoning_effort != null) {
       if (!host) throw new Error('Choosing a model needs the dsh-baton-host plugin running inside DeepSeek Harness. Nothing was sent; send again without model and reasoning_effort to use the Harness default.')
@@ -685,7 +688,7 @@ export const api = {
       })
     }
     const st = host ? tag('host', await hostCall('send', a)) : tag('headless', await waitForSessionId(startRun(a)))
-    evidence.prepare(config.batonHome, { run_id: st.run_id, cwd: await runFolder(a, st), checks, session_id: st.session_id ?? a.session_id, max_file_lines: limit })
+    evidence.prepare(config.batonHome, { run_id: st.run_id, cwd: await runFolder(a, st), checks })
     return st
   },
   async status({ run_id, tail = 20 }) {
