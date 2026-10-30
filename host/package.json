@@ -1,7 +1,7 @@
 {
   "name": "dsh-baton-host",
   "version": "0.6.3",
-  "description": "DeepSeek Harness plugin for dsh-baton: adding it is the whole install. Switched on, it registers the dsh-baton MCP server for Claude Code and Codex, then takes the baton over a local, owner-only control socket, runs it in a specific session through the host's own session controller, and hands the result back when the turn is done.",
+  "description": "DeepSeek Harness plugin for dsh-baton: hand coding tasks from Claude Code or Codex to DeepSeek Harness on your machine. Adding it is the whole install: it registers the dsh-baton MCP server for Claude Code and Codex, runs each task live in the Harness window, wakes the main agent when the run ends and hands back the changed files, the project's own test results and a requirement-by-requirement checklist.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
