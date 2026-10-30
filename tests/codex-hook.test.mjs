@@ -147,6 +147,21 @@ test('reason opens with a glance in Codex\'s language, then the full results for
   assert.equal(hook.glanceFor([failed], [], 'zh'), 'dsh-baton · hrun-g2：失败，用时 45 秒 · 改动 0 个文件 · 项目测试未通过（1/2）')
   // A question: its first 100 characters, on one line; no time, the run has not ended.
   const q = `Which one? ${'x'.repeat(89)}…`
+  // The largest source file, since the session started; the rest is in the JSON only.
+  const built = { ...done, evidence: { ...done.evidence, structure: { files: [{ path: 'src/server.mjs', lines: 2012, before: 1500, session_start: 900 }, { path: 'src/db.mjs', lines: 80 }], lines_added: 592, lines_removed: 0 } } }
+  assert.equal(hook.glanceFor([built]), 'dsh-baton · hrun-g1: completed in 4m 12s · 3 files changed · checks passed (2/2) · largest file server.mjs 2012 lines (+1112)')
+  assert.equal(hook.glanceFor([built], [], 'zh'), 'dsh-baton · hrun-g1：已完成，用时 4 分 12 秒 · 改动 3 个文件 · 项目测试通过（2/2） · 最大文件 server.mjs 2012 行（+1112）')
+  const over = (o) => ({ ...built, evidence: { ...built.evidence, structure: { ...built.evidence.structure, max_file_lines: 600, over_limit: o } } })
+  const big = { path: 'src/server.mjs', lines: 2012, grew: 1112 }
+  assert.match(hook.glanceFor([over([big])]), / · largest file server\.mjs 2012 lines \(\+1112\), over the 600 limit$/)
+  assert.match(hook.glanceFor([over([big])], [], 'zh'), / · 最大文件 server\.mjs 2012 行（\+1112），超过上限 600$/)
+  assert.match(hook.glanceFor([over([big, { path: 'a.js', lines: 700, new: true }])], [], 'zh'), /，超过上限 600（共 2 个文件）$/)
+  assert.match(hook.glanceFor([over([{ path: 'a.js', lines: 700, new: true }])]), /largest file server\.mjs 2012 lines \(\+1112\) · 1 file over the 600 limit$/)
+  const fresh = { ...done, evidence: { structure: { files: [{ path: 'app.py', lines: 120 }] } } }
+  assert.match(hook.glanceFor([fresh], [], 'zh'), /最大文件 app\.py 120 行（新建）$/)
+  assert.match(hook.glanceFor([fresh]), /largest file app\.py 120 lines \(new\)$/)
+  const same = { ...done, evidence: { structure: { files: [{ path: 'a.js', lines: 5, before: 5 }] } } }
+  assert.match(hook.glanceFor([same]), /largest file a\.js 5 lines$/)
   assert.equal(hook.glanceFor([asking]), `dsh-baton · hrun-g3: waiting for an answer (2 questions): "${q}"`)
   assert.equal(hook.glanceFor([asking], [], 'zh'), `dsh-baton · hrun-g3：在等回答（共 2 个问题）：「${q}」`)
   assert.equal(hook.glanceFor([approval], [], 'zh'), 'dsh-baton · hrun-g4：在等你在 Harness 里批准')

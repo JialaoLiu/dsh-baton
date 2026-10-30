@@ -139,6 +139,9 @@ const WORDS = {
     checks: (ok, bad, skipped, all) => (skipped
       ? `checks ${ok}/${all} passed${bad ? `, ${bad} failed` : ''}, ${skipped} skipped`
       : `checks ${bad ? 'failed' : 'passed'} (${ok}/${all})`),
+    largest: (name, n, change) => `largest file ${name} ${n} line${n === 1 ? '' : 's'}${change ? ` (${change === 'new' ? 'new' : change})` : ''}`,
+    over: (limit, others) => `, over the ${limit} limit${others ? ` (${others + 1} files)` : ''}`,
+    overOthers: (limit, n) => `${n} file${n === 1 ? '' : 's'} over the ${limit} limit`,
     many: (n) => `dsh-baton: ${n} Harness runs are back`,
     running: (ids) => `Still running: ${ids.join(', ')}`,
     sep: ': ', dot: ' · ',
@@ -152,6 +155,9 @@ const WORDS = {
     checks: (ok, bad, skipped, all) => (skipped
       ? `项目测试 ${ok}/${all} 通过${bad ? `，${bad} 个未通过` : ''}，${skipped} 个超时未跑`
       : `项目测试${bad ? '未通过' : '通过'}（${ok}/${all}）`),
+    largest: (name, n, change) => `最大文件 ${name} ${n} 行${change ? `（${change === 'new' ? '新建' : change}）` : ''}`,
+    over: (limit, others) => `，超过上限 ${limit}${others ? `（共 ${others + 1} 个文件）` : ''}`,
+    overOthers: (limit, n) => `${n} 个文件超过上限 ${limit}`,
     many: (n) => `dsh-baton：${n} 个 Harness 任务回来了`,
     running: (ids) => `还在运行：${ids.join('、')}`,
     sep: '：', dot: ' · ',
@@ -189,7 +195,25 @@ function runLine(r, w) {
     const skipped = checks.filter((c) => c.skipped).length
     bits.push(w.checks(ok, checks.length - ok - skipped, skipped, checks.length))
   }
+  const layout = layoutBit(r.evidence?.structure, w)
+  if (layout) bits.push(layout)
   return bits.join(w.dot)
+}
+
+// The largest source file the run touched and how it changed since the session started
+// (else since dsh_send); the full list is in the JSON for the model.
+function layoutBit(st, w) {
+  const top = st?.files?.[0]
+  const over = st?.over_limit ?? []
+  if (!top) return over.length ? w.overOthers(st.max_file_lines, over.length) : ''
+  const from = top.session_start ?? top.before
+  const diff = top.lines - (from ?? 0)
+  const change = !from ? 'new' : diff ? `${diff > 0 ? '+' : ''}${diff}` : ''
+  const name = top.path.split('/').pop()
+  const topOver = over.some((o) => o.path === top.path)
+  const text = w.largest(name, top.lines, change)
+  if (topOver) return `${text}${w.over(st.max_file_lines, over.length - 1)}`
+  return over.length ? `${text}${w.dot}${w.overOthers(st.max_file_lines, over.length)}` : text
 }
 
 export function glanceFor(results, running = [], lang = 'en') {

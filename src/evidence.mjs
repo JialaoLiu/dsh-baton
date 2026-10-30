@@ -3,10 +3,12 @@
 // run ends), and the result of check commands the client gave with dsh_send, run here by
 // dsh-baton in that folder. The Harness reply can say "all tests pass"; this says whether
 // they do. Kept in a file per run, because the client may wait from another process.
+// It also says how the code is laid out (structure.mjs).
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { spawnSync } from 'node:child_process'
+import { structureOf, codeLines } from './structure.mjs'
 
 const SKIP = new Set(['node_modules', '.git', '.hg', '.svn', 'dist', 'build', '.next', '.cache', 'coverage', '__pycache__', '.venv', 'venv', 'target'])
 const MAX_FILES = 3000
@@ -15,7 +17,15 @@ const CHECK_TIMEOUT_MS = 120_000
 const CHECKS_TOTAL_MS = 180_000
 const TAIL_LINES = 15
 
-const fileOf = (home, runId) => path.join(home, 'evidence', `${String(runId).replace(/[^\w.-]/g, '_')}.json`)
+const safe = (id) => String(id).replace(/[^\w.-]/g, '_')
+const fileOf = (home, runId) => path.join(home, 'evidence', `${safe(runId)}.json`)
+// The code file sizes in a session's folder when dsh-baton first sent to it, so a file
+// that grows run after run in one session is seen as a whole.
+const startOf = (home, sessionId) => path.join(home, 'evidence-sessions', `${safe(sessionId)}.json`)
+const newest = (dir, keep) => {
+  const old = fs.readdirSync(dir).map((n) => ({ n, t: fs.statSync(path.join(dir, n)).mtimeMs })).sort((a, b) => b.t - a.t).slice(keep)
+  for (const { n } of old) fs.rmSync(path.join(dir, n), { force: true })
+}
 
 // path -> { hash, lines } for the files under dir (bounded; big or binary files keep only a hash).
 function snapshot(dir) {
@@ -44,16 +54,26 @@ function snapshot(dir) {
   return { files, truncated }
 }
 
-export function prepare(home, { run_id, cwd, checks }) {
+export function prepare(home, { run_id, cwd, checks, session_id, max_file_lines = 0 }) {
   if (!run_id || !cwd || !fs.existsSync(cwd)) return
   try {
     fs.mkdirSync(path.join(home, 'evidence'), { recursive: true, mode: 0o700 })
     const list = Array.isArray(checks) ? checks.filter((c) => typeof c === 'string' && c.trim()).slice(0, 10) : []
-    fs.writeFileSync(fileOf(home, run_id), JSON.stringify({ cwd, checks: list, before: snapshot(cwd), at: Date.now() }), { mode: 0o600 })
+    const before = snapshot(cwd)
+    let start = null
+    if (session_id) {
+      const file = startOf(home, session_id)
+      try { start = JSON.parse(fs.readFileSync(file, 'utf8')) } catch { /* first send to it */ }
+      if (start?.cwd !== cwd) {
+        start = { cwd, lines: codeLines(before.files) }
+        fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 })
+        fs.writeFileSync(file, JSON.stringify(start), { mode: 0o600 })
+        newest(path.dirname(file), 50)
+      }
+    }
+    fs.writeFileSync(fileOf(home, run_id), JSON.stringify({ cwd, checks: list, before, start: start?.lines ?? null, max_file_lines, at: Date.now() }), { mode: 0o600 })
     // Keep the folder small: the 50 newest runs.
-    const dir = path.join(home, 'evidence')
-    const old = fs.readdirSync(dir).map((n) => ({ n, t: fs.statSync(path.join(dir, n)).mtimeMs })).sort((a, b) => b.t - a.t).slice(50)
-    for (const { n } of old) fs.rmSync(path.join(dir, n), { force: true })
+    newest(path.join(home, 'evidence'), 50)
   } catch { /* evidence is extra; sending never fails over it */ }
 }
 
@@ -91,11 +111,13 @@ export function collect(home, runId) {
     const left = deadline - Date.now()
     checks.push(left > 1000 ? runCheck(c, rec.cwd, Math.min(CHECK_TIMEOUT_MS, left)) : { command: c, skipped: 'out of time' })
   }
+  const structure = structureOf(before, after.files, rec.start, rec.max_file_lines)
   const result = {
     source: 'dsh-baton, not the Harness model',
     changes: { created, modified, deleted, ...(after.truncated || rec.before.truncated ? { truncated: true } : {}) },
+    ...(structure ? { structure } : {}),
     ...(checks.length ? { checks, all_checks_passed: checks.every((c) => c.passed) } : {}),
   }
-  try { fs.writeFileSync(file, JSON.stringify({ ...rec, before: undefined, result }), { mode: 0o600 }) } catch { /* recomputed next time */ }
+  try { fs.writeFileSync(file, JSON.stringify({ ...rec, before: undefined, start: undefined, result }), { mode: 0o600 }) } catch { /* recomputed next time */ }
   return result
 }

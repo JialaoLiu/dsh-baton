@@ -93,6 +93,21 @@ test('a hand-over with checks asks for a sub-agent review table; a plain message
   rm(project)
 })
 
+test('a file size limit, from max_file_lines or the setting, asks Harness to keep new files small; 0 or none adds nothing', async () => {
+  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
+  const off = { DSH_BATON_MAX_FILE_LINES: '' }
+  const param = await sendFrom({ clientName: 'claude-code', cwd: project, env: off, args: { message: 'build it', max_file_lines: 500, checks: ['npm test'] } })
+  assert.match(param.host.message, /^build it\n\n---\nCode layout: .* under 500 lines\. .*\n\n---\nWhen the work is done, .*split by responsibility/s)
+  assert.equal(param.host.max_file_lines, undefined, 'the limit stays in dsh-baton')
+  const zh = await sendFrom({ clientName: 'claude-code', cwd: project, env: { DSH_BATON_MAX_FILE_LINES: '600' }, args: { message: '做一个看板', checks: ['npm test'] } })
+  assert.match(zh.host.message, /^做一个看板\n\n---\n代码结构：.*不超过 600 行.*\n\n---\n完成后，启动一个只读子代理/s)
+  const zero = await sendFrom({ clientName: 'claude-code', cwd: project, env: { DSH_BATON_MAX_FILE_LINES: '600' }, args: { message: 'hi', max_file_lines: 0 } })
+  assert.equal(zero.host.message, 'hi')
+  const none = await sendFrom({ clientName: 'claude-code', cwd: project, env: off, args: { message: 'hi' } })
+  assert.equal(none.host.message, 'hi')
+  rm(project)
+})
+
 test('model goes to the plugin with the message; a plugin too old to choose one gets nothing', async () => {
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
   const { host } = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'hi', model: 'V4 Pro', reasoning_effort: 'high' } })
