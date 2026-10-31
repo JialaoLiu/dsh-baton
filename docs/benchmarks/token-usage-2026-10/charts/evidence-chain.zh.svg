@@ -1,64 +1,63 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="868" viewBox="0 0 900 868" font-family="-apple-system, 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
-<rect width="900" height="868" fill="#FFFFFF"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="808" viewBox="0 0 900 808" font-family="-apple-system, 'PingFang SC', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<rect width="900" height="808" fill="#FFFFFF"/>
 <text x="24" y="36" font-size="19" font-weight="600" fill="#0F172A">证据链：一次真实转交从需求到验收</text>
-<line x1="98" x2="98" y1="118" y2="138" stroke="#C3CAD5" stroke-width="2"/>
-<rect x="24" y="64" width="148" height="54" rx="8" fill="#5B6577"/>
-<text x="98" y="96" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">用户</text>
-<rect x="184" y="64" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#E2E7EF" stroke-width="1"/>
+<line x1="32" x2="32" y1="97" y2="159" stroke="#D5DAE2" stroke-width="1.5"/>
+<circle cx="32" cy="91" r="5" fill="#5B6577"/>
+<text x="46" y="95.5" font-size="13" font-weight="600" fill="#3B4556">用户</text>
+<rect x="184" y="64" width="692" height="54" rx="8" fill="#F6F7F9" stroke="#E6E9EF" stroke-width="1"/>
 <text x="200" y="86" font-size="14" font-weight="600" fill="#0F172A">1. 提出需求</text>
 <text x="200" y="106" font-size="12.5" fill="#3B4556">一段口语化的需求：做一个任务管理小网页（Node 服务器 + 前端页面）</text>
-<line x1="98" x2="98" y1="192" y2="212" stroke="#C3CAD5" stroke-width="2"/>
-<rect x="24" y="138" width="148" height="54" rx="8" fill="#2563EB"/>
-<text x="98" y="170" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">Codex（主 Agent）</text>
-<rect x="184" y="138" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#E2E7EF" stroke-width="1"/>
+<line x1="32" x2="32" y1="171" y2="233" stroke="#D5DAE2" stroke-width="1.5"/>
+<circle cx="32" cy="165" r="5" fill="#2563EB"/>
+<text x="46" y="169.5" font-size="13" font-weight="600" fill="#3B4556">Codex（主 Agent）</text>
+<rect x="184" y="138" width="692" height="54" rx="8" fill="#F6F7F9" stroke="#E6E9EF" stroke-width="1"/>
 <text x="200" y="160" font-size="14" font-weight="600" fill="#0F172A">2. 写规格 + 验收命令，dsh_send</text>
 <text x="200" y="180" font-size="12.5" fill="#3B4556">规格 1,401 字符；验收命令 2 条：npm test、检查 package.json 零依赖</text>
-<line x1="98" x2="98" y1="266" y2="286" stroke="#C3CAD5" stroke-width="2"/>
-<rect x="24" y="212" width="148" height="54" rx="8" fill="#C27803"/>
-<text x="98" y="244" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">dsh-baton</text>
-<rect x="184" y="212" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#C27803" stroke-width="2"/>
+<line x1="32" x2="32" y1="245" y2="307" stroke="#D5DAE2" stroke-width="1.5"/>
+<circle cx="32" cy="239" r="5" fill="#C27803"/>
+<text x="46" y="243.5" font-size="13" font-weight="600" fill="#3B4556">dsh-baton</text>
+<rect x="184" y="212" width="692" height="54" rx="8" fill="#FBF6EC" stroke="#EAD7B0" stroke-width="1"/>
 <text x="200" y="234" font-size="14" font-weight="600" fill="#0F172A">3. 发送前给文件夹拍快照</text>
 <text x="200" y="254" font-size="12.5" fill="#3B4556">记录每个文件的哈希和行数（当时文件夹为空）</text>
-<line x1="98" x2="98" y1="340" y2="360" stroke="#C3CAD5" stroke-width="2"/>
-<rect x="24" y="286" width="148" height="54" rx="8" fill="#0E9F6E"/>
-<text x="98" y="318" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">DeepSeek Harness</text>
-<rect x="184" y="286" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#E2E7EF" stroke-width="1"/>
+<line x1="32" x2="32" y1="319" y2="381" stroke="#D5DAE2" stroke-width="1.5"/>
+<circle cx="32" cy="313" r="5" fill="#0E9F6E"/>
+<text x="46" y="317.5" font-size="13" font-weight="600" fill="#3B4556">DeepSeek Harness</text>
+<rect x="184" y="286" width="692" height="54" rx="8" fill="#F6F7F9" stroke="#E6E9EF" stroke-width="1"/>
 <text x="200" y="308" font-size="14" font-weight="600" fill="#0F172A">4. 干活</text>
 <text x="200" y="328" font-size="12.5" fill="#3B4556">DeepSeek V4.1 Flash 1017，49 次模型请求，写出 11 个文件：server.js 452 行、public/app.js 818 行、测试 600 行…</text>
-<line x1="98" x2="98" y1="414" y2="434" stroke="#C3CAD5" stroke-width="2"/>
-<rect x="24" y="360" width="148" height="54" rx="8" fill="#C27803"/>
-<text x="98" y="392" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">dsh-baton</text>
-<rect x="184" y="360" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#C27803" stroke-width="2"/>
+<line x1="32" x2="32" y1="393" y2="455" stroke="#D5DAE2" stroke-width="1.5"/>
+<circle cx="32" cy="387" r="5" fill="#C27803"/>
+<text x="46" y="391.5" font-size="13" font-weight="600" fill="#3B4556">dsh-baton</text>
+<rect x="184" y="360" width="692" height="54" rx="8" fill="#FBF6EC" stroke="#EAD7B0" stroke-width="1"/>
 <text x="200" y="382" font-size="14" font-weight="600" fill="#0F172A">5. 运行结束：自己比对文件、自己跑验收</text>
 <text x="200" y="402" font-size="12.5" fill="#3B4556">新建 11 个、修改 0、删除 0；npm test 退出码 0（9 项测试全过）；零依赖检查通过</text>
-<line x1="98" x2="98" y1="488" y2="508" stroke="#C3CAD5" stroke-width="2"/>
-<rect x="24" y="434" width="148" height="54" rx="8" fill="#2563EB"/>
-<text x="98" y="466" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">Codex（主 Agent）</text>
-<rect x="184" y="434" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#E2E7EF" stroke-width="1"/>
+<line x1="32" x2="32" y1="467" y2="529" stroke="#D5DAE2" stroke-width="1.5"/>
+<circle cx="32" cy="461" r="5" fill="#2563EB"/>
+<text x="46" y="465.5" font-size="13" font-weight="600" fill="#3B4556">Codex（主 Agent）</text>
+<rect x="184" y="434" width="692" height="54" rx="8" fill="#F6F7F9" stroke="#E6E9EF" stroke-width="1"/>
 <text x="200" y="456" font-size="14" font-weight="600" fill="#0F172A">6. 看证据 + 复查，主动打回 1 处</text>
 <text x="200" y="476" font-size="12.5" fill="#3B4556">发现 README 里 /api/stats 示例 total=6，应为 5；只发这一处修改，附一条新验收命令</text>
-<line x1="98" x2="98" y1="562" y2="582" stroke="#C3CAD5" stroke-width="2"/>
-<rect x="24" y="508" width="148" height="54" rx="8" fill="#0E9F6E"/>
-<text x="98" y="540" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">DeepSeek Harness</text>
-<rect x="184" y="508" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#E2E7EF" stroke-width="1"/>
+<line x1="32" x2="32" y1="541" y2="603" stroke="#D5DAE2" stroke-width="1.5"/>
+<circle cx="32" cy="535" r="5" fill="#0E9F6E"/>
+<text x="46" y="539.5" font-size="13" font-weight="600" fill="#3B4556">DeepSeek Harness</text>
+<rect x="184" y="508" width="692" height="54" rx="8" fill="#F6F7F9" stroke="#E6E9EF" stroke-width="1"/>
 <text x="200" y="530" font-size="14" font-weight="600" fill="#0F172A">7. 修改</text>
 <text x="200" y="550" font-size="12.5" fill="#3B4556">只改 README.md 一处</text>
-<line x1="98" x2="98" y1="636" y2="656" stroke="#C3CAD5" stroke-width="2"/>
-<rect x="24" y="582" width="148" height="54" rx="8" fill="#C27803"/>
-<text x="98" y="614" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">dsh-baton</text>
-<rect x="184" y="582" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#C27803" stroke-width="2"/>
+<line x1="32" x2="32" y1="615" y2="677" stroke="#D5DAE2" stroke-width="1.5"/>
+<circle cx="32" cy="609" r="5" fill="#C27803"/>
+<text x="46" y="613.5" font-size="13" font-weight="600" fill="#3B4556">dsh-baton</text>
+<rect x="184" y="582" width="692" height="54" rx="8" fill="#FBF6EC" stroke="#EAD7B0" stroke-width="1"/>
 <text x="200" y="604" font-size="14" font-weight="600" fill="#0F172A">8. 再次比对 + 验收</text>
 <text x="200" y="624" font-size="12.5" fill="#3B4556">README.md 修改（251 行 → 251 行）；"total": 5 检查通过</text>
-<line x1="98" x2="98" y1="710" y2="730" stroke="#C3CAD5" stroke-width="2"/>
-<rect x="24" y="656" width="148" height="54" rx="8" fill="#2563EB"/>
-<text x="98" y="688" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">Codex（主 Agent）</text>
-<rect x="184" y="656" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#E2E7EF" stroke-width="1"/>
+<line x1="32" x2="32" y1="689" y2="751" stroke="#D5DAE2" stroke-width="1.5"/>
+<circle cx="32" cy="683" r="5" fill="#2563EB"/>
+<text x="46" y="687.5" font-size="13" font-weight="600" fill="#3B4556">Codex（主 Agent）</text>
+<rect x="184" y="656" width="692" height="54" rx="8" fill="#F6F7F9" stroke="#E6E9EF" stroke-width="1"/>
 <text x="200" y="678" font-size="14" font-weight="600" fill="#0F172A">9. 验收通过</text>
-<text x="200" y="698" font-size="12.5" fill="#3B4556">Codex 全程 $0.126，约占 Plus 5 小时额度 1%（额度只按整数显示）；DeepSeek $0.224（按高峰价估算）</text>
-<rect x="24" y="730" width="148" height="54" rx="8" fill="#0F172A"/>
-<text x="98" y="762" font-size="13.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">独立验收</text>
-<rect x="184" y="730" width="692" height="54" rx="8" fill="#F4F6F9" stroke="#E2E7EF" stroke-width="1"/>
+<text x="200" y="698" font-size="12.5" fill="#3B4556">Codex 全程 $0.126，约占 Plus 5 小时额度 1%；DeepSeek $0.224（按高峰价估算）</text>
+<circle cx="32" cy="757" r="5" fill="#0F172A"/>
+<text x="46" y="761.5" font-size="13" font-weight="600" fill="#3B4556">独立验收</text>
+<rect x="184" y="730" width="692" height="54" rx="8" fill="#F6F7F9" stroke="#E6E9EF" stroke-width="1"/>
 <text x="200" y="752" font-size="14" font-weight="600" fill="#0F172A">10. 基准测试的独立验收</text>
 <text x="200" y="772" font-size="12.5" fill="#3B4556">13/13 通过：启动、增删改查、统计、400/404、数据写入 DATA_FILE</text>
-<text x="24" y="842" font-size="12" fill="#5B6577">原始记录：results/codex-nevidence.jsonl（rep 2）、对应的 Codex rollout 和 Harness 会话文件；证据字段 source = "dsh-baton, not the Harness model"。</text>
 </svg>

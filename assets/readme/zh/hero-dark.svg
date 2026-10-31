@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">dsh-baton</title>
+  <desc id="desc">dsh-baton lets Claude Code or Codex pass a task, like a relay baton, to a local DeepSeek Harness over an owner-only local socket. A dsh_send call returns a run id; the same session appears in Harness, runs, and completes.</desc>
+  <rect width="1200" height="420" rx="24" fill="#0D1117"/>
+<g id="title-block" transform="translate(64 0)">
+<text x="0" y="92" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="18" fill="#9198A1" letter-spacing="2">MCP 服务器  +  HARNESS 插件</text>
+<text x="-3" y="170" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="76" fill="#E6EDF3" font-weight="700" letter-spacing="-2">dsh-baton</text>
+<text x="0" y="226" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="27" fill="#E6EDF3">让 Claude Code 或 Codex 把接力棒</text>
+<text x="0" y="262" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="27" fill="#E6EDF3">交给 DeepSeek Harness，界面实时可见，</text>
+<text x="0" y="298" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="27" fill="#E6EDF3"><tspan fill="#4493F8">跑完那一刻</tspan>就交回给你。</text>
+<text x="0" y="356" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="18" fill="#9198A1">零依赖 · 只走本地 socket · 不用 API key · MIT</text>
+</g>
+<g id="proof" transform="translate(640 48)">
+<rect x="0" y="0" width="496" height="124" rx="14" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+<text x="22" y="34" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="18" fill="#9198A1">claude code</text>
+<text x="22" y="72" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="20" fill="#E6EDF3"><tspan fill="#4493F8">›</tspan> dsh_send cwd=~/code/new-app</text>
+<text x="22" y="104" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="20" fill="#9198A1" opacity="1.000">← run_id hrun-7f3a</text>
+<line x1="64" y1="124" x2="64" y2="200" stroke="#484F58" stroke-width="2" stroke-dasharray="6 6"/>
+<line x1="64" y1="124" x2="64" y2="200.0" stroke="#4493F8" stroke-width="2" stroke-dasharray="6 6" opacity="1.000"/>
+<circle cx="64" cy="162" r="6" fill="#0D1117" stroke="#4493F8" stroke-width="2"/>
+<text x="88" y="168" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="18" fill="#9198A1">~/.dsh-baton/host.sock  0600</text>
+<rect x="0" y="200" width="496" height="124" rx="14" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+<text x="22" y="234" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="18" fill="#9198A1">harness · session-91c2</text>
+<text x="22" y="272" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#E6EDF3" opacity="1.000">搭一个 Vite + React 项目骨架…</text>
+<g transform="translate(22 288)">
+<rect x="0" y="0" width="104" height="26" rx="13" fill="none" stroke="#9198A1" stroke-width="1"/>
+<text x="52.0" y="19" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="16" fill="#9198A1" text-anchor="middle">queued</text>
+<rect x="116" y="0" width="110" height="26" rx="13" fill="none" stroke="#9198A1" stroke-width="1"/>
+<text x="171.0" y="19" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="16" fill="#9198A1" text-anchor="middle">running</text>
+<rect x="238" y="0" width="132" height="26" rx="13" fill="#4493F8"/>
+<text x="304.0" y="19" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="16" fill="#0D1117" font-weight="700" text-anchor="middle">completed</text>
+</g></g>
+</svg>

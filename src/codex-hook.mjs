@@ -1,22 +1,21 @@
-// Waking Codex when a run ends. Codex has no wake-on-exit for background commands, but it
-// runs Stop hooks when a turn ends: a hook that prints {"decision":"block","reason"} makes
-// Codex feed reason back to the model in the same turn. `dsh-baton codex-stop-hook` is such
-// a hook: after dsh_send the model ends its turn, the hook waits for the run without any
-// model requests, and returns the result as dsh_wait would. One wake instead of a dsh_wait
-// call every few minutes.
+// The Codex Stop hook runner. Plugins 0.6.0–0.6.3 added a Stop hook that waited for a run
+// after the model ended its turn and fed the result back ({"decision":"block","reason"}).
+// dsh-baton now waits with long dsh_waits and the plugin takes the hook out (register.mjs),
+// but Codex conversations opened before 0.6.4 keep a snapshot of their hooks and still run
+// `dsh-baton codex-stop-hook` at every turn's end: it stays for them, and with nothing
+// pending it ends quietly.
 import fs from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import * as core from './core.mjs'
-import { codexConfigPath, stableNodePath, codexHookEntry, codexHookStatus, hookResultFile, HOOK_TIMEOUT_S } from './register.mjs'
+import { codexConfigPath, HOOK_TIMEOUT_S } from './register.mjs'
 
-export { editCodexHook, HOOK_TIMEOUT_S } from './register.mjs'
+export { HOOK_TIMEOUT_S } from './register.mjs'
 
 const dir = () => path.join(core.config.batonHome, 'codex-hook')
 const pendingFile = () => path.join(dir(), 'pending.json')
-// Touched every time Codex runs the hook, so the server knows the hook is installed,
-// trusted and firing (an untrusted or edited hook never runs).
-const aliveFile = () => path.join(dir(), 'alive')
+// Touched every time Codex runs the hook: a trace of conversations from before 0.6.4 that
+// still call it.
 
 function readPending() {
   try { return JSON.parse(fs.readFileSync(pendingFile(), 'utf8')) } catch { return {} }
@@ -31,11 +30,6 @@ function writePending(p) {
 // The Codex conversation a tool call came from (every Codex tools/call carries it).
 export const threadOf = (meta) => meta?.threadId ?? meta?.['x-codex-turn-metadata']?.thread_id ?? null
 
-export function remember(threadId, runId) {
-  if (!threadId || !runId) return
-  writePending({ ...readPending(), [runId]: { thread: threadId, delivered: null, at: Date.now() } })
-}
-
 // The model got this result itself (dsh_wait): the hook must not deliver it again.
 export function delivered(runId, st) {
   const p = readPending()
@@ -46,54 +40,6 @@ export function delivered(runId, st) {
 }
 
 const questionKey = (st) => `${st.needs_input}:${JSON.stringify(st.question?.questions?.map((q) => q.id ?? q.question) ?? st.waiting_on ?? null)}`
-
-// The hook is in Codex's config and the user has trusted it (see codexHookStatus).
-// Not "has run since the config last changed": Codex rewrites its config for its own
-// settings (the app language, say), which says nothing about the hook.
-export function hookActive(env = process.env) {
-  try {
-    const st = codexHookStatus(env)
-    return st.installed && st.trusted
-  } catch {
-    return false
-  }
-}
-
-// The hook is in Codex's config but the user has not trusted it (see codexHookStatus).
-export function hookUntrusted() {
-  try {
-    const st = codexHookStatus()
-    return st.installed && !st.trusted
-  } catch {
-    return false
-  }
-}
-
-// Why the plugin did not add the hook (see addCodexHook), in one sentence, or null: when
-// it was added, when Codex is not installed, or when no plugin from 0.6.2 on has run yet.
-const SKIP_REASONS = {
-  disabled: 'it is turned off with DSH_BATON_CODEX_HOOK=0 in the environment Harness runs with',
-  'no-cli': "Codex's dsh-baton entry does not name a server folder with cli.mjs in it (a bare command such as npx, or a folder that is gone)",
-}
-export function hookSkipReason(env = process.env) {
-  let r = null
-  try { r = JSON.parse(fs.readFileSync(hookResultFile(env), 'utf8')) } catch { return null }
-  if (!['off', 'skipped', 'failed'].includes(r?.state) || !r.reason) return null
-  const why = SKIP_REASONS[r.reason] ?? `adding it failed (${String(r.reason).slice(0, 200)})`
-  return `dsh-baton's Codex Stop hook is not set up because ${why}, so Codex waits with dsh_wait.`
-}
-
-// Each Codex conversation is told about trusting the hook once.
-const notedFile = () => path.join(dir(), 'trust-noted.json')
-export function noteOnce(thread) {
-  if (!thread) return false
-  let seen = []
-  try { seen = JSON.parse(fs.readFileSync(notedFile(), 'utf8')) } catch { /* none yet */ }
-  if (seen.includes(thread)) return false
-  fs.mkdirSync(dir(), { recursive: true, mode: 0o700 })
-  fs.writeFileSync(notedFile(), JSON.stringify([...seen.slice(-199), thread]))
-  return true
-}
 
 // The language of Codex's own interface. A language picked in Codex's settings is written as
 // localeOverride in its config ([desktop]) and wins, English included. Without one, Codex
@@ -255,12 +201,6 @@ export function parseHookInput(raw) {
   return null
 }
 
-// The node and cli.mjs this hook process runs as (what Codex trusted).
-function ranAs() {
-  const real = (p) => { try { return fs.realpathSync(p) } catch { return p } }
-  return { node: real(process.execPath), cli: real(process.argv[1] ?? '') }
-}
-
 // One Stop-hook call. input is the JSON Codex writes to stdin; shape(st) turns a run's
 // state into what dsh_wait returns. Returns the JSON to print, or null to let the turn end.
 //
@@ -268,9 +208,7 @@ function ranAs() {
 // last of them ends, with all their results, so it reviews the parallel parts together.
 // A run that stops to ask a question or fails wakes it at once (with whatever else has
 // ended by then); the rest keep waiting for the next Stop.
-export async function runHook(input, { shape, wait = core.api.wait, now = Date.now, chunk_s = 10, self = ranAs(), lang } = {}) {
-  fs.mkdirSync(dir(), { recursive: true, mode: 0o700 })
-  fs.writeFileSync(aliveFile(), JSON.stringify({ at: now(), ...self }))
+export async function runHook(input, { shape, wait = core.api.wait, now = Date.now, chunk_s = 10, lang } = {}) {
   const thread = input?.session_id
   if (!thread) return null
   const deadline = now() + (HOOK_TIMEOUT_S - 60) * 1000
@@ -310,7 +248,3 @@ export async function runHook(input, { shape, wait = core.api.wait, now = Date.n
   }
 }
 
-// The hook entry for Codex's config.toml (see register.mjs, which also writes it).
-export function hookCommand(root = core.ROOT, node = stableNodePath(), { platform, harness = Boolean(process.versions.electron) } = {}) {
-  return codexHookEntry(node, path.join(root, 'src', 'server.mjs'), { platform, home: core.config.batonHome, harness })
-}

@@ -8,12 +8,15 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 
-const SKIP = new Set(['node_modules', '.git', '.hg', '.svn', 'dist', 'build', '.next', '.cache', 'coverage', '__pycache__', '.venv', 'venv', 'target'])
+const SKIP = new Set(['node_modules', '.git', '.hg', '.svn', 'dist', 'build', '.next', '.cache', 'coverage', '__pycache__', '.venv', 'venv', 'target', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.tox', '.gradle'])
+// Files no one wrote on purpose.
+const SKIP_FILES = new Set(['.DS_Store', 'Thumbs.db'])
 const MAX_FILES = 3000
 const MAX_TEXT = 512 * 1024
 const CHECK_TIMEOUT_MS = 120_000
 const CHECKS_TOTAL_MS = 180_000
 const TAIL_LINES = 15
+const DAY_MS = 24 * 3600 * 1000
 
 const fileOf = (home, runId) => path.join(home, 'evidence', `${String(runId).replace(/[^\w.-]/g, '_')}.json`)
 
@@ -28,7 +31,7 @@ function snapshot(dir) {
       if (count >= MAX_FILES) { truncated = true; return }
       const p = path.join(d, e.name)
       if (e.isDirectory()) { if (!SKIP.has(e.name)) walk(p); continue }
-      if (!e.isFile()) continue
+      if (!e.isFile() || SKIP_FILES.has(e.name)) continue
       count++
       try {
         const buf = fs.readFileSync(p)
@@ -44,12 +47,12 @@ function snapshot(dir) {
   return { files, truncated }
 }
 
-export function prepare(home, { run_id, cwd, checks }) {
+export function prepare(home, { run_id, session_id = null, cwd, checks }) {
   if (!run_id || !cwd || !fs.existsSync(cwd)) return
   try {
     fs.mkdirSync(path.join(home, 'evidence'), { recursive: true, mode: 0o700 })
     const list = Array.isArray(checks) ? checks.filter((c) => typeof c === 'string' && c.trim()).slice(0, 10) : []
-    fs.writeFileSync(fileOf(home, run_id), JSON.stringify({ cwd, checks: list, before: snapshot(cwd), at: Date.now() }), { mode: 0o600 })
+    fs.writeFileSync(fileOf(home, run_id), JSON.stringify({ cwd, session_id, checks: list, before: snapshot(cwd), at: Date.now() }), { mode: 0o600 })
     // Keep the folder small: the 50 newest runs.
     const dir = path.join(home, 'evidence')
     const old = fs.readdirSync(dir).map((n) => ({ n, t: fs.statSync(path.join(dir, n)).mtimeMs })).sort((a, b) => b.t - a.t).slice(50)
@@ -71,6 +74,20 @@ function runCheck(command, cwd, timeout) {
   }
 }
 
+// When another run ended. Many are never collected here (one steered into another, one
+// stopped by a restart), so the plugin's own record of the run comes first; then the end
+// noted here (0.6.4 on), or the time an older record's result was written. One with neither
+// counts as running for a day at most.
+function endedAt(home, runId, rec, mtime) {
+  try {
+    const run = JSON.parse(fs.readFileSync(path.join(home, 'host-runs', `${runId}.json`), 'utf8'))
+    if (['queued', 'running', 'waiting'].includes(run.state)) return Infinity
+    const t = Date.parse(run.endedAt)
+    if (t) return t
+  } catch { /* not a host run, or no record */ }
+  return rec.ended_at ?? (rec.result ? mtime : rec.at + DAY_MS)
+}
+
 // The evidence for a run that ended, computed once and then read back.
 export function collect(home, runId) {
   const file = fileOf(home, runId)
@@ -85,6 +102,21 @@ export function collect(home, runId) {
     else if (before[p].hash !== f.hash) modified.push({ path: p, lines_before: before[p].lines, lines_after: f.lines })
   }
   for (const p of Object.keys(before)) if (!after.files[p]) deleted.push(p)
+  // Other runs in the same folder at the same time: their changes show up here too, and
+  // cannot be told from this run's.
+  const now = Date.now()
+  const overlapping = []
+  try {
+    for (const n of fs.readdirSync(path.join(home, 'evidence'))) {
+      const other = n.replace(/\.json$/, '')
+      if (other === String(runId).replace(/[^\w.-]/g, '_')) continue
+      let o, mtime
+      try { mtime = fs.statSync(path.join(home, 'evidence', n)).mtimeMs; o = JSON.parse(fs.readFileSync(path.join(home, 'evidence', n), 'utf8')) } catch { continue }
+      // A run of the same session (one steered into this one) is the same work.
+      if (o.cwd !== rec.cwd || (rec.session_id && o.session_id === rec.session_id)) continue
+      if (o.at <= now && endedAt(home, other, o, mtime) >= rec.at) overlapping.push(other)
+    }
+  } catch { /* no others */ }
   const checks = []
   const deadline = Date.now() + CHECKS_TOTAL_MS
   for (const c of rec.checks) {
@@ -94,8 +126,9 @@ export function collect(home, runId) {
   const result = {
     source: 'dsh-baton, not the Harness model',
     changes: { created, modified, deleted, ...(after.truncated || rec.before.truncated ? { truncated: true } : {}) },
+    ...(overlapping.length ? { same_folder_runs: overlapping } : {}),
     ...(checks.length ? { checks, all_checks_passed: checks.every((c) => c.passed) } : {}),
   }
-  try { fs.writeFileSync(file, JSON.stringify({ ...rec, before: undefined, result }), { mode: 0o600 }) } catch { /* recomputed next time */ }
+  try { fs.writeFileSync(file, JSON.stringify({ ...rec, before: undefined, result, ended_at: now }), { mode: 0o600 }) } catch { /* recomputed next time */ }
   return result
 }

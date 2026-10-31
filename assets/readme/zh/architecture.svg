@@ -10,10 +10,10 @@
   </style>
 
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M0 0 L10 5 L0 10 z" fill="#0F172A"/>
     </marker>
-    <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+    <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
     </marker>
     <marker id="arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
@@ -32,17 +32,17 @@
   <g id="clients" transform="translate(64 112)">
     <text x="0" y="0" class="mono" font-size="18" fill="#5B6577">MCP 客户端</text>
     <rect x="0" y="20" width="220" height="64" rx="12" fill="#F4F6FA" stroke="#E2E7EF"/>
-    <text x="110" y="60" text-anchor="middle" class="sans" font-size="22" font-weight="600" fill="#0F172A">Claude Code</text>
+    <text x="110" y="60" text-anchor="middle" class="sans" font-size="22" font-weight="600" fill="#0F172A">Codex</text>
     <rect x="0" y="100" width="220" height="64" rx="12" fill="#F4F6FA" stroke="#E2E7EF"/>
-    <text x="110" y="140" text-anchor="middle" class="sans" font-size="22" font-weight="600" fill="#0F172A">Codex</text>
+    <text x="110" y="140" text-anchor="middle" class="sans" font-size="22" font-weight="600" fill="#0F172A">Claude Code</text>
     <rect x="0" y="180" width="220" height="64" rx="12" fill="#F4F6FA" stroke="#E2E7EF"/>
     <text x="110" y="220" text-anchor="middle" class="sans" font-size="22" fill="#5B6577">其他 MCP 客户端</text>
   </g>
 
   <!-- clients -> mcp -->
-  <path d="M284 164 C 310 164, 310 236, 336 236" fill="none" stroke="#0F172A" stroke-width="2"/>
-  <path d="M284 244 L 336 244" fill="none" stroke="#0F172A" stroke-width="2"/>
-  <path d="M284 324 C 310 324, 310 252, 336 252" fill="none" stroke="#0F172A" stroke-width="2"/>
+  <path d="M292 164 H 302 C 322 164, 318 236, 336 236" fill="none" stroke="#0F172A" stroke-width="2" marker-start="url(#arrow)"/>
+  <path d="M292 244 L 336 244" fill="none" stroke="#0F172A" stroke-width="2" marker-start="url(#arrow)"/>
+  <path d="M292 324 H 302 C 322 324, 318 252, 336 252" fill="none" stroke="#0F172A" stroke-width="2" marker-start="url(#arrow)"/>
   <path d="M336 244 L 352 244" fill="none" stroke="#0F172A" stroke-width="2" marker-end="url(#arrow)"/>
   <text x="318" y="148" text-anchor="middle" class="mono" font-size="18" fill="#5B6577">stdio</text>
 
@@ -55,7 +55,7 @@
   </g>
 
   <!-- socket link -->
-  <path d="M608 244 L 716 244" fill="none" stroke="#2563EB" stroke-width="2.5" stroke-dasharray="7 6" marker-end="url(#arrow-accent)"/>
+  <path d="M616 244 L 716 244" fill="none" stroke="#2563EB" stroke-width="2.5" stroke-dasharray="7 6" marker-start="url(#arrow-accent)" marker-end="url(#arrow-accent)"/>
   <circle cx="662" cy="244" r="7" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
   <text x="662" y="210" text-anchor="middle" class="mono" font-size="18" fill="#2563EB">host.sock</text>
   <text x="662" y="286" text-anchor="middle" class="mono" font-size="18" fill="#5B6577">仅当前用户</text>

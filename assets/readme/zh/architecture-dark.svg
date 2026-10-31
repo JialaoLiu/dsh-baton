@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="600" viewBox="0 0 1200 600"
+     role="img" aria-labelledby="title desc">
+  <title id="title">How dsh-baton is wired</title>
+  <desc id="desc">MCP clients such as Claude Code and Codex call dsh-baton-mcp over stdio. dsh-baton-mcp talks to the dsh-baton-host plugin inside DeepSeek Harness through an owner-only local socket at ~/.dsh-baton/host.sock. The plugin drives Harness's own session controller, so workspaces and sessions appear live in the Harness UI. When the plugin is unreachable, dsh-baton-mcp falls back to dsh headless. Everything stays on your machine with no network port.</desc>
+
+  <style>
+    .sans { font-family: "Microsoft YaHei", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Microsoft YaHei", "PingFang SC", monospace; }
+  </style>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#E6EDF3"/>
+    </marker>
+    <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#4493F8"/>
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#9198A1"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="600" rx="24" fill="#0D1117"/>
+  <rect x="0.5" y="0.5" width="1199" height="599" rx="24" fill="none" stroke="#30363D"/>
+
+  <!-- machine boundary -->
+  <rect x="32" y="32" width="1136" height="536" rx="18" fill="none" stroke="#30363D" stroke-dasharray="8 8"/>
+  <text x="60" y="72" class="mono" font-size="18" letter-spacing="2" fill="#9198A1">全在本机 · 不开网络端口</text>
+
+  <!-- column 1: MCP clients -->
+  <g id="clients" transform="translate(64 112)">
+    <text x="0" y="0" class="mono" font-size="18" fill="#9198A1">MCP 客户端</text>
+    <rect x="0" y="20" width="220" height="64" rx="12" fill="#161B22" stroke="#30363D"/>
+    <text x="110" y="60" text-anchor="middle" class="sans" font-size="22" font-weight="600" fill="#E6EDF3">Codex</text>
+    <rect x="0" y="100" width="220" height="64" rx="12" fill="#161B22" stroke="#30363D"/>
+    <text x="110" y="140" text-anchor="middle" class="sans" font-size="22" font-weight="600" fill="#E6EDF3">Claude Code</text>
+    <rect x="0" y="180" width="220" height="64" rx="12" fill="#161B22" stroke="#30363D"/>
+    <text x="110" y="220" text-anchor="middle" class="sans" font-size="22" fill="#9198A1">其他 MCP 客户端</text>
+  </g>
+
+  <!-- clients -> mcp -->
+  <path d="M292 164 H 302 C 322 164, 318 236, 336 236" fill="none" stroke="#E6EDF3" stroke-width="2" marker-start="url(#arrow)"/>
+  <path d="M292 244 L 336 244" fill="none" stroke="#E6EDF3" stroke-width="2" marker-start="url(#arrow)"/>
+  <path d="M292 324 H 302 C 322 324, 318 252, 336 252" fill="none" stroke="#E6EDF3" stroke-width="2" marker-start="url(#arrow)"/>
+  <path d="M336 244 L 352 244" fill="none" stroke="#E6EDF3" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="318" y="148" text-anchor="middle" class="mono" font-size="18" fill="#9198A1">stdio</text>
+
+  <!-- column 2: dsh-baton-mcp -->
+  <g id="mcp" transform="translate(356 172)">
+    <rect x="0" y="0" width="252" height="144" rx="14" fill="#161B22" stroke="#E6EDF3" stroke-width="2"/>
+    <text x="24" y="44" class="sans" font-size="24" font-weight="700" fill="#E6EDF3">dsh-baton-mcp</text>
+    <text x="24" y="76" class="mono" font-size="18" fill="#9198A1">src/ · npx</text>
+    <text x="24" y="114" class="mono" font-size="20" fill="#4493F8">dsh_* 工具 + 命令行</text>
+  </g>
+
+  <!-- socket link -->
+  <path d="M616 244 L 716 244" fill="none" stroke="#4493F8" stroke-width="2.5" stroke-dasharray="7 6" marker-start="url(#arrow-accent)" marker-end="url(#arrow-accent)"/>
+  <circle cx="662" cy="244" r="7" fill="#0D1117" stroke="#4493F8" stroke-width="2"/>
+  <text x="662" y="210" text-anchor="middle" class="mono" font-size="18" fill="#4493F8">host.sock</text>
+  <text x="662" y="286" text-anchor="middle" class="mono" font-size="18" fill="#9198A1">仅当前用户</text>
+
+  <!-- column 3: DeepSeek Harness -->
+  <g id="harness" transform="translate(724 100)">
+    <rect x="0" y="0" width="412" height="300" rx="16" fill="#11161D" stroke="#30363D"/>
+    <text x="24" y="40" class="mono" font-size="18" letter-spacing="2" fill="#9198A1">DEEPSEEK HARNESS</text>
+
+    <rect x="24" y="64" width="364" height="88" rx="12" fill="#161B22" stroke="#E6EDF3" stroke-width="2"/>
+    <text x="44" y="102" class="sans" font-size="24" font-weight="700" fill="#E6EDF3">dsh-baton-host</text>
+    <text x="44" y="132" class="mono" font-size="18" fill="#9198A1">插件 · host/</text>
+
+    <path d="M206 152 L 206 176" stroke="#E6EDF3" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="24" y="180" width="364" height="44" rx="10" fill="none" stroke="#484F58"/>
+    <text x="206" y="209" text-anchor="middle" class="sans" font-size="20" fill="#E6EDF3">Harness 会话服务</text>
+
+    <path d="M206 224 L 206 240" stroke="#E6EDF3" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="24" y="244" width="364" height="44" rx="10" fill="none" stroke="#484F58"/>
+    <text x="206" y="273" text-anchor="middle" class="sans" font-size="20" fill="#E6EDF3">工作区 · 对话 · 实时界面</text>
+  </g>
+
+  <!-- headless fallback -->
+  <path d="M482 316 L 482 440" fill="none" stroke="#9198A1" stroke-width="2" stroke-dasharray="4 6" marker-end="url(#arrow-muted)"/>
+  <text x="500" y="384" class="mono" font-size="18" fill="#9198A1">插件不可用时</text>
+  <g id="headless" transform="translate(356 444)">
+    <rect x="0" y="0" width="252" height="88" rx="12" fill="none" stroke="#484F58" stroke-dasharray="4 6"/>
+    <text x="24" y="38" class="mono" font-size="20" fill="#E6EDF3">dsh headless</text>
+    <text x="24" y="68" class="sans" font-size="18" fill="#9198A1">后备 · 不进侧边栏</text>
+  </g>
+
+  <!-- footer note -->
+  <text x="724" y="470" class="sans" font-size="20" fill="#E6EDF3">消息由 Harness 自己处理，和亲手打字一样：</text>
+  <text x="724" y="500" class="sans" font-size="20" fill="#E6EDF3">同样的登录、预设、沙箱和审批。</text>
+</svg>

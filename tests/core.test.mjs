@@ -219,6 +219,20 @@ test('a run that ran out of DeepSeek balance says not to send again; other failu
   const quota = { run_id: 'r1', state: 'failed', error: 'Insufficient Balance (request_id: x)', turn_end: { kind: 'error', error: { message: 'Insufficient Balance', code: 'ACCOUNT_QUOTA', status: 402 } } }
   assert.equal(core.waitResult(quota).hint, core.QUOTA_HINT)
   assert.equal(core.waitResult({ run_id: 'r2', state: 'failed', error: 'Insufficient Balance' }).hint, core.QUOTA_HINT, 'the headless backend only has the text')
-  assert.equal(core.waitResult({ run_id: 'r3', state: 'failed', error: 'network down' }).hint, core.ENDED_HINT)
-  assert.equal(core.waitResult({ run_id: 'r4', state: 'completed', final_text: 'done' }).hint, core.ENDED_HINT)
+  assert.equal(core.waitResult({ run_id: 'r3', state: 'failed', error: 'network down' }).hint, core.endedHint({}))
+  assert.equal(core.waitResult({ run_id: 'r4', state: 'completed', final_text: 'done' }).hint, core.endedHint({}))
+})
+
+test('the ended hint follows the checks: none sent, all passed, or one failed for a missing tool', () => {
+  const none = core.waitResult({ run_id: 'r5', state: 'completed', final_text: 'done', evidence: { changes: {} } }).hint
+  assert.match(none, /sent without checks/)
+  assert.doesNotMatch(none, /a requirement has no check/)
+  const passed = { run_id: 'r6', state: 'completed', evidence: { checks: [{ command: 'npm test', passed: true, output_tail: 'ok' }] } }
+  assert.equal(core.waitResult(passed).hint, core.ENDED_HINT)
+  const env = { run_id: 'r7', state: 'completed', evidence: { checks: [{ command: 'python3 -m pytest', passed: false, output_tail: '/opt/homebrew/bin/python3: No module named pytest' }] } }
+  assert.match(core.waitResult(env).hint, /another environment than Harness used/)
+  const broken = { run_id: 'r8', state: 'completed', evidence: { checks: [{ command: 'npm test', passed: false, output_tail: 'AssertionError: 1 !== 2' }] } }
+  assert.equal(core.waitResult(broken).hint, core.ENDED_HINT, 'a real failure: fixes as usual')
+  const shared = { run_id: 'r9', state: 'completed', evidence: { same_folder_runs: ['hrun-x'] } }
+  assert.match(core.waitResult(shared).hint, /never delete or revert a file because this run was not asked for it/)
 })

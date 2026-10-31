@@ -544,6 +544,22 @@ export function reviewRequest(message) {
 }
 
 export const ENDED_HINT = 'evidence is produced by dsh-baton (files changed, checks it ran), not by the Harness reply: trust it over final_text. If a check failed, a requirement has no check, or a file the task needs is missing from evidence.changes, send all fixes back in one message to the same session, quoting the failing output; do not reproduce failures or write test scripts yourself. If every check passed and final_text ends with a review table whose rows are all met, accept it without reading code; read code only for rows marked no or unclear.'
+// Sent without checks there is no check output to come: a follow-up only to get one costs a
+// round and tells nothing the review table does not.
+const NO_CHECKS_HINT = 'evidence is produced by dsh-baton (files changed), not by the Harness reply. This message was sent without checks, so there is no check output to wait for: do not send a follow-up only to get one. If a file the task needs is missing from evidence.changes or final_text reports a failure, send all fixes back in one message to the same session; do not reproduce failures or write test scripts yourself. If final_text ends with a review table whose rows are all met, accept it without reading code; read code only for rows marked no or unclear.'
+// A check that failed because a command or module was not found ran in another environment
+// than Harness used (another python, PATH), which says nothing about the code.
+const MISSING_TOOL = /command not found|not recognized as (?:an internal|the name)|No module named|ModuleNotFoundError|Cannot find module|: not found\b/i
+const ENV_HINT = ' A failed check whose output says a command or module was not found most likely ran in another environment than Harness used (another interpreter or PATH), not against broken code: ask Harness to run that check the way it ran its own tests (its interpreter or venv) instead of asking for code fixes.'
+// Runs that worked in the same folder at the same time put their changes in each other's
+// evidence: a file this run did not make may be another's, so it is not to be removed.
+const SHARED_HINT = (runs) => ` Other runs (${runs.join(', ')}) worked in this folder at the same time, so evidence.changes may include their files: never delete or revert a file because this run was not asked for it.`
+export function endedHint(st) {
+  const checks = st?.evidence?.checks
+  const shared = st?.evidence?.same_folder_runs?.length ? SHARED_HINT(st.evidence.same_folder_runs) : ''
+  if (!checks?.length) return NO_CHECKS_HINT + shared
+  return ENDED_HINT + (checks.some((c) => !c.passed && MISSING_TOOL.test(c.output_tail ?? '')) ? ENV_HINT : '') + shared
+}
 
 // A run that stopped because the DeepSeek balance ran out: sending again fails the same way.
 export const QUOTA_HINT = 'The run stopped because the DeepSeek account has no balance left. Do not send again or retry: every send fails the same way until the balance is topped up. Tell the user, in their language, to top up (Harness → Settings → Account, or platform.deepseek.com), then send to the same session to continue where it stopped.'
@@ -564,8 +580,8 @@ function ended({ recent_events, message_preview, backend, ...st }) {
   if (outOfBalance(st)) return { ...out, hint: QUOTA_HINT }
   // decided_for_user first, so a client that skims to final_text still meets it.
   return st.decided_for_user
-    ? { hint: `${DECIDED_HINT} ${ENDED_HINT}`, decided_for_user: st.decided_for_user, ...out }
-    : { ...out, hint: ENDED_HINT }
+    ? { hint: `${DECIDED_HINT} ${endedHint(st)}`, decided_for_user: st.decided_for_user, ...out }
+    : { ...out, hint: endedHint(st) }
 }
 
 
@@ -692,8 +708,11 @@ export const api = {
         throw new Error(`The Harness plugin dsh-baton-host ${hostVersion ?? ''} is too old to choose a model; this MCP server is ${VERSION}. Nothing was sent. Update the plugin: Plugins → dsh-baton-host → Uninstall, then Add plugin → dsh-baton-host@${VERSION}, or send without model.`.replace('  ', ' '))
       })
     }
+    // No Harness CLI to run the turn without the app (the Windows app has none on PATH): what
+    // is wrong is that Harness is not running, not that a CLI is missing.
+    if (!host) { try { dshBin() } catch { throw new Error('DeepSeek Harness is not running, or its dsh-baton-host plugin is switched off: open Harness (Plugins → dsh-baton-host on) and send again.') } }
     const st = host ? tag('host', await hostCall('send', a)) : tag('headless', await waitForSessionId(startRun(a)))
-    evidence.prepare(config.batonHome, { run_id: st.run_id, cwd: await runFolder(a, st), checks })
+    evidence.prepare(config.batonHome, { run_id: st.run_id, session_id: st.session_id, cwd: await runFolder(a, st), checks })
     return st
   },
   async status({ run_id, tail = 20 }) {

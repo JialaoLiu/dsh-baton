@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="350" viewBox="0 0 1200 350" role="img" aria-labelledby="title desc">
+  <title id="title">使用须知</title>
+  <desc id="desc">任务进行中在 Harness 界面里发的话，会作为人工插话记到这个任务上；任务记录保存在本机，Harness 重启后还在，被重启打断的任务标为 interrupted；Claude Code 在后台等待、结束时唤醒一次；Codex 一次 dsh_wait 最多等 59 分钟。</desc>
+  <rect width="1200" height="350" rx="24" fill="#0D1117"/>
+<text x="64" y="76" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="30" fill="#E6EDF3" font-weight="700">使用须知</text>
+<rect x="64" y="104" width="341" height="210" rx="16" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+<rect x="64" y="130" width="4" height="30" fill="#3FB950"/>
+<text x="90" y="154" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#E6EDF3" font-weight="700">界面插话会被标出</text>
+<text x="90" y="196" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">任务进行中你在界面里</text>
+<text x="90" y="224" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">发的话，会作为人工插话</text>
+<text x="90" y="252" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">记到这个任务上。</text>
+<rect x="429" y="104" width="341" height="210" rx="16" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+<rect x="429" y="130" width="4" height="30" fill="#3FB950"/>
+<text x="455" y="154" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#E6EDF3" font-weight="700">重启后记录还在</text>
+<text x="455" y="196" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">任务记录保存在本机，</text>
+<text x="455" y="224" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">被 Harness 重启打断的</text>
+<text x="455" y="252" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">任务标成 interrupted。</text>
+<rect x="794" y="104" width="341" height="210" rx="16" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+<rect x="794" y="130" width="4" height="30" fill="#3FB950"/>
+<text x="820" y="154" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#E6EDF3" font-weight="700">等待不轮询</text>
+<text x="820" y="196" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">Claude Code 只唤醒一次；</text>
+<text x="820" y="224" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">Codex 一次调用最多</text>
+<text x="820" y="252" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">等 59 分钟，不轮询。</text>
+</svg>

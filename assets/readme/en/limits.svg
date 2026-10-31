@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="350" viewBox="0 0 1200 350" role="img" aria-labelledby="title desc">
   <title id="title">Good to know</title>
-  <desc id="desc">A message typed in the Harness UI during a relayed run is recorded on that run as a human interjection; run records survive a Harness restart and a run cut short by one is marked interrupted; Claude Code waits in the background and Codex ends its turn with its Stop hook; both are woken once, when the run ends.</desc>
+  <desc id="desc">A message typed in the Harness UI during a relayed run is recorded on that run as a human interjection; run records survive a Harness restart and a run cut short by one is marked interrupted; Claude Code waits in the background and is woken once; Codex waits up to 59 minutes in one dsh_wait call.</desc>
   <rect width="1200" height="350" rx="24" fill="#FFFFFF"/>
 <text x="64" y="76" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="30" fill="#0F172A" font-weight="700">Good to know</text>
 <rect x="64" y="104" width="341" height="210" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
@@ -18,7 +18,7 @@
 <rect x="794" y="104" width="341" height="210" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <rect x="794" y="130" width="4" height="30" fill="#2F855A"/>
 <text x="820" y="154" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#0F172A" font-weight="700">Waits without polling</text>
-<text x="820" y="196" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">Claude Code and Codex are</text>
-<text x="820" y="224" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">woken once, when a run</text>
-<text x="820" y="252" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">ends; nothing polls.</text>
+<text x="820" y="196" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">Claude Code is woken once;</text>
+<text x="820" y="224" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">Codex waits up to 59 min</text>
+<text x="820" y="252" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">in one call. Nothing polls.</text>
 </svg>

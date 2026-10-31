@@ -1,11 +1,13 @@
 // The MCP server itself (newline-delimited JSON-RPC 2.0 over stdio, no dependencies). It
 // runs as a child of server.mjs, which starts a fresh one when a newer version is installed.
 import readline from 'node:readline'
+import fs from 'node:fs'
 import path from 'node:path'
 import * as core from './core.mjs'
 import { stableNodePath } from './setup.mjs'
+import { codexConfigPath, readCodexToolTimeout, codexTimeoutNoteFile, codexWaitSeconds, threadStartedAt } from './register.mjs'
 import { conversationFolder, within } from './folder.mjs'
-import { threadOf, remember, delivered, hookActive, hookUntrusted, hookSkipReason, noteOnce } from './codex-hook.mjs'
+import { threadOf, delivered } from './codex-hook.mjs'
 
 const SERVER = { name: 'dsh-baton', version: core.VERSION }
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
@@ -14,16 +16,42 @@ const str = (description) => ({ type: 'string', description })
 const int = (description, d) => ({ type: 'integer', description, default: d })
 
 // How long one dsh_wait call waits, chosen by the server so it always ends before the
-// client gives up on the tool call: Codex stops a call after 300 s, so it gets 270 s;
-// other clients get 50 s (Claude Code waits with wait_command instead). DSH_BATON_WAIT_S
-// overrides it for a client whose timeout was raised. A timeout_s from the model is
-// ignored, so a model cannot pick a short wait and poll.
+// client gives up on the tool call: Codex stops a call after its tool_timeout_sec for
+// dsh-baton (an hour as dsh-baton registers it; 300 s when unset), so it gets that less
+// 60 s, or 270 s; other clients get 50 s (Claude Code waits with wait_command instead).
+// DSH_BATON_WAIT_S overrides it. A timeout_s from the model is ignored, so a model cannot
+// pick a short wait and poll.
 const MAX_WAIT_S = 24 * 3600
 const envWait = Math.floor(Number(core.setting('WAIT_S')))
 const isCodex = () => core.senderOf(clientName) === 'codex'
-const waitSeconds = () => {
+let codexTimeout = { mtime: null, value: null }
+function codexToolTimeout() {
+  try {
+    const file = codexConfigPath()
+    const mtime = fs.statSync(file).mtimeMs
+    if (mtime !== codexTimeout.mtime) {
+      const value = readCodexToolTimeout(fs.readFileSync(file, 'utf8'))
+      // Since when the value has been there: the note, when it is for this value; else the
+      // file's last change, which is never earlier.
+      let since = mtime, prev = null
+      try {
+        const note = JSON.parse(fs.readFileSync(codexTimeoutNoteFile(), 'utf8'))
+        if (note.value === value && Number(note.since) > 0) { since = Math.min(Number(note.since), mtime); prev = Number(note.prev) || null }
+      } catch { /* no note */ }
+      codexTimeout = { mtime, value, since, prev }
+    }
+    return codexTimeout
+  } catch {
+    return { value: null }
+  }
+}
+// meta is the call's: Codex keeps the tool_timeout_sec a conversation started with, so a
+// conversation from before the value was written keeps 270 s (see noteCodexToolTimeout).
+// Without meta (a tool description), the length a new conversation gets.
+const waitSeconds = (meta) => {
   if (envWait >= 1) return Math.min(envWait, MAX_WAIT_S)
-  return isCodex() ? 270 : 50
+  if (!isCodex()) return 50
+  return codexWaitSeconds(codexToolTimeout(), meta === undefined ? undefined : threadStartedAt(threadOf(meta)))
 }
 const WAIT_CHUNK_S = 10
 // The Codex app runs tools from a script cell that yields every 30 s and wakes the model
@@ -32,10 +60,9 @@ const codeModeYield = () => {
   const ms = (waitSeconds() + 20) * 1000
   return `Required when you call tools from a script cell ("Script running with cell ID …"): the script that calls dsh_wait must start with the line // @exec: {"yield_time_ms": ${ms}}, never a shorter value; if the cell still yields, resume it with wait and yield_time_ms ${ms} (or the largest value wait accepts), never a short value such as 30000 or 55000.`
 }
-// Said to the user (in their language) the first time a Codex conversation hands over
-// while dsh-baton's Stop hook is waiting to be trusted.
-const TRUST_NOTE = 'One step left: in Codex, open Settings → Hooks and trust the Stop hook "dsh-baton: waiting for the Harness run". After that, Codex no longer uses your quota while it waits for DeepSeek Harness.'
-const NO_POLL = 'While waiting, make no other calls (no dsh_status, dsh_session_activity or dsh_read_session) and do not list or read the target folder to check progress.'
+// Not "no calls at all": a model told only that kept waiting on the old request after the
+// user added to it, and sent the change once the old run had finished.
+const NO_POLL = 'While waiting, do not check progress: no dsh_status, dsh_session_activity or dsh_read_session, and do not list or read the target folder. If the user adds to or changes the request while you wait, send it at once with dsh_send mode steer and the same session_id (it joins the running turn), then dsh_wait the new run_id instead of the old one: both end together with one result.'
 const INSTRUCTIONS = 'Hands tasks to a local DeepSeek Harness and brings the results back: start with dsh_send.'
 const ARCHIVED = 'Sessions not in dsh_list_sessions are archived or gone: do not look for them on disk.'
 // A shell command that blocks until a run ends and prints its reply. Run in the
@@ -51,11 +78,13 @@ const waitCommand = (runId) =>
 // Wait in short chunks, reporting progress between them (clients that support it can
 // show it or reset their timer). An unfinished wait returns only the state, not the run's
 // recent events, so the client has nothing to summarise and simply waits again.
-async function waitInChunks({ run_id }, progress) {
-  const total = waitSeconds()
+// A call the client cancelled (the user stopped the turn) stops at the next chunk.
+async function waitInChunks({ run_id }, progress, signal, meta) {
+  const total = waitSeconds(meta ?? null)
   const started = Date.now()
   const deadline = started + total * 1000
   for (;;) {
+    if (signal?.aborted) return { run_id, cancelled: true }
     const left = Math.ceil((deadline - Date.now()) / 1000)
     const t0 = Date.now()
     const st = await core.api.wait({ run_id, timeout_s: Math.max(1, Math.min(WAIT_CHUNK_S, left)) })
@@ -140,21 +169,7 @@ const TOOLS = [
       // Codex has no wake-on-exit for shell commands: offered wait_command, it runs it in a
       // terminal and polls that, so it gets dsh_wait only.
       if (isCodex()) {
-        // With dsh-baton's Stop hook installed and firing, the model ends its turn and the
-        // hook brings the result back into this conversation: no model requests while waiting.
-        const thread = threadOf(meta)
-        if (thread && hookActive()) {
-          remember(thread, st.run_id)
-          return { ...st, hint: `Run started. End your turn now: reply to the user in one short line (in their language) that the task is with DeepSeek Harness. Do not call dsh_wait, dsh_status or any other tool, and do not read the target folder. When all the runs you started end (or one stops to ask something or fails), dsh-baton continues this conversation by itself with their results together (as dsh_wait returns them), so you review them in one go. If the conversation is ever resumed without it, call dsh_wait with this run_id.` }
-        }
-        // Not trusted yet: the user is told once per conversation, until they trust it.
-        const untrusted = thread && hookUntrusted()
-        const note = untrusted && noteOnce(thread) ? { note_for_user: TRUST_NOTE } : null
-        const relay = note ? 'First, start your reply to the user with note_for_user, in their language, on a line of its own. ' : ''
-        // Not added at all: the reason, once per conversation.
-        const reason = thread && !untrusted ? hookSkipReason() : null
-        const why = reason && noteOnce(thread) ? `${reason} Tell the user so in one line, in their language. ` : ''
-        return { ...st, ...note, hint: `${relay}${why}Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${NO_POLL} ${codeModeYield()}` }
+        return { ...st, hint: `Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${NO_POLL} ${codeModeYield()}` }
       }
       return {
         ...st,
@@ -173,12 +188,13 @@ const TOOLS = [
   {
     name: 'dsh_wait',
     annotations: annotations('Wait for run'),
-    description: () => `Wait for a run sent with dsh_send to end and return its state and final reply.${!isCodex() ? ' Prefer the background wait_command from dsh_send if your client wakes you when a background command exits: it costs no turns.' : hookActive() ? ' Call it only when a hint says so: when dsh_send\'s hint says to end your turn, end it, and the result comes back by itself.' : ''} It also returns at once when the run stops to ask a person: needs_input answer (question and relay; reply with dsh_answer) or harness-ui (an approval only a person can give in Harness). Each call waits up to ${waitSeconds()} s; if it returns timed_out: true, call dsh_wait again with the same run_id, without a progress note.${isCodex() ? ` ${NO_POLL} ${codeModeYield()}` : ''}`,
+    description: () => `Wait for a run sent with dsh_send to end and return its state and final reply.${!isCodex() ? ' Prefer the background wait_command from dsh_send if your client wakes you when a background command exits: it costs no turns.' : ''} It also returns at once when the run stops to ask a person: needs_input answer (question and relay; reply with dsh_answer) or harness-ui (an approval only a person can give in Harness). Each call waits up to ${waitSeconds()} s${isCodex() && waitSeconds() > 270 ? ' (270 s in a conversation that was already open when dsh-baton set Codex\'s tool timeout)' : ''}; if it returns timed_out: true, call dsh_wait again with the same run_id, without a progress note.${isCodex() ? ` ${NO_POLL} ${codeModeYield()}` : ''}`,
     inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send') } },
-    run: async (a, { progress }) => {
-      const result = await waitInChunks(a, progress)
-      // Got here, the result must not come again through the Codex Stop hook.
-      if (!result.timed_out) delivered(a.run_id, result)
+    run: async (a, { progress, signal, meta }) => {
+      const result = await waitInChunks(a, progress, signal, meta)
+      // Got here, the result must not come again through the Codex Stop hook (conversations
+      // from before 0.6.4 still run it).
+      if (!result.timed_out && !result.cancelled) delivered(a.run_id, result)
       return result
     },
   },
@@ -321,7 +337,7 @@ async function handle(req) {
         const token = req.params?._meta?.progressToken
         const progress = token === undefined ? undefined : (done, message) =>
           send({ jsonrpc: '2.0', method: 'notifications/progress', params: { progressToken: token, progress: done, message } })
-        const result = await tool.run(req.params.arguments || {}, { progress, meta: req.params?._meta })
+        const result = await tool.run(req.params.arguments || {}, { progress, meta: req.params?._meta, signal: aborts.get(req.id)?.signal })
         // Compact JSON: indentation is paid for again on every later request of the conversation.
         const content = [{ type: 'text', text: JSON.stringify(result) }]
         // Said once per server process, the first time a call finds the versions apart.
@@ -343,6 +359,7 @@ const rl = readline.createInterface({ input: process.stdin })
 // and we get re-parented. Otherwise orphaned servers pile up.
 let inFlight = 0
 let stdinClosed = false
+const aborts = new Map() // request id -> AbortController, while the call runs
 // Writes to a piped stdout are asynchronous: flush the last reply before exiting.
 const exitIfDone = () => { if (stdinClosed && inFlight === 0) process.stdout.write('', () => process.exit(0)) }
 rl.on('close', () => { stdinClosed = true; exitIfDone() })
@@ -354,6 +371,11 @@ const parentGone = () => {
 }
 setInterval(() => { if (process.ppid !== parentPid || parentGone()) process.exit(0) }, 5000).unref()
 
+// A cancelled request gets no reply to the client (MCP): server.mjs drops this one. It is
+// sent all the same so that a server.mjs from before 0.6.4, still running after a hot
+// update, lets go of the call (it then passes it on, as 0.6.3 did with late replies).
+const CANCELLED = (id) => ({ jsonrpc: '2.0', id, error: { code: -32800, message: 'Request cancelled' } })
+
 rl.on('line', async (line) => {
   if (!line.trim()) return
   let req
@@ -361,13 +383,20 @@ rl.on('line', async (line) => {
   if (req === null || typeof req !== 'object' || Array.isArray(req) || typeof req.method !== 'string') {
     return send({ jsonrpc: '2.0', id: req?.id ?? null, error: { code: -32600, message: 'Invalid Request' } })
   }
-  if (req.id === undefined) return // notification
+  if (req.id === undefined) {
+    if (req.method === 'notifications/cancelled') aborts.get(req.params?.requestId)?.abort()
+    return
+  }
   inFlight++
+  const abort = new AbortController()
+  aborts.set(req.id, abort)
   try {
-    send({ jsonrpc: '2.0', id: req.id, result: await handle(req) })
+    const result = await handle(req)
+    send(abort.signal.aborted ? CANCELLED(req.id) : { jsonrpc: '2.0', id: req.id, result })
   } catch (e) {
-    send({ jsonrpc: '2.0', id: req.id, error: { code: e.code || -32603, message: e.message } })
+    send(abort.signal.aborted ? CANCELLED(req.id) : { jsonrpc: '2.0', id: req.id, error: { code: e.code || -32603, message: e.message } })
   } finally {
+    aborts.delete(req.id)
     inFlight--
     exitIfDone()
   }

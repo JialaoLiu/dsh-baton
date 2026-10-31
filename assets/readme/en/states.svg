@@ -26,14 +26,14 @@
 <text x="64" y="372" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">Harness restarted</text>
 <text x="64" y="398" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">mid-run.</text>
 </g>
-<rect x="820" y="160" width="316" height="320" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
+<rect x="820" y="160" width="316" height="340" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <text x="846" y="202" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#2563EB" letter-spacing="2">SESSION BUSY?</text>
 <text x="846" y="252" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="22" fill="#0F172A" font-weight="700">followup</text>
-<text x="970" y="252" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">default</text>
 <text x="846" y="282" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">Queued, runs after the</text>
 <text x="846" y="310" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">current task.</text>
 <line x1="846" y1="346" x2="1110" y2="346" stroke="#E2E7EF"/>
 <text x="846" y="390" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="22" fill="#0F172A" font-weight="700">steer</text>
 <text x="846" y="420" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">Interjects at the agent's</text>
 <text x="846" y="448" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">next step.</text>
+<text x="846" y="484" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">Unset: your Harness setting.</text>
 </svg>

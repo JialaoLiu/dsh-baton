@@ -88,11 +88,21 @@ function toolCallsOf(content) {
 const iso = (t) => (typeof t === 'number' ? new Date(t).toISOString() : t ?? null)
 
 // The MCP server package this plugin registers: the checkout or ~/.dsh-baton/app folder
-// this host folder sits in, else the dsh-baton-mcp package installed with the plugin.
+// this host folder sits in, else the dsh-baton-mcp package installed with the plugin. That
+// one must be this plugin's own version (its exact dependency): a copy of another version
+// left nested in the plugin folder (pnpm moves a link: plugin's folder in on uninstall) is
+// not installed over ~/.dsh-baton/app.
 function serverRoot() {
   const up = fileURLToPath(new URL('../../', import.meta.url))
   if (fs.existsSync(path.join(up, 'src', 'register.mjs'))) return path.resolve(up)
-  try { return path.dirname(createRequire(import.meta.url).resolve('dsh-baton-mcp/package.json')) } catch { return null }
+  // Looked up from here (a nested copy first), then from the folder the plugin is installed in.
+  for (const from of [import.meta.url, pathToFileURL(path.join(fileURLToPath(new URL('../../', import.meta.url)), 'x.js')).href]) {
+    try {
+      const pkg = createRequire(from).resolve('dsh-baton-mcp/package.json')
+      if (JSON.parse(fs.readFileSync(pkg, 'utf8')).version === VERSION) return path.dirname(pkg)
+    } catch { /* not there */ }
+  }
+  return null
 }
 
 // The Harness install this process runs from, so its bundled Node (whose path changes
@@ -1094,21 +1104,17 @@ export function apply(ctx) {
   // entry that is already right is left untouched. The Plugins page reads the outcome from
   // GET /dsh-baton/status (lib/client.js). DSH_BATON_AUTO_REGISTER=0 turns it off.
   let registration = { state: 'pending' }
-  // Whether Codex's Stop hook is trusted yet: read on each status request, so the Plugins
-  // page notices the user trusting it in Codex.
-  let hookStatus = null
   if (setting('AUTO_REGISTER') !== '0') {
     setImmediate(guard('register', async () => {
       const root = serverRoot()
       if (!root) { registration = { state: 'done', ok: false, error: 'no-server', clients: [] }; return }
-      const { autoRegister, harnessRuntime, codexHookStatus } = await import(pathToFileURL(path.join(root, 'src', 'register.mjs')).href)
-      hookStatus = codexHookStatus ?? null
+      const { autoRegister, harnessRuntime } = await import(pathToFileURL(path.join(root, 'src', 'register.mjs')).href)
       // Inside the desktop app, its own binary can stand in for a missing Node.js.
       const fallback = process.versions.electron && harnessRuntime ? harnessRuntime(process.execPath) : null
       const result = autoRegister({ root, harnessDir: harnessDir(), fallback })
       registration = { state: 'done', ...result }
       const summary = result.clients.map((c) => `${c.label}: ${c.state}${c.error ? ` (${c.error})` : ''}`).join(', ')
-      ctx.logger?.[result.ok ? 'info' : 'error']?.(`dsh-baton-host MCP registration: ${summary || result.error}${result.codexHook ? `; Codex Stop hook: ${result.codexHook}` : ''}`)
+      ctx.logger?.[result.ok ? 'info' : 'error']?.(`dsh-baton-host MCP registration: ${summary || result.error}${result.codexHook && result.codexHook !== 'none' ? `; old Codex Stop hook: ${result.codexHook}` : ''}`)
     }))
   } else {
     registration = { state: 'off' }
@@ -1133,9 +1139,7 @@ export function apply(ctx) {
         handler: (request, response) => {
           const { state, ok, error, version, runtime, clients = [] } = registration
           response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
-          let codexHook = null
-          try { codexHook = hookStatus?.() ?? null } catch { /* config unreadable: say nothing */ }
-          response.end(JSON.stringify({ version: VERSION, registration: { state, ok, error, version, runtime, clients: clients.map(({ id, label, state }) => ({ id, label, state })), codexHook } }))
+          response.end(JSON.stringify({ version: VERSION, registration: { state, ok, error, version, runtime, clients: clients.map(({ id, label, state }) => ({ id, label, state })) } }))
         },
       }), 'dsh-baton-host status route')
     })

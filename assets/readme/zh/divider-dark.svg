@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="12" viewBox="0 0 1200 12" role="img" aria-labelledby="title desc">
+  <title id="title">Section divider</title>
+  <desc id="desc">A thin horizontal rule.</desc>
+  <rect width="1200" height="12" rx="0" fill="none"/>
+<line x1="0" y1="6" x2="1200" y2="6" stroke="#1E3A5F" stroke-width="2"/>
+</svg>

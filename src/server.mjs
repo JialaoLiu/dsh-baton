@@ -32,6 +32,7 @@ function stamp() {
 }
 
 let nextInternal = 0
+const CANCELLED = Symbol('cancelled') // a client call whose reply is not passed on
 const children = new Set()
 
 function startChild() {
@@ -70,7 +71,7 @@ function startChild() {
     } else if (msg.id !== undefined && child.clientCalls.has(msg.id)) {
       const rewrite = child.clientCalls.get(msg.id)
       child.clientCalls.delete(msg.id)
-      send(rewrite && msg.result ? { ...msg, result: rewrite(msg.result) } : msg)
+      if (rewrite !== CANCELLED) send(rewrite && msg.result ? { ...msg, result: rewrite(msg.result) } : msg)
     } else {
       send(msg) // notifications (progress) and replies to malformed requests
     }
@@ -80,7 +81,7 @@ function startChild() {
   proc.on('exit', (code) => {
     child.exited = true
     children.delete(child)
-    for (const [id] of child.clientCalls) send({ jsonrpc: '2.0', id, error: { code: -32603, message: `The dsh-baton server process stopped (exit code ${code}).` } })
+    for (const [id, rewrite] of child.clientCalls) if (rewrite !== CANCELLED) send({ jsonrpc: '2.0', id, error: { code: -32603, message: `The dsh-baton server process stopped (exit code ${code}).` } })
     for (const [, own] of child.internal) own.reject(new Error(`exited with code ${code}`))
     child.clientCalls.clear()
     child.internal.clear()
@@ -166,8 +167,13 @@ async function route(line) {
 
   if (msg.id === undefined) {
     // A cancellation goes to the child running that call; other notifications to the current one.
+    // The client gets no reply to a cancelled call: the child's (it stops within seconds) is dropped.
     if (msg.method === 'notifications/cancelled') {
-      for (const c of children) if (c.clientCalls.has(msg.params?.requestId)) return c.write(msg)
+      for (const c of children) {
+        if (!c.clientCalls.has(msg.params?.requestId)) continue
+        c.clientCalls.set(msg.params.requestId, CANCELLED)
+        return c.write(msg)
+      }
       return
     }
     return current?.write(msg)

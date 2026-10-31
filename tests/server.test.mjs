@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
+import fs from 'node:fs'
 
 const SERVER = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'server.mjs')
 
@@ -190,8 +191,10 @@ test('Claude Code gets a background wait_command; Codex, which cannot be woken b
 
 test('dsh_wait length is chosen per client, and DSH_BATON_WAIT_S overrides it', async () => {
   const { DSH_BATON_WAIT_S, ...base } = process.env
+  // An empty Codex home: the user's own tool_timeout_sec must not change the default.
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-cx-'))
   const run = (env, clientName) => new Promise((resolve) => {
-    const child = spawn(process.execPath, [SERVER], { env: { ...base, ...env } })
+    const child = spawn(process.execPath, [SERVER], { env: { ...base, CODEX_HOME: codexHome, ...env } })
     let out = ''
     child.stdout.on('data', (d) => { out += d })
     child.on('close', () => resolve(out.trim().split('\n').map((l) => JSON.parse(l)).find((m) => m.id === 2).result.tools.find((t) => t.name === 'dsh_wait').description))
@@ -210,4 +213,5 @@ test('dsh_wait length is chosen per client, and DSH_BATON_WAIT_S overrides it', 
   assert.doesNotMatch(claude, /yield_time_ms/)
   assert.match(await run({ DSH_BATON_WAIT_S: '1740' }, 'codex-mcp-client'), /up to 1740 s/)
   assert.match(await run({ DSH_BATON_WAIT_S: 'nope' }, 'codex-mcp-client'), /up to 270 s/)
+  fs.rmSync(codexHome, { recursive: true, force: true })
 })

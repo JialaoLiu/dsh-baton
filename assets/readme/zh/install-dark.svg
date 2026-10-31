@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="444" viewBox="0 0 1200 444" role="img" aria-labelledby="title desc">
+  <title id="title">Set up dsh-baton in three steps</title>
+  <desc id="desc">第一步：Harness → 插件 → 添加插件 → 输入 dsh-baton-host → 安装 → 立即启用，它会为 Claude Code 和 Codex 注册 dsh-baton。第二步：在 Claude Code 或 Codex 里新开一个对话；Codex 第一次会请你批准 dsh-baton 的工具。第三步：让它调用 dsh_list_workspaces，会列出你的 Harness 工作区。</desc>
+  <rect width="1200" height="444" rx="24" fill="#0D1117"/>
+<text x="64" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="18" fill="#9198A1" letter-spacing="2">三步装好</text>
+<rect x="64" y="104" width="341" height="300" rx="16" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+<text x="88" y="162" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#4493F8" font-weight="700">1</text>
+<text x="130" y="156" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="23" fill="#E6EDF3" font-weight="700">在 Harness 里添加</text>
+<rect x="84" y="180" width="60" height="34" rx="17" fill="#0D1117" stroke="#484F58" stroke-width="1"/>
+<text x="114.0" y="203" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#E6EDF3" text-anchor="middle">插件</text>
+<path d="M150 191 l6 6 l-6 6" stroke="#9198A1" stroke-width="2" fill="none"/>
+<rect x="164" y="180" width="94" height="34" rx="17" fill="#0D1117" stroke="#484F58" stroke-width="1"/>
+<text x="211.0" y="203" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#E6EDF3" text-anchor="middle">添加插件</text>
+<rect x="84" y="230" width="152" height="34" rx="17" fill="#132A4A" stroke="#4493F8" stroke-width="1"/>
+<text x="160.0" y="253" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#4493F8" text-anchor="middle">dsh-baton-host</text>
+<rect x="84" y="280" width="60" height="34" rx="17" fill="#0D1117" stroke="#484F58" stroke-width="1"/>
+<text x="114.0" y="303" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#E6EDF3" text-anchor="middle">安装</text>
+<path d="M150 291 l6 6 l-6 6" stroke="#9198A1" stroke-width="2" fill="none"/>
+<rect x="164" y="280" width="94" height="34" rx="17" fill="#0D1117" stroke="#484F58" stroke-width="1"/>
+<text x="211.0" y="303" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#E6EDF3" text-anchor="middle">立即启用</text>
+<text x="88" y="354" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">为 Claude Code 和 Codex 注册。</text>
+<path d="M409 254.0 h16" stroke="#9198A1" stroke-width="2"/>
+<rect x="429" y="104" width="341" height="300" rx="16" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+<text x="453" y="162" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#4493F8" font-weight="700">2</text>
+<text x="495" y="156" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="23" fill="#E6EDF3" font-weight="700">新开对话</text>
+<text x="453" y="204" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">在 Claude Code 或 Codex 里</text>
+<text x="453" y="232" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">新开一个对话。</text>
+<text x="453" y="260" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">Codex 第一次会请你</text>
+<text x="453" y="288" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">批准 dsh-baton 的工具。</text>
+<path d="M774 254.0 h16" stroke="#9198A1" stroke-width="2"/>
+<rect x="794" y="104" width="341" height="300" rx="16" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+<text x="818" y="162" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#4493F8" font-weight="700">3</text>
+<text x="860" y="156" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="23" fill="#E6EDF3" font-weight="700">检查</text>
+<text x="818" y="204" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">让它调用</text>
+<rect x="814" y="210" width="301" height="32" rx="8" fill="#0D1117" stroke="#30363D" stroke-width="1"/>
+<text x="824" y="231" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="15" fill="#4493F8">dsh_list_workspaces</text>
+<text x="818" y="272" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">会列出你的 Harness 工作区。</text>
+</svg>

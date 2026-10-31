@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="444" viewBox="0 0 1200 444" role="img" aria-labelledby="title desc">
   <title id="title">Set up dsh-baton in three steps</title>
-  <desc id="desc">Step 1: in Harness open Plugins, Add plugin, enter dsh-baton-host, Install, Enable now; it registers dsh-baton for Claude Code and Codex. Step 2, Codex only, once: Settings, Hooks, trust &quot;dsh-baton: waiting for the Harness run&quot;, so Codex is woken when a run ends. Step 3: in a new chat, ask for dsh_list_workspaces; it lists your Harness workspaces.</desc>
+  <desc id="desc">Step 1: in Harness open Plugins, Add plugin, enter dsh-baton-host, Install, Enable now; it registers dsh-baton for Claude Code and Codex. Step 2: open a new conversation in Claude Code or Codex; Codex asks once to approve the dsh-baton tools. Step 3: ask it to call dsh_list_workspaces; it lists your Harness workspaces.</desc>
   <rect width="1200" height="444" rx="24" fill="#FFFFFF"/>
 <text x="64" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#5B6577" letter-spacing="2">THREE STEPS</text>
 <rect x="64" y="104" width="341" height="300" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
@@ -22,24 +22,17 @@
 <path d="M409 254.0 h16" stroke="#5B6577" stroke-width="2"/>
 <rect x="429" y="104" width="341" height="300" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <text x="453" y="162" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#2563EB" font-weight="700">2</text>
-<text x="495" y="156" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="23" fill="#0F172A" font-weight="700">Codex: trust once</text>
-<rect x="449" y="180" width="98" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
-<text x="498.0" y="203" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">Settings</text>
-<path d="M553 191 l6 6 l-6 6" stroke="#5B6577" stroke-width="2" fill="none"/>
-<rect x="567" y="180" width="71" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
-<text x="602.5" y="203" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">Hooks</text>
-<path d="M644 191 l6 6 l-6 6" stroke="#5B6577" stroke-width="2" fill="none"/>
-<rect x="658" y="180" width="71" height="34" rx="17" fill="#FFFFFF" stroke="#C9D2DF" stroke-width="1"/>
-<text x="693.5" y="203" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#0F172A" text-anchor="middle">Trust</text>
-<text x="453" y="254" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">dsh-baton: waiting for the</text>
-<text x="453" y="282" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">Harness run. Codex is then</text>
-<text x="453" y="310" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">woken when a run ends.</text>
+<text x="495" y="156" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="23" fill="#0F172A" font-weight="700">New chat</text>
+<text x="453" y="204" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">In Claude Code or Codex,</text>
+<text x="453" y="232" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">open a new conversation.</text>
+<text x="453" y="260" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">Codex asks once to approve</text>
+<text x="453" y="288" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">the dsh-baton tools.</text>
 <path d="M774 254.0 h16" stroke="#5B6577" stroke-width="2"/>
 <rect x="794" y="104" width="341" height="300" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <text x="818" y="162" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="44" fill="#2563EB" font-weight="700">3</text>
 <text x="860" y="156" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="23" fill="#0F172A" font-weight="700">Check</text>
-<text x="818" y="204" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">Open a new chat and ask for</text>
+<text x="818" y="204" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">Ask it to call</text>
 <rect x="814" y="210" width="301" height="32" rx="8" fill="#FFFFFF" stroke="#E2E7EF" stroke-width="1"/>
 <text x="824" y="231" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#2563EB">dsh_list_workspaces</text>
-<text x="818" y="272" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">It lists your Harness workspaces.</text>
+<text x="818" y="272" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">Lists your Harness workspaces.</text>
 </svg>

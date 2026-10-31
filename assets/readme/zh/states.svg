@@ -26,14 +26,14 @@
 <text x="64" y="372" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">Harness 中途</text>
 <text x="64" y="398" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">重启了。</text>
 </g>
-<rect x="820" y="160" width="316" height="320" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
+<rect x="820" y="160" width="316" height="340" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <text x="846" y="202" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="18" fill="#2563EB" letter-spacing="2">对话正忙？</text>
 <text x="846" y="252" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="22" fill="#0F172A" font-weight="700">followup</text>
-<text x="970" y="252" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">默认</text>
 <text x="846" y="282" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">进排队栏，等当前</text>
 <text x="846" y="310" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">任务做完再处理。</text>
 <line x1="846" y1="346" x2="1110" y2="346" stroke="#E2E7EF"/>
 <text x="846" y="390" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="22" fill="#0F172A" font-weight="700">steer</text>
 <text x="846" y="420" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">插话，在智能体的</text>
 <text x="846" y="448" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">下一步就送达。</text>
+<text x="846" y="484" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#5B6577">不传时跟随 Harness 设置。</text>
 </svg>

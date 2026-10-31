@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { autoRegister, harnessRuntime, findNode, readClaudeEntry, readCodexEntry, editClaudeConfig, editCodexConfig, compareVersions, nodeVersionOk } from '../src/register.mjs'
+import { autoRegister, harnessRuntime, findNode, readClaudeEntry, readCodexEntry, editClaudeConfig, editCodexConfig, codexHookBlockFor, compareVersions, nodeVersionOk } from '../src/register.mjs'
 
 const REPO = path.resolve(import.meta.dirname, '..')
 const VERSION = JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).version
@@ -199,72 +199,58 @@ test('versions compare numerically, a prerelease before its release', () => {
   assert.equal(compareVersions(VERSION, VERSION), 0)
 })
 
-test('the Codex Stop hook goes in with the server, once, and only with a real node', () => {
+test('the Codex Stop hook plugins 0.6.0-0.6.3 added is taken out with its trust, once', () => {
   const s = sandbox()
   try {
+    assert.equal(s.run().codexHook, 'none') // never had one
+    // A config as 0.6.3 left it: our table without tool_timeout_sec, the hook, Codex's trust.
+    const script = path.join(s.app, 'src', 'server.mjs')
+    const table = editCodexConfig('model = "x"\n', { command: process.execPath, args: [script] }).replace(/^tool_timeout_sec = .*\n/m, '')
+    const old = `${table.replace(/\s+$/, '')}\n\n${codexHookBlockFor('/x/.dsh-baton/bin/codex-stop-hook')}\n[hooks.state."${s.codexFile}:stop:0:0"]\ntrusted_hash = "sha256:a"\n`
+    fs.writeFileSync(s.codexFile, old)
+    // What the old hook kept beside it, read by nothing now.
+    const state = path.join(s.home, '.dsh-baton', 'codex-hook')
+    fs.mkdirSync(state, { recursive: true })
+    for (const f of ['registered.json', 'trust-noted.json', 'alive', 'pending.json']) fs.writeFileSync(path.join(state, f), '{}')
     const r = s.run()
-    assert.equal(r.codexHook, 'added')
+    assert.deepEqual(fs.readdirSync(state), ['pending.json'], 'the old hook still reads pending.json in conversations opened before')
+    assert.equal(r.codexHook, 'removed')
+    assert.equal(states(r).codex, 'unchanged')
     const text = fs.readFileSync(s.codexFile, 'utf8')
-    const cli = path.join(s.app, 'src', 'cli.mjs')
-    // The entry names the wrapper script; node and cli.mjs are in the script.
-    const wrapper = path.join(s.home, '.dsh-baton', 'bin', process.platform === 'win32' ? 'codex-stop-hook.cmd' : 'codex-stop-hook')
-    assert.ok(text.includes(`command = ${JSON.stringify(wrapper)}`))
-    const script = fs.readFileSync(wrapper, 'utf8')
-    if (process.platform === 'win32') assert.equal(script, `@"${process.execPath}" "${cli}" codex-stop-hook\r\n`)
-    else assert.equal(script, `#!/bin/sh\nexec '${process.execPath}' '${cli}' codex-stop-hook "$@"\n`)
-    // Codex adds its trust record; later starts leave the file alone.
-    fs.appendFileSync(s.codexFile, '\n[hooks.state."x:stop:0:0"]\ntrusted_hash = "sha256:1"\n')
-    const trusted = fs.readFileSync(s.codexFile, 'utf8')
-    assert.equal(s.run().codexHook, 'unchanged')
-    assert.equal(fs.readFileSync(s.codexFile, 'utf8'), trusted)
+    assert.doesNotMatch(text, /codex-stop-hook|hooks\.|trusted_hash/)
+    assert.match(text, /^tool_timeout_sec = 3600$/m)
+    assert.match(text, /^model = "x"$/m)
+    // Later starts find nothing to take out and leave the file as it is.
+    assert.equal(s.run().codexHook, 'none')
+    assert.equal(fs.readFileSync(s.codexFile, 'utf8'), text)
+    // The time the value appeared is noted for the server; taken out and put back, noted again.
+    const noteFile = path.join(s.home, '.dsh-baton', 'codex-timeout.json')
+    const first = JSON.parse(fs.readFileSync(noteFile, 'utf8'))
+    assert.equal(first.value, 3600)
+    fs.writeFileSync(s.codexFile, text.replace(/^tool_timeout_sec = .*\n/m, ''))
+    const wait = Date.now() + 20
+    while (Date.now() < wait) { /* a later millisecond */ }
+    s.run()
+    assert.ok(JSON.parse(fs.readFileSync(noteFile, 'utf8')).since > first.since)
   } finally { s.done() }
-  const off = sandbox()
-  try {
-    assert.equal(off.run({ env: { PATH: '', DSH_BATON_CODEX_HOOK: '0' } }).codexHook, 'off')
-    assert.doesNotMatch(fs.readFileSync(off.codexFile, 'utf8'), /codex-stop-hook/)
-    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(off.home, '.dsh-baton', 'codex-hook', 'registered.json'), 'utf8')).reason, 'disabled')
-  } finally { off.done() }
-  const bare = sandbox()
-  try {
-    // A bare command (npx) has no cli.mjs to run: skipped, and the reason noted.
-    fs.writeFileSync(bare.codexFile, editCodexConfig('', { command: 'npx', args: ['-y', 'dsh-baton-mcp'] }))
-    assert.equal(bare.run().codexHook, 'skipped')
-    assert.equal(JSON.parse(fs.readFileSync(path.join(bare.home, '.dsh-baton', 'codex-hook', 'registered.json'), 'utf8')).reason, 'no-cli')
-  } finally { bare.done() }
-})
-
-test('on Harness\'s own runtime the hook goes in too: the wrapper runs it in Node mode, the entry is the same', () => {
-  const exe = process.execPath
-  const wrapper = (s) => path.join(s.home, '.dsh-baton', 'bin', process.platform === 'win32' ? 'codex-stop-hook.cmd' : 'codex-stop-hook')
-  const hookBlock = (text) => text.match(/# dsh-baton: wakes Codex[^]*?\ntimeout = \d+\n/)[0]
-  const harness = sandbox()
-  try {
-    const r = harness.run({ find: () => null, fallback: harnessRuntime(exe) })
-    assert.equal(r.runtime, 'harness')
-    assert.equal(r.codexHook, 'added')
-    const cli = path.join(harness.app, 'src', 'cli.mjs')
-    const script = fs.readFileSync(wrapper(harness), 'utf8')
-    if (process.platform === 'win32') assert.equal(script, `@set ELECTRON_RUN_AS_NODE=1\r\n@"${exe}" "${cli}" codex-stop-hook\r\n`)
-    else assert.equal(script, `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec '${exe}' '${cli}' codex-stop-hook "$@"\n`)
-    const noted = JSON.parse(fs.readFileSync(path.join(harness.home, '.dsh-baton', 'codex-hook', 'registered.json'), 'utf8'))
-    assert.equal(noted.state, 'added')
-    assert.ok(fs.readFileSync(harness.codexFile, 'utf8').includes(`command = ${JSON.stringify(noted.command)}`))
-  } finally { harness.done() }
-  // A user who trusted the hook on their own Node.js, then moved to Harness's runtime:
-  // only the wrapper changes; the entry, byte for byte, and Codex's trust record stay.
-  const moved = sandbox()
-  try {
-    assert.equal(moved.run().codexHook, 'added')
-    fs.appendFileSync(moved.codexFile, '\n[hooks.state."x:stop:0:0"]\ntrusted_hash = "sha256:1"\n')
-    const before = fs.readFileSync(moved.codexFile, 'utf8')
-    const script = path.join(moved.app, 'src', 'server.mjs')
-    fs.writeFileSync(moved.codexFile, editCodexConfig(before, { ...harnessRuntime(exe), args: [script] }))
-    const switched = fs.readFileSync(moved.codexFile, 'utf8')
-    assert.equal(moved.run({ find: () => null, fallback: harnessRuntime(exe) }).codexHook, 'unchanged')
-    const after = fs.readFileSync(moved.codexFile, 'utf8')
-    assert.equal(after, switched)
-    assert.equal(hookBlock(after), hookBlock(before))
-    assert.match(after, /trusted_hash = "sha256:1"/)
-    assert.match(fs.readFileSync(wrapper(moved), 'utf8'), /ELECTRON_RUN_AS_NODE=1/)
-  } finally { moved.done() }
+  // A config dsh-baton cannot write: the Plugins page shows Codex as failed, with why.
+  if (process.platform !== 'win32' && process.getuid?.() !== 0) {
+    const locked = sandbox()
+    try {
+      locked.run()
+      const table = fs.readFileSync(locked.codexFile, 'utf8').replace(/^tool_timeout_sec = .*\n/m, '')
+      fs.writeFileSync(locked.codexFile, `${table}\n${codexHookBlockFor('/x/.dsh-baton/bin/codex-stop-hook')}`)
+      fs.chmodSync(path.dirname(locked.codexFile), 0o555)
+      const r = locked.run()
+      assert.match(r.codexHook, /^failed \(EACCES\)$/)
+      assert.equal(states(r).codex, 'failed')
+      assert.equal(r.ok, false)
+    } finally {
+      fs.chmodSync(path.dirname(locked.codexFile), 0o755)
+      locked.done()
+    }
+  }
+  // Without Codex there is nothing to look at.
+  const none = sandbox({ codex: false })
+  try { assert.equal(none.run().codexHook, 'none') } finally { none.done() }
 })

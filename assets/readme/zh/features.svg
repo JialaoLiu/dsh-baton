@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="528" viewBox="0 0 1200 528" role="img" aria-labelledby="title desc">
   <title id="title">What dsh-baton does</title>
-  <desc id="desc">Six capabilities: create workspaces and sessions, continue a specific session, run live in the Harness UI labelled with the sender, Claude Code and Codex woken when a run ends, no extra API key and any Harness model, macOS and Windows with zero dependencies.</desc>
+  <desc id="desc">六项能力：新建工作区和对话；续接指定对话；在 Harness 界面里实时运行并标注发送方；运行结束时结果只回来一次（Claude Code 被唤醒，Codex 一次调用最多等一小时）；不需要额外的 API Key，可用 Harness 里的任意模型；macOS 和 Windows 零依赖。</desc>
   <rect width="1200" height="528" rx="24" fill="#FFFFFF"/>
 <rect x="64" y="56" width="341" height="196" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <g transform="translate(90 80)" stroke="#2563EB" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10 h12 l4 5 h20 v21 h-36 z"/><path d="M20 21 v10 M15 26 h10"/></g>
@@ -19,9 +19,9 @@
 <text x="820" y="226" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">还标明是谁发来的。</text>
 <rect x="64" y="276" width="341" height="196" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <g transform="translate(90 300)" stroke="#2563EB" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M10 28 v-10 a10 10 0 0 1 20 0 v10 l3 4 h-26 z"/><path d="M17 36 h6"/></g>
-<text x="90" y="380" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="24" fill="#0F172A" font-weight="700">完成即唤醒</text>
-<text x="90" y="418" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">Claude Code 和 Codex</text>
-<text x="90" y="446" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">在运行结束时被唤醒。</text>
+<text x="90" y="380" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="24" fill="#0F172A" font-weight="700">做完就带回</text>
+<text x="90" y="418" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">Claude Code 只唤醒一次；</text>
+<text x="90" y="446" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#5B6577">Codex 一次最多等 59 分钟。</text>
 <rect x="429" y="276" width="341" height="196" rx="16" fill="#F4F6FA" stroke="#E2E7EF" stroke-width="1"/>
 <g transform="translate(455 300)" stroke="#2563EB" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="20" r="7"/><path d="M19 20 h17 M30 20 v6 M35 20 v4"/><path d="M4 36 L36 4" stroke="#5B6577"/></g>
 <text x="455" y="380" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="24" fill="#0F172A" font-weight="700">不用另配 key</text>

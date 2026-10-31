@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="350" viewBox="0 0 1200 350" role="img" aria-labelledby="title desc">
+  <title id="title">Good to know</title>
+  <desc id="desc">A message typed in the Harness UI during a relayed run is recorded on that run as a human interjection; run records survive a Harness restart and a run cut short by one is marked interrupted; Claude Code waits in the background and is woken once; Codex waits up to 59 minutes in one dsh_wait call.</desc>
+  <rect width="1200" height="350" rx="24" fill="#0D1117"/>
+<text x="64" y="76" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="30" fill="#E6EDF3" font-weight="700">Good to know</text>
+<rect x="64" y="104" width="341" height="210" rx="16" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+<rect x="64" y="130" width="4" height="30" fill="#3FB950"/>
+<text x="90" y="154" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#E6EDF3" font-weight="700">UI input is flagged</text>
+<text x="90" y="196" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">A message typed in the UI</text>
+<text x="90" y="224" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">mid-run is recorded on the</text>
+<text x="90" y="252" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">run as a human interjection.</text>
+<rect x="429" y="104" width="341" height="210" rx="16" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+<rect x="429" y="130" width="4" height="30" fill="#3FB950"/>
+<text x="455" y="154" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#E6EDF3" font-weight="700">Runs survive restarts</text>
+<text x="455" y="196" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">Run records are kept on</text>
+<text x="455" y="224" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">disk; a run cut short by a</text>
+<text x="455" y="252" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">restart shows interrupted.</text>
+<rect x="794" y="104" width="341" height="210" rx="16" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+<rect x="794" y="130" width="4" height="30" fill="#3FB950"/>
+<text x="820" y="154" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#E6EDF3" font-weight="700">Waits without polling</text>
+<text x="820" y="196" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">Claude Code is woken once;</text>
+<text x="820" y="224" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">Codex waits up to 59 min</text>
+<text x="820" y="252" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="20" fill="#9198A1">in one call. Nothing polls.</text>
+</svg>

@@ -2,6 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { editClaudeConfig, editCodexConfig } from '../src/setup.mjs'
+import { readCodexToolTimeout, addCodexToolTimeout } from '../src/register.mjs'
 
 const entry = { command: 'C:\\Program Files\\nodejs\\node.exe', args: ['C:\\dev\\dsh-baton\\src\\server.mjs'] }
 
@@ -23,17 +24,31 @@ command = "x"
 localeOverride = "zh-CN"
 `
   const after = editCodexConfig(before, entry)
-  assert.doesNotMatch(after, /old|tool_timeout_sec|DSH_BATON_WAIT_S/)
+  assert.doesNotMatch(after, /old|DSH_BATON_WAIT_S/)
   assert.match(after, /\[mcp_servers\.other\]\ncommand = "x"/)
   assert.match(after, /\[desktop\]\nlocaleOverride = "zh-CN"/)
-  assert.match(after, /\[mcp_servers\.dsh-baton\]\ncommand = 'C:\\Program Files\\nodejs\\node\.exe'\nargs = \['C:\\dev\\dsh-baton\\src\\server\.mjs'\]\n$/)
+  assert.match(after, /\[mcp_servers\.dsh-baton\]\ncommand = 'C:\\Program Files\\nodejs\\node\.exe'\nargs = \['C:\\dev\\dsh-baton\\src\\server\.mjs'\]\ntool_timeout_sec = 1800\n$/, 'a tool_timeout_sec the user set is kept')
+  assert.match(editCodexConfig('model = "x"\n', entry), /\ntool_timeout_sec = 3600\n$/, 'else an hour')
   assert.equal(editCodexConfig(after, entry), after, 'running setup twice changes nothing')
   assert.equal(editCodexConfig(after, null).includes('dsh-baton'), false)
 })
 
 test('Codex: an empty or missing config gets just the table; quotes fall back to basic strings', () => {
-  assert.equal(editCodexConfig('', { command: '/n', args: ['/s'] }), "[mcp_servers.dsh-baton]\ncommand = '/n'\nargs = ['/s']\n")
+  assert.equal(editCodexConfig('', { command: '/n', args: ['/s'] }), "[mcp_servers.dsh-baton]\ncommand = '/n'\nargs = ['/s']\ntool_timeout_sec = 3600\n")
   assert.match(editCodexConfig('', { command: "/it's/node", args: [] }), /command = "\/it's\/node"/)
+})
+
+test('Codex tool timeout: read from our table only; added to an older table, a value already there kept', () => {
+  const old = `[mcp_servers.other]\ntool_timeout_sec = 99\n\n[mcp_servers.dsh-baton]\ncommand = '/n'\nargs = ['/s']\n\n[mcp_servers.dsh-baton.env]\nX = '1'\n`
+  assert.equal(readCodexToolTimeout(old), null)
+  const added = addCodexToolTimeout(old)
+  assert.match(added, /args = \['\/s'\]\ntool_timeout_sec = 3600\n\n\[mcp_servers\.dsh-baton\.env\]/)
+  assert.equal(readCodexToolTimeout(added), 3600)
+  assert.equal(addCodexToolTimeout(added), added, 'adding twice changes nothing')
+  const own = old.replace("args = ['/s']", "args = ['/s']\ntool_timeout_sec = 900")
+  assert.equal(addCodexToolTimeout(own), own)
+  assert.equal(readCodexToolTimeout(own), 900)
+  assert.equal(addCodexToolTimeout('model = "x"\n'), 'model = "x"\n', 'no dsh-baton table: unchanged')
 })
 
 test('Claude Code: sets and removes the user-scope entry, keeps other keys', () => {
@@ -153,4 +168,27 @@ test('setup leaves an app folder that already holds this version alone', async (
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ version: '0.0.1' }))
   assert.equal(sameVersionAt(dir), false)
   fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('setup --remove takes out the MCP table and the Codex Stop hook 0.6.0-0.6.3 added, with its trust', async () => {
+  const fs = await import('node:fs')
+  const os = await import('node:os')
+  const path = await import('node:path')
+  const { spawnSync } = await import('node:child_process')
+  const { codexHookBlockFor } = await import('../src/register.mjs')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-rm-'))
+  const codexHome = path.join(dir, '.codex')
+  fs.mkdirSync(codexHome)
+  const cfg = path.join(codexHome, 'config.toml')
+  const own = 'model = "x"\n'
+  fs.writeFileSync(cfg, `${editCodexConfig(own, entry)}\n${codexHookBlockFor('/x/.dsh-baton/bin/codex-stop-hook')}\n[hooks.state."${cfg}:stop:0:0"]\ntrusted_hash = "sha256:a"\n`)
+  const env = { ...process.env, HOME: dir, USERPROFILE: dir, CODEX_HOME: codexHome, CLAUDE_CONFIG_DIR: dir, DSH_HOME: path.join(dir, '.dsh'), DSH_BATON_HOME: path.join(dir, '.dsh-baton'), DSH_BATON_SOCKET: path.join(dir, 'none.sock') }
+  try {
+    const r = spawnSync(process.execPath, [path.join(import.meta.dirname, '..', 'src', 'cli.mjs'), 'setup', '--remove'], { env, encoding: 'utf8', timeout: 30000 })
+    assert.equal(r.status, 0, r.stderr)
+    assert.match(r.stdout, /Codex Stop hook: removed from/)
+    assert.equal(fs.readFileSync(cfg, 'utf8'), own)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
 })

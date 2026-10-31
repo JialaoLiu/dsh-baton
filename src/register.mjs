@@ -43,10 +43,89 @@ const tomlString = (s) => (/['\n\r]/.test(s) ? JSON.stringify(s) : `'${s}'`)
 const OWN_TABLE = /^\s*\[\s*mcp_servers\s*\.\s*(["']?)dsh-(?:baton|bridge)\1\s*(?:\.[^\]]*)?\]\s*(?:#.*)?$/
 const ANY_TABLE = /^\s*\[/
 
+// Codex stops an MCP tool call after 300 s unless the server's table sets tool_timeout_sec.
+// dsh-baton sets an hour, so one dsh_wait waits up to about that long: one model request
+// per hour of a run instead of one every 270 s.
+export const CODEX_TOOL_TIMEOUT_S = 3600
+const TIMEOUT_KEY = /^\s*(["']?)tool_timeout_sec\1\s*=\s*([\d_.]+)\s*(?:#.*)?$/
+const HAS_TIMEOUT = /^\s*(["']?)tool_timeout_sec\1\s*=/
+
+// The lines of [mcp_servers.dsh-baton] (not its sub-tables): [start, end) indexes, or null.
+function ownMainTable(lines) {
+  const start = lines.findIndex((l) => /^\s*\[\s*mcp_servers\s*\.\s*(["']?)dsh-baton\1\s*\]\s*(?:#.*)?$/.test(l))
+  if (start < 0) return null
+  let end = lines.findIndex((l, i) => i > start && (ANY_TABLE.test(l) || l === HOOK_MARK))
+  if (end < 0) end = lines.length
+  return [start, end]
+}
+
+// tool_timeout_sec in [mcp_servers.dsh-baton], in seconds, or null.
+export function readCodexToolTimeout(text) {
+  const lines = String(text ?? '').split(/\r?\n/)
+  const t = ownMainTable(lines)
+  if (!t) return null
+  for (const l of lines.slice(...t)) {
+    const m = l.match(TIMEOUT_KEY)
+    const n = m && Number(m[2].replace(/_/g, ''))
+    if (n > 0) return n
+  }
+  return null
+}
+
+// Adds tool_timeout_sec to an existing [mcp_servers.dsh-baton] that has none (entries
+// written before it existed); a value already there, the user's own, is kept.
+export function addCodexToolTimeout(text) {
+  const lines = String(text ?? '').split(/\r?\n/)
+  const t = ownMainTable(lines)
+  if (!t || lines.slice(...t).some((l) => HAS_TIMEOUT.test(l))) return text
+  let at = t[1]
+  while (at > t[0] + 1 && !lines[at - 1].trim()) at--
+  lines.splice(at, 0, `tool_timeout_sec = ${CODEX_TOOL_TIMEOUT_S}`)
+  return lines.join('\n')
+}
+
+// Codex reads tool_timeout_sec when a conversation starts and keeps it: a conversation opened
+// before the value was written still stops calls at 300 s. So when the value appears or
+// changes, the time is noted here; the server gives the long wait only to conversations
+// started after it (a Codex thread id is a UUIDv7, which carries its start time). fresh: the
+// value was just put back (something had taken it out, and conversations opened meanwhile
+// stop at 300 s), so the time is noted again even though the value is the same.
+export const codexTimeoutNoteFile = (env = process.env, home = os.homedir()) => path.join(batonHome(env, home), 'codex-timeout.json')
+export function noteCodexToolTimeout(file, env = process.env, home = os.homedir(), fresh = false) {
+  try {
+    const value = readCodexToolTimeout(fs.readFileSync(file, 'utf8'))
+    const note = codexTimeoutNoteFile(env, home)
+    let seen = null
+    try { seen = JSON.parse(fs.readFileSync(note, 'utf8')) } catch { /* none yet */ }
+    if (!value || (!fresh && seen?.value === value)) return
+    fs.mkdirSync(path.dirname(note), { recursive: true, mode: 0o700 })
+    // prev: what conversations opened before still have (none: Codex's default 300 s).
+    fs.writeFileSync(note, JSON.stringify({ value, since: Date.now(), prev: fresh ? null : seen?.value ?? null }))
+  } catch { /* no note: the server goes by the config file's time */ }
+}
+
+// How long one Codex dsh_wait may wait: tool_timeout_sec less 60 s for a conversation that
+// started after the value was written (started: from its UUIDv7 thread id), else 270 s,
+// under Codex's default 300 s, or under the value before when the user had set one. A value
+// too short for the long wait (the user's own) is kept under, less 30 s (half, under a
+// minute). started undefined: the length a new conversation gets.
+export const threadStartedAt = (threadId) => {
+  const id = String(threadId ?? '').replace(/-/g, '')
+  return /^[0-9a-f]{12}7/i.test(id) ? parseInt(id.slice(0, 12), 16) : null
+}
+const shortWait = (value) => (!value ? 270 : value > 60 ? Math.min(270, Math.floor(value - 30)) : Math.max(1, Math.floor(value / 2)))
+export function codexWaitSeconds({ value, since, prev = null }, started) {
+  const long = value && value - 60 > 270 ? Math.min(Math.floor(value - 60), 24 * 3600) : null
+  const now = long ?? shortWait(value)
+  if (started === undefined) return now
+  // Opened before the value was written: Codex still holds it to the one before.
+  return started && since && started > since ? now : Math.min(now, shortWait(prev))
+}
+
 // ~/.codex/config.toml: replace any earlier dsh-baton tables with one fresh table at the
-// end. Codex stops a tool call after 300 s; the server keeps each wait under that, so no
-// tool_timeout_sec is needed.
+// end, with tool_timeout_sec (see CODEX_TOOL_TIMEOUT_S; a value the user set is kept).
 export function editCodexConfig(text, entry) {
+  const timeout = readCodexToolTimeout(text) ?? CODEX_TOOL_TIMEOUT_S
   const kept = []
   let skipping = false
   for (const line of text.split(/\r?\n/)) {
@@ -57,7 +136,7 @@ export function editCodexConfig(text, entry) {
   }
   let out = kept.join('\n').replace(/\s+$/, '')
   if (entry) {
-    out += `${out ? '\n\n' : ''}[mcp_servers.${NAME}]\ncommand = ${tomlString(entry.command)}\nargs = [${entry.args.map(tomlString).join(', ')}]`
+    out += `${out ? '\n\n' : ''}[mcp_servers.${NAME}]\ncommand = ${tomlString(entry.command)}\nargs = [${entry.args.map(tomlString).join(', ')}]\ntool_timeout_sec = ${timeout}`
     const env = Object.entries(entry.env ?? {})
     if (env.length) out += `\n\n[mcp_servers.${NAME}.env]\n${env.map(([k, v]) => `${k} = ${tomlString(v)}`).join('\n')}`
   }
@@ -89,14 +168,22 @@ export function readCodexEntry(text) {
   return command ? { command, args, ...(Object.keys(env).length ? { env } : {}) } : null
 }
 
-// The Codex Stop hook that wakes Codex when a Harness run ends (src/codex-hook.mjs). Our
-// block is a marker line and the fixed lines written after it.
+// The Codex Stop hook dsh-baton added before 0.6.4 (src/codex-hook.mjs), known here so it
+// can be taken out (see removeCodexHookBlock) without touching hooks of the user's own. Every
+// version wrote it as its own [[hooks.Stop]] group with one hook, after a marker line.
 const HOOK_MARK = '# dsh-baton: wakes Codex when a Harness run ends (dsh-baton codex-stop-hook)'
 // How long one hook call may wait; Codex kills the hook after the timeout in its config.
 export const HOOK_TIMEOUT_S = 24 * 3600
-// What Codex shows for the hook (in its hooks list, and while the hook runs).
+// What Codex shows for the hook (0.6.1 on; the builds before had no status message).
 const HOOK_STATUS = 'dsh-baton: waiting for the Harness run'
-const OWN_HOOK_LINE = /^(\[\[hooks\.Stop\]\]|\[\[hooks\.Stop\.hooks\]\]|type = "command"|command = .*codex-stop-hook.*|statusMessage = .*|timeout = \d+)$/
+// Its command: the wrapper in ~/.dsh-baton/bin (0.6.1 on, also in PowerShell's call form of
+// the node line it runs), or that node line itself (before 0.6.1). A wrapper written as an
+// 8.3 short path, or under another DSH_BATON_HOME, is known by HOOK_STATUS instead.
+const OUR_COMMAND = /(?:[\\/]\.dsh-baton[\\/]bin[\\/]codex-stop-hook(?:\.cmd)?"?|"[^"]*[\\/]cli\.mjs" codex-stop-hook)$/i
+const HEADER = /^\s*\[/
+// [[hooks.Stop]] and [[hooks.Stop.hooks]] headers, spaced or with a comment after them.
+const STOP_GROUP = /^\s*\[\[\s*hooks\s*\.\s*Stop\s*\]\]\s*(?:#.*)?$/
+const STOP_HOOK = /^\s*\[\[\s*hooks\s*\.\s*Stop\s*\.\s*hooks\s*\]\]\s*(?:#.*)?$/
 
 // A TOML string as written: basic ("..." with escapes, which JSON reads) or literal ('...',
 // what Codex itself writes when the text holds backslashes, as Windows paths do).
@@ -106,152 +193,127 @@ function readTomlString(v) {
   try { return JSON.parse(t) } catch { return null }
 }
 
-// The same file? Windows paths ignore case and take either slash.
-const samePath = (a, b) => process.platform === 'win32'
-  ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase()
-  : a === b
-
-// The hook command for the server at `script`: cli.mjs beside it, run with the same node.
-export const codexHookCommand = (node, script) => `"${node}" "${path.join(path.dirname(script), 'cli.mjs')}" codex-stop-hook`
-
-// The hook entry in Codex's config is written once and then left as it is: Codex hashes
-// the entry (command, timeout, statusMessage) when the user trusts it, and asks again when
-// any of it changes. So the command names a small wrapper script at a fixed place,
-// ~/.dsh-baton/bin, and what moves (the node and the server's cli.mjs) goes in the script,
-// which is rewritten freely: Codex does not hash what the command runs.
-//
-// On Windows the script is a .cmd: Codex hands the command to the session's shell,
-// PowerShell (-Command) or cmd (/C), and they read a leading quoted path differently ("x"
-// is a string to PowerShell, a program to cmd); a bare path to a .cmd runs in both.
-export const hookWrapperPath = (home = batonHome(), platform = process.platform) =>
-  path.join(home, 'bin', platform === 'win32' ? 'codex-stop-hook.cmd' : 'codex-stop-hook')
-
-// What goes in config.toml as the hook command: the wrapper's path, written beside it.
-// A path with spaces (a user name with a space): on Windows its 8.3 short form, else
-// PowerShell's call form of the whole line (PowerShell being Codex's shell on Windows);
-// elsewhere the path in double quotes, for the shell Codex runs the command with.
-//
-// harness: node is Harness's own binary (no Node.js of the user's own, see harnessRuntime),
-// which runs cli.mjs only in Node mode, so the wrapper sets ELECTRON_RUN_AS_NODE=1 first.
-// The entry stays the same either way: only the script changes.
-export function codexHookEntry(node, script, { platform = process.platform, home = batonHome(), shortPath = winShortPath, harness = false } = {}) {
-  const line = codexHookCommand(node, script)
-  const file = hookWrapperPath(home, platform)
-  const sh = (p) => `'${p.replace(/'/g, `'\\''`)}'`
-  const body = platform === 'win32'
-    ? `${harness ? '@set ELECTRON_RUN_AS_NODE=1\r\n' : ''}@${line.replace(/%/g, '%%')}\r\n`
-    : `#!/bin/sh\n${harness ? 'ELECTRON_RUN_AS_NODE=1 ' : ''}exec ${sh(node)} ${sh(path.join(path.dirname(script), 'cli.mjs'))} codex-stop-hook "$@"\n`
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  let old = null
-  try { old = fs.readFileSync(file, 'utf8') } catch { /* first time */ }
-  if (old !== body) fs.writeFileSync(file, body, { mode: 0o700 })
-  if (platform !== 'win32') fs.chmodSync(file, 0o700)
-  if (!/\s/.test(file)) return file
-  if (platform !== 'win32') return JSON.stringify(file)
-  const at = shortPath(file)
-  return at && !/\s/.test(at) ? at : `${harness ? "$env:ELECTRON_RUN_AS_NODE='1'; " : ''}& ${line}`
-}
-
-// The 8.3 short form of an existing path, or null (8.3 names can be off for a drive).
-function winShortPath(p) {
-  try {
-    const out = execFileSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"for %I in ("${p}") do @echo %~sI"`], { windowsHide: true, windowsVerbatimArguments: true, timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
-    return out && fs.existsSync(out) ? out : null
-  } catch {
-    return null
-  }
-}
-
-// The node and cli.mjs a hook command line runs (plain, or PowerShell's call form).
-function hookTarget(command) {
-  const m = command?.match(/^(?:& )?"(.+?)" "(.+?)" codex-stop-hook$/)
-  return m ? { node: m[1], cli: m[2] } : null
-}
-
-// Add, replace (command given) or remove (null) the hook. An entry with this very command
-// is left where it is: Codex keys its trust by the hook's place and content, so moving or
-// rewriting it would ask the user to trust it again.
-//
-// Codex keeps its trust in [hooks.state."<config>:stop:<group>:<hook>"] tables, keyed by
-// place only. When ours is rewritten, the record left at its old or new place would still
-// read as trusted while Codex itself sees a modified hook and skips it; such records go.
-export function editCodexHook(text, command) {
-  if (command && hasHook(text, command)) return text
-  const out = editHookBlock(text, command)
-  return dropTrust(out, [hookPlace(text.split(/\r?\n/)), hookPlace(out.split('\n'))])
-}
-
-// Our entry is there exactly as this version writes it: this command, the status message
-// and the timeout (Codex may have rewritten its strings in single quotes).
-function hasHook(text, command) {
-  const lines = text.split(/\r?\n/)
-  const at = lines.findIndex((l) => /^command = /.test(l) && readTomlString(l.slice(10)) === command)
-  if (at < 0) return false
-  let start = at, end = at
-  while (start > 0 && lines[start - 1] !== '[[hooks.Stop.hooks]]' && OWN_HOOK_LINE.test(lines[start - 1])) start--
-  while (end + 1 < lines.length && OWN_HOOK_LINE.test(lines[end + 1])) end++
-  const kv = {}
-  for (const l of lines.slice(start, end + 1)) {
-    const m = l.match(/^(\w+) = (.*)$/)
-    if (m) kv[m[1]] = m[1] === 'timeout' ? Number(m[2]) : readTomlString(m[2])
-  }
-  const want = { type: 'command', command, statusMessage: HOOK_STATUS, timeout: HOOK_TIMEOUT_S }
-  return Object.keys(kv).length === 4 && Object.entries(want).every(([k, v]) => kv[k] === v)
-}
-
-// Where our hook sits among the Stop hooks ({ group, hook, at: its command line }), or null.
-function hookPlace(lines) {
-  const at = lines.findIndex((l) => /^command = .*codex-stop-hook/.test(l))
-  if (at < 0) return null
-  const before = lines.slice(0, at)
-  const group = before.filter((l) => l.trim() === '[[hooks.Stop]]').length - 1
-  const hook = before.slice(before.lastIndexOf('[[hooks.Stop]]')).filter((l) => l.trim() === '[[hooks.Stop.hooks]]').length - 1
-  return { group, hook, at }
-}
-
-const trustKey = ({ group, hook }) => new RegExp(`^\\[hooks\\.state\\.(["']).*:stop:${group}:${hook}\\1\\]`)
-
-// Remove Codex's trust tables (header and key lines) for the given places.
-function dropTrust(text, places) {
-  const keys = places.filter(Boolean).map(trustKey)
-  if (!keys.length) return text
-  const lines = text.split('\n')
-  const kept = []
+// The [[hooks.Stop]] groups in file order: { start, end } line ranges (end exclusive, trailing
+// blank and comment lines left to what follows) and whether the group is our hook alone.
+function stopGroups(lines) {
+  const groups = []
   for (let i = 0; i < lines.length; i++) {
-    if (!keys.some((k) => k.test(lines[i]))) { kept.push(lines[i]); continue }
-    while (i + 1 < lines.length && /^\s*[\w"'.-]+\s*=/.test(lines[i + 1])) i++
-    if (kept.at(-1) === '') kept.pop()
+    if (!STOP_GROUP.test(lines[i])) continue
+    let end = i + 1
+    while (end < lines.length && !(HEADER.test(lines[end]) && !STOP_HOOK.test(lines[end]))) end++
+    while (end > i + 1 && (!lines[end - 1].trim() || lines[end - 1].trim().startsWith('#'))) end--
+    const body = lines.slice(i + 1, end)
+    const hooks = body.filter((l) => STOP_HOOK.test(l)).length
+    const value = (key) => body.map((l) => l.match(new RegExp(`^\\s*${key}\\s*=\\s*(.*)$`))).find(Boolean)?.[1]
+    const command = readTomlString(value('command') ?? '') ?? ''
+    const ours = hooks === 1 && (OUR_COMMAND.test(command) || readTomlString(value('statusMessage') ?? '') === HOOK_STATUS)
+    groups.push({ start: i, end, ours })
+    i = end - 1
   }
-  const out = kept.join('\n').replace(/\s+$/, '')
-  return out ? `${out}\n` : ''
+  return groups
 }
 
-function editHookBlock(text, command) {
-  const lines = text.split(/\r?\n/)
-  const kept = []
+// Codex keeps its trust in [hooks.state."<config file>:stop:<group>:<hook>"] tables, keyed by
+// place. Each table: its key's file, group and hook, and its lines.
+function trustTables(lines) {
+  const tables = []
   for (let i = 0; i < lines.length; i++) {
-    // Found by the marker, or by its command when another edit dropped the marker line.
-    const ours = lines[i] === HOOK_MARK || (lines[i] === '[[hooks.Stop]]' && lines.slice(i, i + 5).some((l) => /^command = .*codex-stop-hook/.test(l)))
-    if (!ours) { kept.push(lines[i]); continue }
-    if (kept.at(-1) === '') kept.pop() // the blank line put before the block
-    if (lines[i] !== HOOK_MARK) i--
-    while (i + 1 < lines.length && OWN_HOOK_LINE.test(lines[i + 1])) i++
+    const m = lines[i].match(/^\s*\[\s*hooks\s*\.\s*state\s*\.\s*("(?:[^"\\]|\\.)*"|'[^']*')\s*\]\s*$/)
+    const key = m && readTomlString(m[1])
+    const k = key?.match(/^(.*):stop:(\d+):(\d+)$/)
+    if (!k) continue
+    let end = i + 1
+    while (end < lines.length && !HEADER.test(lines[end])) end++
+    tables.push({ start: i, end, file: k[1], group: Number(k[2]), hook: Number(k[3]), quote: m[1][0] })
   }
-  let out = kept.join('\n').replace(/\s+$/, '')
-  if (command) out += `${out ? '\n\n' : ''}${HOOK_MARK}\n[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ntype = "command"\ncommand = ${JSON.stringify(command)}\nstatusMessage = ${JSON.stringify(HOOK_STATUS)}\ntimeout = ${HOOK_TIMEOUT_S}`
-  return out ? `${out}\n` : ''
+  return tables
+}
+
+const sameFile = (a, b) => {
+  const norm = (p) => path.resolve(p).replace(/\\/g, '/')
+  return process.platform === 'win32' ? norm(a).toLowerCase() === norm(b).toLowerCase() : norm(a) === norm(b)
+}
+
+// dsh-baton no longer uses a Codex Stop hook: long dsh_waits (tool_timeout_sec) cost about
+// as little, read as an ordinary tool result and need nothing trusted, where the hook's
+// message reads badly. So plugin start and setup take out the one 0.6.0–0.6.3 added; updating
+// is all the user does. Conversations opened before keep calling it, so its wrapper in
+// ~/.dsh-baton/bin stays; with nothing pending it ends quietly (codex-hook.mjs).
+//
+// Takes our hook groups out of a Codex config, with their trust records. The groups after
+// one move up a place, so their trust records are renumbered to match and the user's own
+// hooks stay trusted. file: the config's path, to touch only trust records keyed by it
+// (records of other config layers are left alone); without it any record counts.
+// Returns the text unchanged when there is nothing of ours.
+export function removeCodexHookBlock(text, file = null) {
+  let lines = String(text ?? '').split(/\r?\n/)
+  if (!stopGroups(lines).some((x) => x.ours)) return text
+  for (;;) {
+    const groups = stopGroups(lines)
+    const g = groups.findIndex((x) => x.ours)
+    if (g < 0) break
+    let { start, end } = groups[g]
+    // With the marker line. A blank line before it stays to part what was before from what
+    // follows, so the blank lines after the block go.
+    if (start > 0 && lines[start - 1] === HOOK_MARK) start--
+    if (start === 0 || !lines[start - 1].trim()) while (end < lines.length && !lines[end].trim()) end++
+    const mine = (t) => !file || sameFile(t.file, file)
+    const drop = new Set()
+    for (let i = start; i < end; i++) drop.add(i)
+    const rename = new Map()
+    for (const t of trustTables(lines).filter(mine)) {
+      if (t.group === g) for (let i = t.start; i < t.end; i++) drop.add(i)
+      else if (t.group > g) {
+        const key = `${t.file}:stop:${t.group - 1}:${t.hook}`
+        rename.set(t.start, `[hooks.state.${t.quote === "'" && !key.includes("'") ? `'${key}'` : JSON.stringify(key)}]`)
+      }
+    }
+    lines = lines.flatMap((l, i) => (drop.has(i) ? [] : [rename.get(i) ?? l]))
+  }
+  lines = lines.filter((l) => l !== HOOK_MARK)
+  const after = lines.join('\n').replace(/\s+$/, '')
+  return after ? `${after}\n` : ''
+}
+
+// Writes an old-style hook block (tests build the configs 0.6.1-0.6.3 left with it).
+export function codexHookBlockFor(command) {
+  return `${HOOK_MARK}\n[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ntype = "command"\ncommand = ${JSON.stringify(command)}\nstatusMessage = ${JSON.stringify(HOOK_STATUS)}\ntimeout = ${HOOK_TIMEOUT_S}\n`
 }
 
 // Write only when the content changes, keep one backup, and replace the file atomically.
 export function rewrite(file, edit) {
   const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
-  const after = edit(before)
+  let after = edit(before)
+  // The edits join lines with \n; a file written with \r\n (Windows) keeps them.
+  if (before.includes('\r\n') && after !== before) after = after.replace(/\r?\n/g, '\r\n')
   if (after === before) return 'unchanged'
   if (before) fs.copyFileSync(file, `${file}.bak-dsh-baton`)
   fs.mkdirSync(path.dirname(file), { recursive: true })
   const tmp = `${file}.tmp-${process.pid}`
   fs.writeFileSync(tmp, after, { mode: before ? fs.statSync(file).mode : 0o600 })
-  fs.renameSync(tmp, file)
+  // On Windows a file another process has open (Codex reading its config just after a
+  // change, an antivirus scan) refuses the rename for a moment: try again shortly. The file
+  // is read again each time, so a change saved meanwhile (Codex's own settings) is kept.
+  let seen = before
+  for (let tries = 0; ; tries++) {
+    try { fs.renameSync(tmp, file); break } catch (e) {
+      if (tries < 20 && ['EPERM', 'EBUSY', 'EACCES'].includes(e.code)) {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)
+        let now = seen
+        try { now = fs.readFileSync(file, 'utf8') } catch { /* still locked: as before */ }
+        if (now !== seen) {
+          seen = now
+          let next = edit(now)
+          if (now.includes('\r\n') && next !== now) next = next.replace(/\r?\n/g, '\r\n')
+          if (next === now) { fs.rmSync(tmp, { force: true }); return 'unchanged' }
+          fs.writeFileSync(tmp, next)
+        }
+        continue
+      }
+      try { fs.rmSync(tmp, { force: true }) } catch { /* left behind */ }
+      throw e
+    }
+  }
   return 'updated'
 }
 
@@ -410,6 +472,11 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
       return !fallback || path.resolve(e.command) !== path.resolve(fallback.command) || e.env?.ELECTRON_RUN_AS_NODE === '1'
     }
     const list = clients(env, home)
+    // Whether Codex's table already had tool_timeout_sec: one written now (below, or with a
+    // fresh table) is noted as new, so conversations opened without it keep 270 s.
+    const codexFile = list.find((c) => c.id === 'codex')?.file
+    let hadTimeout = false
+    try { hadTimeout = readCodexToolTimeout(fs.readFileSync(codexFile, 'utf8')) !== null } catch { /* no config yet */ }
     let launch = node ? { command: node } : null
     for (const c of list) {
       if (!c.present) { result.clients.push({ id: c.id, label: c.label, state: 'not-installed' }); continue }
@@ -432,7 +499,32 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
         result.clients.push({ id: c.id, label: c.label, state: 'failed', error: e.message })
       }
     }
-    result.codexHook = addCodexHook(list.find((c) => c.id === 'codex'), env, fallback, home)
+    const codex = list.find((c) => c.id === 'codex')
+    // Entries written before tool_timeout_sec existed get it here, and the old Codex Stop
+    // hook goes (see removeCodexHookBlock), in one write: Codex may still have the file open
+    // from the edit before, and Windows refuses to replace it then.
+    result.codexHook = 'none'
+    try {
+      if (codex?.present && fs.existsSync(codex.file)) {
+        rewrite(codex.file, (t) => {
+          const timed = addCodexToolTimeout(t)
+          const out = removeCodexHookBlock(timed, codex.file)
+          result.codexHook = out === timed ? 'none' : 'removed'
+          return out
+        })
+        noteCodexToolTimeout(codex.file, env, home, !hadTimeout)
+      }
+    } catch (e) {
+      result.codexHook = `failed (${e.code ?? e.message})`
+      // Codex then keeps 270 s waits and the old hook: say so where the Plugins page looks.
+      const c = result.clients.find((x) => x.id === 'codex')
+      if (c && c.state !== 'not-installed') Object.assign(c, { state: 'failed', error: `could not update ${codex.file}: ${e.code ?? e.message}` })
+    }
+    // State the hook of 0.6.0–0.6.3 kept that nothing reads any more (pending.json stays:
+    // conversations opened before still run the hook, which reads it).
+    for (const f of ['registered.json', 'trust-noted.json', 'wanted', 'alive']) {
+      try { fs.rmSync(path.join(batonHome(env, home), 'codex-hook', f), { force: true }) } catch { /* left */ }
+    }
     result.node = launch?.command ?? null
     result.runtime = !launch ? null : launch === fallback ? 'harness' : 'node'
     const present = result.clients.filter((c) => c.state !== 'not-installed')
@@ -445,69 +537,3 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
   return result
 }
 
-// The Codex Stop hook goes in with the server, so Codex waits for runs without model
-// requests (see codex-hook.mjs). It runs cli.mjs beside the server Codex is set up with,
-// with the same runtime: the user's Node.js, or Harness's own in Node mode. Codex runs a
-// new hook only once the user trusts it (Settings → Hooks); until then dsh-baton keeps to
-// dsh_wait. Not added without Codex, with DSH_BATON_CODEX_HOOK=0, or when the entry has
-// no cli.mjs to run (a bare command such as npx, or a server folder that is gone).
-// What happened, and why, is noted in hookResultFile for dsh_send to pass on.
-function addCodexHook(codex, env, fallback, home) {
-  const done = (state, reason = null, command = null) => {
-    try {
-      const file = hookResultFile(env, home)
-      fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 })
-      fs.writeFileSync(file, JSON.stringify({ state, reason, command, at: Date.now() }))
-    } catch { /* nowhere to note it */ }
-    return state
-  }
-  try {
-    if (!codex?.present) return 'off'
-    if (env.DSH_BATON_CODEX_HOOK === '0') return done('off', 'disabled')
-    const e = readCodexEntry(fs.existsSync(codex.file) ? fs.readFileSync(codex.file, 'utf8') : '')
-    const script = e?.args?.[0]
-    if (!e || !/[\\/]/.test(e.command) || !script || !fs.existsSync(path.join(path.dirname(script), 'cli.mjs'))) return done('skipped', 'no-cli')
-    const harness = e.env?.ELECTRON_RUN_AS_NODE === '1' || Boolean(fallback && path.resolve(e.command) === path.resolve(fallback.command))
-    const entry = codexHookEntry(e.command, script, { home: batonHome(env, home), harness })
-    return done(rewrite(codex.file, (t) => editCodexHook(t, entry)) === 'updated' ? 'added' : 'unchanged', null, entry)
-  } catch (err) {
-    return done('failed', err.message)
-  }
-}
-
-// What the plugin last did about the hook ({ state, reason, command, at }), see addCodexHook.
-// command is the hook command as written to config.toml (the wrapper path, its 8.3 form,
-// or PowerShell's call form), so a check need not parse TOML.
-export const hookResultFile = (env = process.env, home = os.homedir()) => path.join(batonHome(env, home), 'codex-hook', 'registered.json')
-
-// Where the Stop hook notes each run (codex-hook.mjs): when, and the node and cli.mjs it
-// ran as, so a hook rewritten since can be told from the one Codex trusted.
-export const hookAliveFile = (env = process.env, home = os.homedir()) => path.join(batonHome(env, home), 'codex-hook', 'alive')
-
-// Whether Codex is set up with our Stop hook and the user has trusted it. Codex keeps its
-// trust next to the hooks, as [hooks.state."<config file>:stop:<group>:<hook>"] (or with
-// the key in single quotes, as on Windows where the path has backslashes) with the
-// hash of the hook it trusted. That hash is Codex's own, so a hook rewritten after it was
-// trusted is caught another way: Codex runs only trusted hooks, and each run notes what it
-// ran as. A trust record with no run noted yet (trusted, no turn ended since) counts.
-export function codexHookStatus(env = process.env, home = os.homedir()) {
-  const file = codexConfigPath(env, home)
-  if (!fs.existsSync(path.dirname(file))) return { codex: false, installed: false, trusted: false }
-  const lines = (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '').split(/\r?\n/)
-  const place = hookPlace(lines)
-  if (!place) return { codex: true, installed: false, trusted: false }
-  const { at } = place
-  const key = trustKey(place)
-  const s = lines.findIndex((l) => key.test(l))
-  const recorded = s >= 0 && lines.slice(s + 1).find((l) => /^\s*(\[|trusted_hash\s*=)/.test(l))?.trim().startsWith('trusted_hash')
-  if (!recorded) return { codex: true, installed: true, trusted: false }
-  let ran = null
-  try { ran = JSON.parse(fs.readFileSync(hookAliveFile(env, home), 'utf8')) } catch { /* not run yet, or noted before 0.6.1 */ }
-  if (!ran?.cli) return { codex: true, installed: true, trusted: true }
-  const real = (p) => { try { return fs.realpathSync(p) } catch { return p } }
-  const command = readTomlString(lines[at].replace(/^command = /, ''))
-  // Through the wrapper (any command but a node line) the trusted entry does not change
-  // when node moves: the trust record is all there is to check.
-  const t = hookTarget(command)
-  return { codex: true, installed: true, trusted: !t || (samePath(real(t.node), ran.node) && samePath(real(t.cli), ran.cli)) }
-}

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="470" viewBox="0 0 1200 470" role="img" aria-labelledby="title desc">
+  <title id="title">dsh-baton plugin compared with dsh headless</title>
+  <desc id="desc">With the plugin, runs show up live in the Harness UI, can continue sessions created in the desktop app, and use desktop agent presets. dsh headless does none of these. Both reuse the desktop sign-in; headless does it through the account patch.</desc>
+  <rect width="1200" height="470" rx="24" fill="#0D1117"/>
+<rect x="590" y="40" width="220" height="400" rx="14" fill="#161B22"/>
+<text x="64" y="76" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="30" fill="#E6EDF3" font-weight="700">Plugin vs headless</text>
+<text x="700" y="76" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#4493F8" font-weight="700" text-anchor="middle">dsh-baton</text>
+<text x="940" y="76" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#9198A1" font-weight="700" text-anchor="middle">dsh headless</text>
+<line x1="64" y1="100" x2="1136" y2="100" stroke="#30363D"/>
+<text x="64" y="158" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#E6EDF3">Shows up live in the Harness UI</text>
+<circle cx="700" cy="150" r="15" fill="#4493F8"/><path d="M693 150 l5 5 l9 -10" stroke="#0D1117" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="940" cy="150" r="14" fill="none" stroke="#484F58" stroke-width="2"/><path d="M934 150 h12" stroke="#9198A1" stroke-width="3" stroke-linecap="round"/>
+<line x1="64" y1="185" x2="1136" y2="185" stroke="#30363D"/>
+<text x="64" y="228" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#E6EDF3">Continues sessions made in the desktop app</text>
+<circle cx="700" cy="220" r="15" fill="#4493F8"/><path d="M693 220 l5 5 l9 -10" stroke="#0D1117" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="940" cy="220" r="14" fill="none" stroke="#484F58" stroke-width="2"/><path d="M934 220 h12" stroke="#9198A1" stroke-width="3" stroke-linecap="round"/>
+<line x1="64" y1="255" x2="1136" y2="255" stroke="#30363D"/>
+<text x="64" y="298" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#E6EDF3">Uses your desktop agent presets</text>
+<circle cx="700" cy="290" r="15" fill="#4493F8"/><path d="M693 290 l5 5 l9 -10" stroke="#0D1117" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="940" cy="290" r="14" fill="none" stroke="#484F58" stroke-width="2"/><path d="M934 290 h12" stroke="#9198A1" stroke-width="3" stroke-linecap="round"/>
+<line x1="64" y1="325" x2="1136" y2="325" stroke="#30363D"/>
+<text x="64" y="368" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="22" fill="#E6EDF3">Desktop sign-in, no API key</text>
+<circle cx="700" cy="360" r="15" fill="#4493F8"/><path d="M693 360 l5 5 l9 -10" stroke="#0D1117" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="940" cy="360" r="15" fill="#4493F8"/><path d="M933 360 l5 5 l9 -10" stroke="#0D1117" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
