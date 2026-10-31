@@ -32,14 +32,16 @@ That is the whole install: switched on, the plugin registers the dsh-baton MCP s
 
 装好就完成了：插件启用时会为 Claude Code 和 Codex 注册 dsh-baton MCP 服务器（`dsh-baton-mcp` 包，随插件一起安装），Harness 里会提示。新开的对话就有 `dsh_*` 工具。没能注册的话，运行 `npx -y dsh-baton-mcp setup`。详见 [dsh-baton](https://github.com/JialaoLiu/dsh-baton/blob/main/README.zh-CN.md#安装细节)。
 
-Update / 更新: uninstall, then add it again; the MCP server is updated with it / 先卸载再重新添加，MCP 服务器会一起更新.
+Codex needs nothing extra: from 0.6.4 it waits for a run in one `dsh_wait` call of up to 59 minutes, with no hook to trust. / Codex 不用额外设置：从 0.6.4 起一次 `dsh_wait` 最长等 59 分钟，不需要信任钩子。
+
+Update / 更新: uninstall, then add it again; the MCP server is updated with it. Right after a release, type the exact version, such as `dsh-baton-host@0.6.4`. / 先卸载再重新添加，MCP 服务器会一起更新；刚发版时请输入完整版本号，例如 `dsh-baton-host@0.6.4`。
 
 Remove / 卸载: uninstall, then `npx -y dsh-baton-mcp setup --remove` / 卸载插件后运行 `npx -y dsh-baton-mcp setup --remove`.
 
 ## How it works / 工作原理
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/JialaoLiu/dsh-baton/main/assets/readme/en/architecture.svg" width="100%" alt="MCP clients call dsh-baton-mcp over stdio; it reaches the dsh-baton-host plugin inside Harness through an owner-only local socket; the plugin drives Harness sessions live, with dsh headless as fallback">
+  <img src="https://raw.githubusercontent.com/JialaoLiu/dsh-baton/main/assets/readme/en/architecture.gif" width="100%" alt="MCP clients call dsh-baton-mcp over stdio; it reaches the dsh-baton-host plugin inside Harness through an owner-only local socket; the plugin drives Harness sessions live, with dsh headless as fallback">
 </p>
 
 ## Socket protocol / 套接字协议
@@ -53,6 +55,7 @@ Newline-delimited JSON: request `{"id", "method", "params"}`, reply `{"id", "res
 | `create_workspace` | `path`, `title?`, `create_dir?` (default `true`) |
 | `list_sessions` | `cwd?`, `query?`, `limit?` |
 | `read_session` | `session_id`, `last?` |
+| `models` | — |
 | `send` | `message`, and `session_id` or `cwd` or `workspace_id`; `mode?` (`followup` \| `steer`; left out, Harness's busy-send setting, else `followup`) |
 | `status` | `run_id`, `tail?` |
 | `wait` | `run_id`, `timeout_s?` |
