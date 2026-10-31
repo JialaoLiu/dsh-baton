@@ -206,7 +206,7 @@ test('the Codex Stop hook plugins 0.6.0-0.6.3 added is taken out with its trust,
     // A config as 0.6.3 left it: our table without tool_timeout_sec, the hook, Codex's trust.
     const script = path.join(s.app, 'src', 'server.mjs')
     const table = editCodexConfig('model = "x"\n', { command: process.execPath, args: [script] }).replace(/^tool_timeout_sec = .*\n/m, '')
-    const old = `${table.replace(/\s+$/, '')}\n\n${codexHookBlockFor('/x/.dsh-baton/bin/codex-stop-hook')}\n[hooks.state."${s.codexFile}:stop:0:0"]\ntrusted_hash = "sha256:a"\n`
+    const old = `${table.replace(/\s+$/, '')}\n\n${codexHookBlockFor('/x/.dsh-baton/bin/codex-stop-hook')}\n[hooks.state.${JSON.stringify(`${s.codexFile}:stop:0:0`)}]\ntrusted_hash = "sha256:a"\n`
     fs.writeFileSync(s.codexFile, old)
     // What the old hook kept beside it, read by nothing now.
     const state = path.join(s.home, '.dsh-baton', 'codex-hook')

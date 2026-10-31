@@ -181,7 +181,7 @@ test('setup --remove takes out the MCP table and the Codex Stop hook 0.6.0-0.6.3
   fs.mkdirSync(codexHome)
   const cfg = path.join(codexHome, 'config.toml')
   const own = 'model = "x"\n'
-  fs.writeFileSync(cfg, `${editCodexConfig(own, entry)}\n${codexHookBlockFor('/x/.dsh-baton/bin/codex-stop-hook')}\n[hooks.state."${cfg}:stop:0:0"]\ntrusted_hash = "sha256:a"\n`)
+  fs.writeFileSync(cfg, `${editCodexConfig(own, entry)}\n${codexHookBlockFor('/x/.dsh-baton/bin/codex-stop-hook')}\n[hooks.state.${JSON.stringify(`${cfg}:stop:0:0`)}]\ntrusted_hash = "sha256:a"\n`)
   const env = { ...process.env, HOME: dir, USERPROFILE: dir, CODEX_HOME: codexHome, CLAUDE_CONFIG_DIR: dir, DSH_HOME: path.join(dir, '.dsh'), DSH_BATON_HOME: path.join(dir, '.dsh-baton'), DSH_BATON_SOCKET: path.join(dir, 'none.sock') }
   try {
     const r = spawnSync(process.execPath, [path.join(import.meta.dirname, '..', 'src', 'cli.mjs'), 'setup', '--remove'], { env, encoding: 'utf8', timeout: 30000 })

@@ -387,7 +387,7 @@ test('Codex\'s dsh_wait description never says to end the turn, even with a trus
   const none = await describe()
   assert.doesNotMatch(none, /end your turn/)
   assert.match(none, /call dsh_wait again with the same run_id/)
-  fs.writeFileSync(cfg, `${codexHookBlockFor(WRAPPER)}\n[hooks.state."${cfg}:stop:0:0"]\ntrusted_hash = "sha256:a"\n`)
+  fs.writeFileSync(cfg, `${codexHookBlockFor(WRAPPER)}\n[hooks.state.${JSON.stringify(`${cfg}:stop:0:0`)}]\ntrusted_hash = "sha256:a"\n`)
   assert.equal(await describe(), none)
   fs.rmSync(codexHome, { recursive: true, force: true })
 })

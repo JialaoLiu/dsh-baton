@@ -130,7 +130,7 @@ test('Codex always waits with dsh_wait, even with a trusted hook still in config
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-lw-'))
   const cfg = path.join(dir, 'config.toml')
   const conf = `${editCodexConfig('', { command: '/n', args: ['/s'] })}\n${codexHookBlockFor('/h/codex-stop-hook')}`
-  fs.writeFileSync(cfg, `${conf}\n[hooks.state."${cfg}:stop:0:0"]\ntrusted_hash = "sha256:a"\n`)
+  fs.writeFileSync(cfg, `${conf}\n[hooks.state.${JSON.stringify(`${cfg}:stop:0:0`)}]\ntrusted_hash = "sha256:a"\n`)
   fs.writeFileSync(path.join(dir, 'codex-timeout.json'), JSON.stringify({ value: 3600, since: 1000 }))
   const sock = path.join(dir, 'h.sock')
   const server = net.createServer((c) => c.on('data', (d) => {
