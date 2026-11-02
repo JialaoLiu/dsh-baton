@@ -185,7 +185,7 @@ test('a conversation started after tool_timeout_sec was written waits long; an o
 })
 
 test('an old conversation loaded again after the value was written (a Codex restart) waits long too', async () => {
-  const { codexConfigReadAt, codexProcessStartedAt, processInfo } = await import('../src/register.mjs')
+  const { codexConfigReadAt, codexProcessStartedAt, codexProcessStartedAtAsync, processChain, processInfo } = await import('../src/register.mjs')
   const old = '00000000-0001-7000-8000-000000000000' // started at 1 ms
   assert.equal(codexConfigReadAt(old, 5000), 5000, 'Codex started later: it read the config then')
   assert.equal(codexConfigReadAt(old, null), 1, 'no Codex process found: the thread id alone')
@@ -199,11 +199,18 @@ test('an old conversation loaded again after the value was written (a Codex rest
   assert.equal(codexProcessStartedAt(7, info), 600, 'Windows: codex.exe in any case')
   assert.equal(codexProcessStartedAt(9, (pid) => (pid === 8 ? { ppid: 1, name: 'claude', started: 1 } : info(pid))), null, 'Claude Code started it: not Codex')
   assert.equal(codexProcessStartedAt(42, info), null, 'a process that is gone')
+  // Windows reads the parents in one PowerShell call; its lines, from the pid upwards.
+  const chain = processChain(30, '20|node.exe|2026-11-01T10:00:05.5000000Z\r\n10|Codex.exe|2026-11-01T09:00:00.0000000Z\r\n')
+  assert.deepEqual(chain.get(30), { ppid: 20, name: 'node.exe', started: Date.parse('2026-11-01T10:00:05Z') })
+  assert.equal(codexProcessStartedAt(30, (p) => chain.get(p) ?? null), Date.parse('2026-11-01T09:00:00Z'))
+  assert.equal(processChain(30, '').size, 0)
+  assert.equal(await codexProcessStartedAtAsync(process.pid), null, 'run by the test runner, not Codex')
 
   // Read from the system for this very process (ps, or PowerShell on Windows).
   const me = processInfo(process.pid)
   assert.ok(me, 'process info for this process')
-  assert.match(me.name, /^node(?:\.exe)?$/i)
+  // Linux ps shows the main thread's name, which Node 24 sets to MainThread.
+  assert.match(me.name, process.platform === 'linux' ? /^(?:node|MainThread)$/ : /^node(?:\.exe)?$/i)
   assert.equal(me.ppid, process.ppid)
   const started = Date.now() - process.uptime() * 1000
   assert.ok(me.started <= started + 1000 && me.started > started - 5000, `started ${me.started} vs ${started}`)

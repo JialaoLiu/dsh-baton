@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import * as core from './core.mjs'
 import { stableNodePath } from './setup.mjs'
-import { codexConfigPath, readCodexToolTimeout, codexTimeoutNoteFile, codexWaitSeconds, codexConfigReadAt, codexProcessStartedAt } from './register.mjs'
+import { codexConfigPath, readCodexToolTimeout, codexTimeoutNoteFile, codexWaitSeconds, codexConfigReadAt, codexProcessStartedAtAsync } from './register.mjs'
 import { conversationFolder, within } from './folder.mjs'
 import { threadOf, delivered } from './codex-hook.mjs'
 
@@ -47,15 +47,14 @@ function codexToolTimeout() {
 }
 // When the Codex process that runs this conversation started, looked up once from the client
 // pid server.mjs passes. A shell from before 0.6.5 passes none, and then the thread id alone
-// decides.
-let codexStarted
-const codexStartedAt = () => {
-  if (codexStarted === undefined) {
-    const pid = Number(process.env.DSH_BATON_CLIENT_PID)
-    codexStarted = pid > 1 ? codexProcessStartedAt(pid) : null
-  }
-  return codexStarted
+// decides. It starts at initialize and a wait awaits it (on Windows it takes a second or more).
+let codexStarted = null, codexLookup = null
+const lookUpCodexStart = () => {
+  const pid = Number(process.env.DSH_BATON_CLIENT_PID)
+  codexLookup ??= pid > 1 ? codexProcessStartedAtAsync(pid).then((t) => { codexStarted = t }, () => {}) : Promise.resolve()
+  return codexLookup
 }
+const codexStartedAt = () => codexStarted
 // meta is the call's: Codex keeps the tool_timeout_sec a conversation read when it started or
 // was loaded, so one open since before the value was written keeps 270 s (see
 // noteCodexToolTimeout). Without meta (a tool description), the length a new conversation gets.
@@ -98,6 +97,7 @@ const FOLLOW_COMMAND_HINT = ' Your client wakes you when a background command ex
 // recent events, so the client has nothing to summarise and simply waits again.
 // A call the client cancelled (the user stopped the turn) stops at the next chunk.
 async function waitInChunks({ run_id }, progress, signal, meta) {
+  if (isCodex()) await lookUpCodexStart()
   const total = waitSeconds(meta ?? null)
   const started = Date.now()
   const deadline = started + total * 1000
@@ -128,6 +128,7 @@ async function waitInChunks({ run_id }, progress, signal, meta) {
 const FOLLOW_MAX_S = 900
 const FOLLOW_CHUNK_S = 30
 async function followInChunks({ session_id, until = 'goal', cursor, every_minutes = 10 }, progress, signal, meta) {
+  if (isCodex()) await lookUpCodexStart()
   const total = Math.min(waitSeconds(meta ?? null), FOLLOW_MAX_S)
   const started = Date.now()
   const deadline = started + total * 1000
@@ -375,6 +376,7 @@ async function handle(req) {
     case 'initialize': {
       const asked = req.params?.protocolVersion
       clientName = req.params?.clientInfo?.name ?? null
+      if (isCodex()) lookUpCodexStart()
       return {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: {} },

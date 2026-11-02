@@ -8,7 +8,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { execFileSync } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import crypto from 'node:crypto'
 import { batonHome } from '../host/lib/socket.js'
 
@@ -180,6 +180,30 @@ export function codexProcessStartedAt(pid, info = processInfo) {
     pid = p.ppid
   }
   return null
+}
+// The same without holding the server up: on Windows one PowerShell call walks the parents
+// (a call per process took seconds each, and the server answered nothing meanwhile).
+export function codexProcessStartedAtAsync(pid) {
+  if (process.platform !== 'win32') return Promise.resolve(codexProcessStartedAt(pid))
+  const script = `$id = ${Number(pid)}; for ($i = 0; $i -lt 4 -and $id -gt 1; $i++) { $p = Get-CimInstance Win32_Process -Filter "ProcessId=$id"; if (-not $p) { break }; "$($p.ParentProcessId)|$($p.Name)|$($p.CreationDate.ToUniversalTime().ToString('o'))"; $id = $p.ParentProcessId }`
+  return new Promise((resolve) => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', timeout: 15000, windowsHide: true }, (err, out) => {
+    if (err) return resolve(null)
+    const chain = processChain(pid, out)
+    resolve(codexProcessStartedAt(Number(pid), (p) => chain.get(p) ?? null))
+  }))
+}
+// That call's lines ("ppid|name|start", from pid upwards) as pid -> { ppid, name, started }.
+export function processChain(pid, out) {
+  const chain = new Map()
+  let cur = Number(pid)
+  for (const line of String(out).trim().split(/\r?\n/)) {
+    const [ppid, name, started] = line.split('|')
+    const ms = Date.parse(started)
+    if (!(ms > 0)) break
+    chain.set(cur, { ppid: Number(ppid), name, started: Math.floor(ms / 1000) * 1000 })
+    cur = Number(ppid)
+  }
+  return chain
 }
 const shortWait = (value) => (!value ? 270 : value > 60 ? Math.min(270, Math.floor(value - 30)) : Math.max(1, Math.floor(value / 2)))
 export function codexWaitSeconds({ value, since, prev = null }, started) {
