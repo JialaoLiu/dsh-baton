@@ -155,10 +155,20 @@ export function apply(ctx) {
   const followers = new Map() // sessionId -> Set<wake>
   const FOLLOW_EVENTS = new Set(['turn/start', 'turn/end', 'goal/change'])
   // A moment's delay, so the event that woke a follower is in the log it reads.
-  const wakeFollowers = (sessionId) => { if (followers.has(sessionId)) setTimeout(guard('wake followers', () => { for (const wake of [...(followers.get(sessionId) ?? [])]) wake() }), 50) }
+  // Each such event also counts up the session's generation (50 ms later, once the log has it), so
+  // a follow that was reading the log when it came reads again instead of sleeping past it.
+  const eventGen = new Map() // sessionId -> count
+  const wakeFollowers = (sessionId) => setTimeout(guard('wake followers', () => {
+    eventGen.set(sessionId, (eventGen.get(sessionId) ?? 0) + 1)
+    for (const wake of [...(followers.get(sessionId) ?? [])]) wake()
+  }), 50)
   // Sessions whose agent waits for a person (agent/status waiting), and how often each began to.
   const waitingSessions = new Set()
   const uiEpisodes = new Map() // sessionId -> count
+  const waitingSince = new Map() // sessionId -> ms the current wait began
+  // Sessions a follow wait is on, until when: a question that comes between two calls of one
+  // follow (a client's chunks, its round trip) is still taken up for dsh_answer.
+  const followedUntil = new Map() // sessionId -> ms
 
   // --- run bookkeeping ------------------------------------------------------
 
@@ -451,8 +461,8 @@ export function apply(ctx) {
 
   ctx.on('agent/status', guard('agent/status', ({ agent, status }) => {
     if (!agent) return
-    if (status === 'waiting') { if (!waitingSessions.has(agent.id)) uiEpisodes.set(agent.id, (uiEpisodes.get(agent.id) ?? 0) + 1); waitingSessions.add(agent.id) }
-    else waitingSessions.delete(agent.id)
+    if (status === 'waiting') { if (!waitingSessions.has(agent.id)) { uiEpisodes.set(agent.id, (uiEpisodes.get(agent.id) ?? 0) + 1); waitingSince.set(agent.id, Date.now()) } waitingSessions.add(agent.id) }
+    else { waitingSessions.delete(agent.id); waitingSince.delete(agent.id) }
     wakeFollowers(agent.id)
     const receivers = receiversFor(agent.id)
     if (status === 'running' && receivers.length) lastRunningAt.set(agent.id, Date.now())
@@ -591,7 +601,8 @@ export function apply(ctx) {
     const sessionId = request?.agent?.id
     const asked = sessionId && Array.isArray(request.questions) ? outputReceiversFor(sessionId) : []
     // Taken up too when someone follows the session's goal: the follow wait brings it back.
-    if (!asked.length && !(followers.has(sessionId) && Array.isArray(request.questions))) return next()
+    const followed = followers.has(sessionId) || (followedUntil.get(sessionId) ?? 0) > Date.now()
+    if (!asked.length && !(followed && Array.isArray(request.questions))) return next()
     const entry = { id: `q-${crypto.randomBytes(4).toString('hex')}`, sessionId, items: request.questions, answers: new Map(), runs: asked }
     const ours = new Promise((resolve) => { entry.resolve = resolve })
     questions.set(sessionId, entry)
@@ -779,31 +790,30 @@ export function apply(ctx) {
 
   const clipText = (s, n) => (typeof s === 'string' && s.length > n ? `${s.slice(0, n)}…` : s ?? null)
 
-  // The session's current goal, or null (none, or this Harness has no goals).
+  // The session's current goal, null (none, or this Harness has no goals), or undefined when
+  // the projection could not be read just now (not the same as no goal).
   async function goalOf(sessionId) {
     let current
+    if (typeof controller.projections !== 'function') return null
     try {
-      const p = typeof controller.projections === 'function' ? await controller.projections({ sessionId }, signal()) : null
+      const p = await controller.projections({ sessionId }, signal())
       // The projection's wire view is the current goal itself (null when none); the stored
       // state, as the projection cache keeps it, wraps it in { current, seenGoalIds, failure }.
       const v = p?.values?.goal
       current = v && typeof v === 'object' && 'current' in v ? v.current : v
-    } catch { return null }
+    } catch { return undefined }
     const g = current?.goal
     if (!g?.id) return null
-    return {
+    const view = {
       id: g.id, phase: g.phase, objective: clipText(g.objective, 300),
       rounds_started: current.roundsStarted ?? 0, max_rounds: g.maxGoalRounds ?? null,
       activation: activationOf(sessionId, g.id),
       ...(g.blockedReason ? { blocked_reason: { code: g.blockedReason.code, message: g.blockedReason.message } } : {}),
     }
+    // When it last changed, for follow() only (left out of results).
+    return Object.defineProperty(view, 'changedAt', { value: Number(current.updatedAt) || 0 })
   }
 
-  // A goal that will go on after this point (not complete): worth telling whoever waited on a turn.
-  const openGoal = async (sessionId) => {
-    const goal = await goalOf(sessionId)
-    return goal && goal.phase !== 'complete' ? goal : null
-  }
 
   // A session log's turns, oldest first: when each ended, its goal round (when a goal started
   // it), its closing text and the tools it called.
@@ -820,24 +830,36 @@ export function apply(ctx) {
         if (text) cur.text = text
         for (const call of toolCallsOf(content)) { const n = call.name ?? call.kind; cur.tools[n] = (cur.tools[n] ?? 0) + 1 }
       } else if (e.type === 'turn/end') {
-        const { started_at, ...turn } = cur
-        ended.push({ ...turn, ended_at: iso(e.time) ?? new Date().toISOString(), end: e.data?.reason?.kind ?? null })
+        ended.push({ ...cur, ended_at: iso(e.time) ?? new Date().toISOString(), end: e.data?.reason?.kind ?? null })
         cur = null
       }
     }
     return { ended, running: cur !== null, runningSince: cur?.started_at ?? null }
   }
 
-  const MAX_ROUNDS_SHOWN = 10
+  const MAX_ROUNDS_SHOWN = 100
   const shownRound = (t) => ({
     turn: t.turn, ...(t.round != null ? { goal_round: t.round } : {}), ended_at: t.ended_at,
     ...(t.end && t.end !== 'completed' ? { ended_as: t.end } : {}),
     final_text: clipText(t.text, 1500), ...(Object.keys(t.tools).length ? { tools: t.tools } : {}),
   })
-  const shownRounds = (list) => ({
-    rounds: list.slice(-MAX_ROUNDS_SHOWN).map(shownRound),
-    ...(list.length > MAX_ROUNDS_SHOWN ? { earlier_rounds_not_shown: list.length - MAX_ROUNDS_SHOWN } : {}),
+  // An earlier round of a report, in one line: the latest round's reply usually sums up the
+  // goal so far, and a client reads any round in full with dsh_read_session.
+  const digestRound = (t) => ({
+    turn: t.turn, ...(t.round != null ? { goal_round: t.round } : {}),
+    ...(t.end && t.end !== 'completed' ? { ended_as: t.end } : {}),
+    summary: clipText(t.text?.replace(/\s+/g, ' ').trim() || null, 100), ...(Object.keys(t.tools).length ? { tools: t.tools } : {}),
   })
+  // Every round since the last report: the latest in full, the ones before as digests (up to
+  // MAX_ROUNDS_SHOWN, then a count), so no round goes missing however long the wait was.
+  const shownRounds = (list) => {
+    const earlier = list.slice(0, -1)
+    const kept = earlier.slice(-(MAX_ROUNDS_SHOWN - 1))
+    return {
+      rounds: [...kept.map(digestRound), ...list.slice(-1).map(shownRound)],
+      ...(earlier.length > kept.length ? { earlier_rounds_not_shown: earlier.length - kept.length } : {}),
+    }
+  }
 
   // Where a follow wait has got to: rounds already reported, and when it last reported.
   const cursorOf = (mark) => `${mark.rounds}:${mark.at}`
@@ -846,16 +868,24 @@ export function apply(ctx) {
     return m ? { rounds: Number(m[1]), at: Number(m[2]) } : null
   }
   const GOAL_QUIET_MS = Number(process.env.DSH_BATON_GOAL_QUIET_MS) || 5 * 60_000
+  // How long a stopped goal waits for the round that stopped it to show its end in the log.
+  const GOAL_SETTLE_MS = Number(process.env.DSH_BATON_GOAL_SETTLE_MS) || 15_000
   // The question or Harness UI wait a follower was already told about (one report per episode).
-  const noticed = new Map() // sessionId -> key
+  const noticed = new Map() // sessionId -> { key, at }
+  // A question still open is reported again to a call that comes back after this long (the
+  // report may never have reached anyone); a Harness UI wait once per episode.
+  const RENOTICE_MS = 60_000
+  // A waiting status with no question yet: the question usually follows within this time.
+  const QUESTION_GRACE_MS = 500
 
   // Wait on a session's goal without sending anything. until "goal": until the goal stops
-  // (complete, paused, blocked, cleared). until "turn": at the first round end once every_s
+  // (complete, paused, blocked, cleared). since_ms (without a cursor): count from then, e.g.
+  // a run's start, so its own round is in the report too. until "turn": at the first round end once every_s
   // have passed since the last report, with every round since then. Both return at once when
   // Harness needs a person, or the goal will not go on by itself (disarmed; when that cannot
   // be read, no new round for GOAL_QUIET_MS). The cursor carries what was reported, so a
   // next call, in either mode, neither repeats nor misses a round.
-  async function follow({ session_id, until = 'goal', cursor, every_s = 600, timeout_s = 300 }) {
+  async function follow({ session_id, until = 'goal', cursor, since_ms, every_s = 600, timeout_s = 300 }) {
     if (!session_id) throw new Error('session_id is required')
     if (until !== 'goal' && until !== 'turn') throw new Error('until must be goal or turn')
     if (typeof controller.projections !== 'function') throw new Error('This DeepSeek Harness version has no session projections, so its goals cannot be followed.')
@@ -863,34 +893,72 @@ export function apply(ctx) {
     const seconds = Number.isFinite(Number(timeout_s)) ? Math.min(Math.max(Number(timeout_s), 0), MAX_WAIT_S) : 300
     const deadline = Date.now() + seconds * 1000
     let mark = parseCursor(cursor)
-    const startedAt = Date.now()
+    const since = !mark && Number(since_ms) > 0 ? Number(since_ms) : null
+    let sawGoal = false
     for (;;) {
+      // Followed from now on (a question that comes while the log is read is taken up), and
+      // the events so far, to tell whether one came during the read.
+      followedUntil.set(session_id, Date.now() + 60_000)
+      const gen = eventGen.get(session_id) ?? 0
       const [goal, log] = await Promise.all([goalOf(session_id), controller.inspect(session_id, signal())])
       const { ended, running, runningSince } = turnsOf(log?.events)
-      // A first call counts from the start of the round under way, so what it already wrote is reported.
-      mark ??= { rounds: ended.length, at: running && runningSince ? Math.min(runningSince, Date.now()) : Date.now() }
+      // A first call counts from the start of the round under way, so what it already wrote is
+      // reported; one that comes after the goal stopped, from the start of the last round.
+      mark ??= since
+        ? { rounds: ended.filter((t) => Date.parse(t.ended_at) < since).length, at: since }
+        : goal && goal.phase !== 'active' && !running && ended.length
+          ? { rounds: ended.length - 1, at: ended.at(-1).started_at ?? Date.parse(ended.at(-1).ended_at) }
+          : { rounds: ended.length, at: running && runningSince ? Math.min(runningSince, Date.now()) : Date.now() }
+      // The goal could not be read just now: decide nothing, look again shortly.
+      if (goal === undefined) {
+        if (stopping || Date.now() >= deadline) return { session_id, state: 'following', until, cwd: log?.meta?.cwd ?? null, since: iso(mark.at), rounds_since_report: ended.length - Math.min(mark.rounds, ended.length), timed_out: true, cursor: cursorOf(mark) }
+        await new Promise((r) => setTimeout(r, 2000))
+        continue
+      }
+      if (goal) sawGoal = true
       const fresh = ended.slice(Math.min(mark.rounds, ended.length))
-      const out = (state, extra = {}) => ({
-        session_id, state, until, goal, cwd: log?.meta?.cwd ?? null, since: iso(mark.at), ...shownRounds(fresh), ...extra,
-        cursor: extra.timed_out ? cursorOf(mark) : cursorOf({ rounds: ended.length, at: Date.now() }),
-      })
+      // A call that comes back in between (timed out, or Harness needs a person) names how many
+      // rounds wait, not their texts, and keeps the cursor: the rounds come once, in the report.
+      const out = (state, extra = {}) => {
+        const between = !!extra.timed_out || state === 'needs_input'
+        followedUntil.set(session_id, Date.now() + 60_000)
+        return {
+          session_id, state, until, goal, cwd: log?.meta?.cwd ?? null, since: iso(mark.at),
+          ...(between ? { rounds_since_report: fresh.length } : shownRounds(fresh)), ...extra,
+          cursor: between ? cursorOf(mark) : cursorOf({ rounds: ended.length, at: Date.now() }),
+        }
+      }
       // A goal gone since a call that had one was cleared. Without one so far, the turn that
       // sends "/goal …" creates it partway through: no_goal only once no turn is running.
-      const hadGoal = !!goal || (!!cursor && (log?.events ?? []).some((e) => e.type === 'goal/change'))
+      const goalChanges = (log?.events ?? []).filter((e) => e.type === 'goal/change')
+      const hadGoal = sawGoal || ((!!cursor || !!since) && goalChanges.length > 0)
       const endedBecause = !hadGoal ? null : !goal ? 'cleared' : goal.phase !== 'active' ? goal.phase : null
       const lastEnd = ended.length ? Date.parse(ended.at(-1).ended_at) : 0
-      const quietSince = Math.max(lastEnd, startedAt)
+      // From state the cursor carries, so the quiet also adds up across a client's short calls.
+      const quietSince = Math.max(lastEnd, mark.at)
+      // The round that stopped the goal (or used its last round) often still finishes its reply
+      // after that, and the log may not show that round running yet: settled once no round runs
+      // and one has ended since the goal changed, or GOAL_SETTLE_MS after the change.
+      // A cleared goal has no view left: when its last change was logged.
+      const changedAt = goal?.changedAt ?? (Date.parse(iso(goalChanges.at(-1)?.time)) || 0)
+      const settled = !running && (lastEnd >= changedAt || Date.now() - changedAt >= GOAL_SETTLE_MS)
+      const atLimit = !!(goal?.max_rounds && goal.rounds_started >= goal.max_rounds)
+      const question = questions.get(session_id)
+      const waitedFor = waitingSessions.has(session_id) ? Date.now() - (waitingSince.get(session_id) ?? 0) : null
       if (!hadGoal) {
         if (!running || stopping) return out('no_goal', { ended_because: null })
       } else if (endedBecause) {
-        // The round that completed the goal is often still finishing: its reply goes with the report.
-        if (!running || stopping || Date.now() >= deadline) return out('goal_ended', { ended_because: endedBecause })
+        // Out of time before that round ends: a timed-out call, so the next one (same cursor)
+        // still waits for it; ending here would lose its reply.
+        if (settled || stopping) return out('goal_ended', { ended_because: endedBecause })
       } else {
-        if (goal.max_rounds && goal.rounds_started >= goal.max_rounds && !running) return out('goal_ended', { ended_because: 'round_limit' })
-        const question = questions.get(session_id)
-        const key = question ? question.id : waitingSessions.has(session_id) ? `ui:${uiEpisodes.get(session_id)}` : null
-        if (key && noticed.get(session_id) !== key) {
-          noticed.set(session_id, key)
+        if (atLimit && settled) return out('goal_ended', { ended_because: 'round_limit' })
+        // A waiting status with no question yet is an approval in the Harness UI only once the
+        // question had time to come; an open question again to a call that comes back later.
+        const key = question ? `q:${question.id}` : waitedFor >= QUESTION_GRACE_MS ? `ui:${uiEpisodes.get(session_id)}` : null
+        const seen = noticed.get(session_id)
+        if (key && (seen?.key !== key || (question && Date.now() - seen.at >= RENOTICE_MS))) {
+          noticed.set(session_id, { key, at: Date.now() })
           return out('needs_input', question ? { needs_input: 'answer', question: publicQuestion(question) } : { needs_input: 'harness-ui' })
         }
         if (goal.activation === 'disarmed') return out('needs_resume')
@@ -898,8 +966,10 @@ export function apply(ctx) {
         if (until === 'turn' && fresh.length && (lastEnd >= mark.at + every || (Date.now() >= mark.at + every && !running))) return out('report')
       }
       if (stopping || Date.now() >= deadline) return out('following', { timed_out: true })
+      // Something happened while the log was read: read it again rather than sleep past it.
+      if ((eventGen.get(session_id) ?? 0) !== gen) continue
       // Sleep until something happens, the next report is due, or the quiet runs out.
-      const due = [deadline, ...(until === 'turn' ? [mark.at + every] : []), ...(goal && goal.activation == null && !running ? [quietSince + GOAL_QUIET_MS] : [])]
+      const due = [deadline, ...(until === 'turn' ? [mark.at + every] : []), ...(goal && goal.activation == null && !running ? [quietSince + GOAL_QUIET_MS] : []), ...((endedBecause || atLimit) && changedAt ? [changedAt + GOAL_SETTLE_MS] : []), ...(waitedFor != null && waitedFor < QUESTION_GRACE_MS ? [Date.now() - waitedFor + QUESTION_GRACE_MS] : [])]
       const wakeAt = Math.max(Date.now() + 50, Math.min(...due.filter((t) => t > Date.now())))
       await new Promise((resolve) => {
         const set = followers.get(session_id) ?? new Set()
@@ -1192,9 +1262,14 @@ export function apply(ctx) {
   }
 
   // A run that completed in a session with a goal: the goal goes on after it.
+  // The session's goal, for whoever waited on a run: one that goes on after it, or one that
+  // stopped since the run began (its later rounds belong to the run's work: ended_since_run).
+  // A goal complete before the run is left out.
   const goalField = async (run) => {
-    const goal = run.state === 'completed' ? await openGoal(run.sessionId) : null
-    return goal ? { goal } : {}
+    const goal = run.state === 'completed' ? await goalOf(run.sessionId) : null
+    if (!goal) return {}
+    const since = goal.phase !== 'active' && goal.changedAt >= (Date.parse(run.startedAt) || Infinity)
+    return goal.phase !== 'complete' || since ? { goal: since ? { ...goal, ended_since_run: true } : goal } : {}
   }
 
   // What a session is doing right now, as Harness reports it for archiving:

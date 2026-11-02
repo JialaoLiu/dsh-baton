@@ -231,7 +231,9 @@ async function callAs(clientName, name, args, answers, env = {}) {
   const server = net.createServer((c) => c.on('data', (d) => {
     const req = JSON.parse(String(d).split('\n')[0])
     seen.push(req)
-    const result = typeof answers[req.method] === 'function' ? answers[req.method](req.params) : answers[req.method] ?? { name: 'dsh-baton-host', version: '0.0.0' }
+    let result
+    // An answer that throws drops the connection, as a Harness that quits mid-call does.
+    try { result = typeof answers[req.method] === 'function' ? answers[req.method](req.params) : answers[req.method] ?? { name: 'dsh-baton-host', version: '0.0.0' } } catch { return c.destroy() }
     c.end(JSON.stringify({ id: req.id, result }) + '\n')
   }))
   await new Promise((r) => server.listen(socketEndpoint(sock), r))
@@ -251,15 +253,31 @@ async function callAs(clientName, name, args, answers, env = {}) {
 
 const GOAL = { id: 'goal-1', phase: 'active', objective: 'finish', rounds_started: 25, max_rounds: 256, activation: 'armed' }
 
-test('a run that completed in a session with an active goal says the goal goes on and how to follow it', async () => {
-  const done = { wait: { run_id: 'hrun-x', session_id: 's1', state: 'completed', final_text: 'stage done', goal: GOAL } }
-  const codex = await callAs('codex-mcp-client', 'dsh_wait', { run_id: 'hrun-x' }, done)
-  assert.match(codex.result.hint, /active Harness goal \(25 goal round\(s\) started, at most 256\)/)
-  assert.match(codex.result.hint, /send nothing: call dsh_wait with session_id s1/)
+test('a run in a session with an active goal is waited for until the goal stops, with every round since the run began', async () => {
+  const started = '2026-11-03T01:00:00.000Z'
+  const run = { run_id: 'hrun-x', session_id: 's1', state: 'completed', started_at: started, final_text: 'stage done', goal: GOAL, evidence: { checks: [{ command: 'npm test', passed: true }] } }
+  const ended = { session_id: 's1', state: 'goal_ended', until: 'goal', ended_because: 'complete', goal: { ...GOAL, phase: 'complete' }, rounds: [{ turn: 1, final_text: 'stage done' }, { turn: 2, goal_round: 1, final_text: 'all done' }], cursor: '2:9' }
+  const codex = await callAs('codex-mcp-client', 'dsh_wait', { run_id: 'hrun-x' }, { wait: run, follow: ended })
+  const asked = codex.seen.find((r) => r.method === 'follow').params
+  assert.deepEqual([asked.session_id, asked.until, asked.since_ms], ['s1', 'goal', Date.parse(started)], 'counted from the run\'s start, so its own round is in the report')
+  assert.deepEqual([codex.result.state, codex.result.run_id, codex.result.rounds.length], ['goal_ended', 'hrun-x', 2])
+  // No evidence record here to run the checks again from: the run's own, saying so.
+  assert.deepEqual(codex.result.checks, run.evidence.checks)
+  assert.match(codex.result.checks_from, /end of the run's own round/)
+  assert.match(codex.result.hint, /The goal stopped \(complete\)/)
   assert.equal(codex.result.follow_command, undefined)
-  const claude = await callAs('claude-code', 'dsh_wait', { run_id: 'hrun-x' }, done)
-  assert.match(claude.result.follow_command, /cli\.mjs" follow s1 --until goal$/)
+  // Asked for progress reports: until turn every 10 minutes; Claude Code gets a follow_command to go on.
+  const report = { ...ended, state: 'report', until: 'turn', goal: GOAL, rounds: ended.rounds.slice(0, 1), cursor: '1:5' }
+  const claude = await callAs('claude-code', 'dsh_wait', { run_id: 'hrun-x', until: 'turn', every_minutes: 10 }, { wait: run, follow: report })
+  assert.deepEqual([claude.seen.find((r) => r.method === 'follow').params.until, claude.seen.find((r) => r.method === 'follow').params.every_s], ['turn', 600])
+  assert.match(claude.result.follow_command, /cli\.mjs" wait hrun-x --until turn --cursor 1:5 --every 10m$/, 'on through the run, so its checks run again at the end')
+  assert.match(claude.result.hint, /call dsh_wait again with the same run_id, until and this cursor/)
   assert.match(claude.result.hint, /run follow_command that way/)
+  // No time left in the call: the run's result, saying how to follow on.
+  const short = await callAs('codex-mcp-client', 'dsh_wait', { run_id: 'hrun-x' }, { wait: run }, { DSH_BATON_WAIT_S: '1' })
+  assert.match(short.result.hint, /active Harness goal \(25 goal round\(s\) started, at most 256\)/)
+  assert.match(short.result.hint, /send nothing: call dsh_wait with session_id s1/)
+  const done = { wait: run }
   // Disarmed: no following, the user is to press Continue.
   const off = await callAs('codex-mcp-client', 'dsh_wait', { run_id: 'hrun-x' }, { wait: { ...done.wait, goal: { ...GOAL, activation: 'disarmed' } } })
   assert.match(off.result.hint, /will not go on with it by itself/)
@@ -288,11 +306,31 @@ test('dsh_wait with session_id follows the goal: reports carry the rounds and th
   const quiet = await callAs('codex-mcp-client', 'dsh_wait', { session_id: 's1' }, { follow: { ...report, state: 'following', timed_out: true, rounds: [] } }, { DSH_BATON_WAIT_S: '1' })
   assert.equal(quiet.result.timed_out, true)
   assert.match(quiet.result.hint, /No report is due yet/)
+  // A plugin from before this still sends the rounds with a timed-out call: they wait for the report.
+  const old = await callAs('codex-mcp-client', 'dsh_wait', { session_id: 's1' }, { follow: { ...report, state: 'following', timed_out: true } }, { DSH_BATON_WAIT_S: '1' })
+  assert.deepEqual([old.result.rounds_since_report, 'rounds' in old.result], [1, false])
   // Neither run_id nor session_id.
   const neither = await callAs('codex-mcp-client', 'dsh_wait', {}, {})
   assert.equal(neither.isError, true)
   assert.match(neither.result, /run_id is required \(or session_id/)
   fs.rmSync(cwd, { recursive: true, force: true })
+})
+
+test('a follow outlives a Harness restart: a lost connection is retried from the same cursor', async () => {
+  let follows = 0
+  const ended = { session_id: 's1', state: 'goal_ended', until: 'goal', ended_because: 'complete', goal: { ...GOAL, phase: 'complete' }, rounds: [{ turn: 3, final_text: 'done' }], cursor: '3:9' }
+  const r = await callAs('codex-mcp-client', 'dsh_wait', { session_id: 's1', cursor: '2:5' }, {
+    follow: (p) => { follows++; if (follows === 1) throw new Error('drop'); return { ...ended, asked: p } },
+  })
+  assert.equal(follows, 2, 'asked again after the connection dropped')
+  assert.deepEqual([r.result.state, r.result.asked.cursor], ['goal_ended', '2:5'])
+  // Dropped before any cursor came back: the retry goes on from when the follow began.
+  follows = 0
+  const t0 = Date.now()
+  const fresh = await callAs('codex-mcp-client', 'dsh_wait', { session_id: 's1' }, {
+    follow: (p) => { follows++; if (follows === 1) throw new Error('drop'); return { ...ended, asked: p } },
+  })
+  assert.ok(fresh.result.asked.since_ms >= t0 - 1000 && fresh.result.asked.since_ms <= t0 + 5000, 'since_ms set for the retry')
 })
 
 test('dsh_status takes a session id; an older plugin that only knows runs is named as too old', async () => {

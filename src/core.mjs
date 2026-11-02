@@ -565,7 +565,7 @@ export function endedHint(st) {
 
 // A Harness goal starts the session's next round by itself as soon as a turn ends, so a run
 // that completed there is one stage of the work, not its end.
-const FOLLOW_HOW = (sid) => `If the user asked you to keep following it, send nothing: call dsh_wait with session_id ${sid} (until "goal", the default, reports once when the goal stops; until "turn" reports at most every 10 minutes, at the end of a round, with every round since the last report).`
+const FOLLOW_HOW = (sid) => `To follow it to its end, send nothing: call dsh_wait with session_id ${sid} (until "goal", the default, reports once when the goal stops; until "turn", when the user asked for progress reports, at most every 10 minutes, at the end of a round, with every round since the last report).`
 export function goalHint(goal, sid) {
   if (goal.phase === 'active' && goal.activation !== 'disarmed') {
     return `This session has an active Harness goal (${goal.rounds_started} goal round(s) started${goal.max_rounds ? `, at most ${goal.max_rounds}` : ''}): Harness goes on with the next round by itself after this reply, so the work is not finished. Report this stage to the user as one stage. ${FOLLOW_HOW(sid)}`
@@ -574,11 +574,30 @@ export function goalHint(goal, sid) {
   return `The session's Harness goal is ${goal.phase}${goal.blocked_reason ? ` (${goal.blocked_reason.code}: ${goal.blocked_reason.message})` : ''}: it does not go on until the user deals with it in Harness.`
 }
 
+// A run in a session whose Harness goal goes on: its wait goes on with the goal.
+// Also one that stopped after the run began: the rounds after the run's are its work too.
+export const goalGoesOn = (st) => st?.state === 'completed' && !!st.session_id && !!st.goal && ((st.goal.phase === 'active' && st.goal.activation !== 'disarmed') || !!st.goal.ended_since_run)
+// The run's wait followed on through its goal (f, from followResult): the follow's result, with
+// any answer chosen for the user during the run, and, once the goal stopped, the run's checks
+// run again then (budget_ms; without the time, the ones from the end of the run's own round).
+export function throughGoal(run, f, { budget_ms = 180_000 } = {}) {
+  const chose = run.decided_for_user ? 'You chose an answer for the user during this run (decided_for_user): start your reply by telling the user what you chose and why. ' : ''
+  const final = f.state === 'goal_ended' && run.evidence?.checks?.length
+  const again = final && budget_ms >= 5000 ? evidence.recheck(config.batonHome, run.run_id, budget_ms) : null
+  return {
+    ...f, run_id: run.run_id,
+    ...(final ? (again ? { checks: again, all_checks_passed: again.every((c) => c.passed) } : { checks: run.evidence.checks, checks_from: 'the end of the run\'s own round (no time left to run them again)' }) : {}),
+    ...(run.decided_for_user ? { decided_for_user: run.decided_for_user } : {}),
+    // Going on through the run keeps the run's checks for the goal's end.
+    ...(f.hint ? { hint: chose + f.hint.replaceAll(AGAIN, AGAIN.replace('session_id', 'run_id')) } : {}),
+  }
+}
+
 // What a follow wait (dsh_wait with session_id) returns, with what to do next.
 const AGAIN = 'call dsh_wait again with the same session_id, until and this cursor'
 const QUIET = 'While waiting, write no progress sentences.'
 export function followResult(st) {
-  const report = 'Report to the user briefly, in their language: what the rounds did (final_text, tools), the files changed (changed_files) and how far the goal is (goal.rounds_started of goal.max_rounds).'
+  const report = `Report to the user briefly, in their language: what the rounds did (the latest round's final_text, each earlier round's summary and tools), the files changed (changed_files) and how far the goal is (goal.rounds_started of goal.max_rounds).${st.rounds?.length > 1 ? ` For one round in full, read it with dsh_read_session (session_id ${st.session_id}) only if the user asks.` : ''}`
   switch (st.state) {
     case 'report': return { ...st, hint: `${report} Then ${AGAIN}. ${QUIET}` }
     case 'following': return { ...st, hint: `No report is due yet: ${AGAIN}, with no progress note in between. ${QUIET}` }
@@ -707,6 +726,37 @@ const tooOld = (method, what) => (error) => {
 
 const tag = (backend, value) => (Array.isArray(value) ? value.map((v) => ({ ...v, backend })) : { ...value, backend })
 
+// Follow a goal for up to total_s, one host call per chunk_s, from the same cursor each time.
+// A host that went away (Harness restarting or updating) is waited for, HOST_BACK_MS at most:
+// the follow then goes on and finds the goal as Harness left it (after a restart, disarmed).
+const HOST_BACK_MS = 180_000
+const hostGone = (e) => !!e?.hostDown || /closed the connection|needs the dsh-baton-host plugin running|did not answer/.test(e?.message ?? '')
+export async function followThrough(params, { total_s, chunk_s = 300, onChunk, signal } = {}) {
+  const started = Date.now()
+  const deadline = started + total_s * 1000
+  let cursor = params.cursor, since_ms = params.since_ms, lostSince = null
+  for (;;) {
+    if (signal?.aborted) return { session_id: params.session_id, cancelled: true }
+    const left = Math.ceil((deadline - Date.now()) / 1000)
+    let st
+    try {
+      st = await api.follow({ ...params, cursor, since_ms: cursor ? undefined : since_ms, timeout_s: Math.max(1, Math.min(chunk_s, left)) })
+      lostSince = null
+    } catch (e) {
+      if (!hostGone(e)) throw e
+      lostSince ??= Date.now()
+      // No cursor yet: go on from when this follow began, not from after the restart.
+      since_ms ??= started
+      if (Date.now() - lostSince > HOST_BACK_MS || Date.now() >= deadline) throw e
+      await new Promise((r) => setTimeout(r, 5000))
+      continue
+    }
+    if (!st.timed_out || Date.now() >= deadline) return st
+    cursor = st.cursor
+    onChunk?.(st)
+  }
+}
+
 export const api = {
   async workspaces() {
     if (!(await useHost())) throw new Error('Listing workspaces needs the dsh-baton-host plugin running inside DeepSeek Harness.')
@@ -763,11 +813,17 @@ export const api = {
   },
   // Wait on a session's Harness goal without sending anything (host follow()); a report that
   // has rounds in it also lists the files changed in the session's folder since the last one.
-  async follow({ session_id, until = 'goal', cursor, every_s = 600, timeout_s = 300 }) {
+  async follow({ session_id, until = 'goal', cursor, since_ms, every_s = 600, timeout_s = 300 }) {
     if (!session_id) throw new Error('session_id is required')
     if (!(await useHost())) throw new Error('Following a session needs the dsh-baton-host plugin running inside DeepSeek Harness.')
-    const st = shaped(await hostCall('follow', { session_id, until, cursor, every_s, timeout_s }, { timeoutMs: (timeout_s + 15) * 1000 }).catch(tooOld('follow', 'follow a goal')))
-    if (st.timed_out || st.state === 'no_goal' || !st.cwd) return st
+    const st = shaped(await hostCall('follow', { session_id, until, cursor, ...(since_ms ? { since_ms } : {}), every_s, timeout_s }, { timeoutMs: (timeout_s + 15) * 1000 }).catch(tooOld('follow', 'follow a goal')))
+    // An older plugin's timed-out call still carries the rounds: they come with the report.
+    if (st.timed_out && Array.isArray(st.rounds)) {
+      const { rounds, earlier_rounds_not_shown: earlier = 0, ...rest } = st
+      return { ...rest, rounds_since_report: rounds.length + earlier }
+    }
+    if (st.timed_out) return st
+    if (st.state === 'no_goal' || !st.cwd) return st
     const changed = evidence.changedSince(st.cwd, Date.parse(st.since) || 0)
     return changed ? { ...st, changed_files: changed } : st
   },

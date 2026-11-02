@@ -23,6 +23,10 @@ const TAIL_LINES = 15
 const DAY_MS = 24 * 3600 * 1000
 
 const fileOf = (home, runId) => path.join(home, 'evidence', `${String(runId).replace(/[^\w.-]/g, '_')}.json`)
+// The folder snapshot taken at dsh_send, apart from the small record: it can be megabytes, and
+// the records of other runs are read for every collect.
+const beforeOf = (file) => file.replace(/\.json$/, '.before.json')
+const isBefore = (name) => name.endsWith('.before.json')
 
 // The files under dir, skipping dependency, build and cache folders: [{ rel, abs, m, s }].
 function walk(dir) {
@@ -46,8 +50,10 @@ function walk(dir) {
   return { list: out, truncated }
 }
 
-// hash and line count (null for a big or binary file), or null when it cannot be read.
-function readFile(abs) {
+// hash and line count (null for a binary file), or null when it cannot be read. A file over
+// MAX_TEXT (by its size from walk) is not read: no hash, lines null.
+function readFile(abs, size = 0) {
+  if (size > MAX_TEXT) return { lines: null }
   try {
     const buf = fs.readFileSync(abs)
     const text = buf.length <= MAX_TEXT && !buf.includes(0)
@@ -63,7 +69,7 @@ function snapshot(dir) {
   const { list, truncated } = walk(dir)
   const files = {}
   for (const f of list) files[f.rel] = { m: f.m, s: f.s }
-  for (const f of [...list].sort((a, b) => b.m - a.m).slice(0, MAX_READ)) Object.assign(files[f.rel], readFile(f.abs) ?? {})
+  for (const f of [...list].sort((a, b) => b.m - a.m).slice(0, MAX_READ)) Object.assign(files[f.rel], readFile(f.abs, f.s) ?? {})
   return { files, truncated }
 }
 
@@ -92,12 +98,24 @@ export function prepare(home, { run_id, session_id = null, cwd, checks }) {
   try {
     fs.mkdirSync(path.join(home, 'evidence'), { recursive: true, mode: 0o700 })
     const list = Array.isArray(checks) ? checks.filter((c) => typeof c === 'string' && c.trim()).slice(0, 10) : []
-    fs.writeFileSync(fileOf(home, run_id), JSON.stringify({ cwd, session_id, checks: list, before: snapshot(cwd), at: Date.now() }), { mode: 0o600 })
-    // Keep the folder small: the 50 newest runs.
+    const file = fileOf(home, run_id)
+    fs.writeFileSync(beforeOf(file), JSON.stringify(snapshot(cwd)), { mode: 0o600 })
+    fs.writeFileSync(file, JSON.stringify({ cwd, session_id, checks: list, at: Date.now() }), { mode: 0o600 })
+    // Keep the folder small: the 50 newest runs (with their snapshots).
     const dir = path.join(home, 'evidence')
-    const old = fs.readdirSync(dir).map((n) => ({ n, t: fs.statSync(path.join(dir, n)).mtimeMs })).sort((a, b) => b.t - a.t).slice(50)
-    for (const { n } of old) fs.rmSync(path.join(dir, n), { force: true })
+    const old = fs.readdirSync(dir).filter((n) => !isBefore(n)).map((n) => ({ n, t: fs.statSync(path.join(dir, n)).mtimeMs })).sort((a, b) => b.t - a.t).slice(50)
+    for (const { n } of old) { fs.rmSync(path.join(dir, n), { force: true }); fs.rmSync(beforeOf(path.join(dir, n)), { force: true }) }
   } catch { /* evidence is extra; sending never fails over it */ }
+}
+
+// The run's check commands run again now (not kept): for a run whose wait followed its goal
+// to the end, the checks then are the ones that count. Within budgetMs in all.
+export function recheck(home, runId, budgetMs = CHECKS_TOTAL_MS) {
+  let rec
+  try { rec = JSON.parse(fs.readFileSync(fileOf(home, runId), 'utf8')) } catch { return null }
+  if (!rec.checks?.length || !fs.existsSync(rec.cwd)) return null
+  const deadline = Date.now() + Math.min(budgetMs, CHECKS_TOTAL_MS)
+  return rec.checks.map((c) => { const left = deadline - Date.now(); return left > 1000 ? runCheck(c, rec.cwd, Math.min(CHECK_TIMEOUT_MS, left)) : { command: c, skipped: 'out of time' } })
 }
 
 function runCheck(command, cwd, timeout) {
@@ -134,20 +152,28 @@ export function collect(home, runId) {
   let rec
   try { rec = JSON.parse(fs.readFileSync(file, 'utf8')) } catch { return null }
   if (rec.result) return rec.result
+  // A record from before 0.6.5 carries its snapshot inline.
+  let snap = rec.before
+  if (!snap) { try { snap = JSON.parse(fs.readFileSync(beforeOf(file), 'utf8')) } catch { return null } }
   const after = walk(rec.cwd)
-  const before = rec.before.files
+  const before = snap.files
   const created = [], modified = [], deleted = []
   const seen = new Set()
+  // At most MAX_READ files are read here too (a run that writes thousands of files gets their
+  // paths, not their line counts).
+  let reads = 0
+  const read = (f, whole = false) => (reads++ < MAX_READ ? readFile(f.abs, whole ? 0 : f.s) : null)
   for (const f of after.list) {
     seen.add(f.rel)
     const b = before[f.rel]
-    if (!b) { created.push({ path: f.rel, lines: readFile(f.abs)?.lines ?? null }); continue }
+    if (!b) { created.push({ path: f.rel, lines: read(f)?.lines ?? null }); continue }
     // Same size and time: unchanged. Otherwise the content decides when it was read before
     // (a record from before 0.6.5 has only the hash).
     if (b.m === f.m && b.s === f.s) continue
-    const now = b.hash || b.m === undefined ? readFile(f.abs) : null
+    // A record from before 0.6.5 has a hash of every file, big ones too: read it whole to compare.
+    const now = b.hash || b.m === undefined ? read(f, b.m === undefined) : null
     if (b.hash && now?.hash === b.hash) continue
-    modified.push({ path: f.rel, lines_before: b.lines ?? null, lines_after: (now ?? readFile(f.abs))?.lines ?? null })
+    modified.push({ path: f.rel, lines_before: b.lines ?? null, lines_after: (now ?? read(f))?.lines ?? null })
   }
   for (const p of Object.keys(before)) if (!seen.has(p)) deleted.push(p)
   created.sort((a, b) => a.path.localeCompare(b.path))
@@ -159,6 +185,7 @@ export function collect(home, runId) {
   const overlapping = []
   try {
     for (const n of fs.readdirSync(path.join(home, 'evidence'))) {
+      if (isBefore(n)) continue
       const other = n.replace(/\.json$/, '')
       if (other === String(runId).replace(/[^\w.-]/g, '_')) continue
       let o, mtime
@@ -176,10 +203,13 @@ export function collect(home, runId) {
   }
   const result = {
     source: 'dsh-baton, not the Harness model',
-    changes: { created, modified, deleted, ...(after.truncated || rec.before.truncated ? { truncated: true } : {}) },
+    changes: { created, modified, deleted, ...(after.truncated || snap.truncated ? { truncated: true } : {}) },
     ...(overlapping.length ? { same_folder_runs: overlapping } : {}),
     ...(checks.length ? { checks, all_checks_passed: checks.every((c) => c.passed) } : {}),
   }
-  try { fs.writeFileSync(file, JSON.stringify({ ...rec, before: undefined, result, ended_at: now }), { mode: 0o600 }) } catch { /* recomputed next time */ }
+  try {
+    fs.writeFileSync(file, JSON.stringify({ ...rec, before: undefined, result, ended_at: now }), { mode: 0o600 })
+    fs.rmSync(beforeOf(file), { force: true })
+  } catch { /* recomputed next time */ }
   return result
 }

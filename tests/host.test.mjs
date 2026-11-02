@@ -964,7 +964,8 @@ test('following a goal: nothing to follow without one; until goal returns when t
   const r = await p
   assert.equal(r.state, 'goal_ended')
   assert.equal(r.ended_because, 'complete')
-  assert.deepEqual(r.rounds.map((x) => [x.goal_round, x.final_text]), [[2, 'r2'], [3, 'all done']], 'round 1 was before the follow began')
+  // The latest round in full; the ones before it as one-line digests.
+  assert.deepEqual(r.rounds.map((x) => [x.goal_round, x.summary ?? null, x.final_text ?? null]), [[2, 'r2', null], [3, null, 'all done']], 'round 1 was before the follow began')
   assert.deepEqual(r.rounds[0].tools, { pwsh: 2, read_image: 1 })
   assert.match(r.cursor, /^3:\d+$/)
   assert.equal(r.cwd, '/w')
@@ -973,7 +974,7 @@ test('following a goal: nothing to follow without one; until goal returns when t
   const b = await h.call('follow', { session_id: 's1', cursor: r.cursor, timeout_s: 5 })
   assert.deepEqual([b.state, b.ended_because, b.goal.blocked_reason.code], ['goal_ended', 'blocked', 'needs-key'])
   goal.s1 = undefined
-  log.s1.push({ type: 'goal/change', time: Date.now(), data: { operation: 'clear' } })
+  log.s1.push({ type: 'goal/change', time: Date.now() - 60000, data: { operation: 'clear' } })
   assert.deepEqual([(await h.call('follow', { session_id: 's1', cursor: r.cursor, timeout_s: 5 })).ended_because], ['cleared'])
 })
 
@@ -1006,6 +1007,111 @@ test('following right after "/goal …" was sent: waits for that turn to create 
   assert.equal((await q).state, 'no_goal')
 })
 
+test('a run\'s wait going on through its goal: since_ms counts the run\'s own round in', async (t) => {
+  const runStart = Date.now() - 5000
+  const goal = { s1: goalValue('complete') }
+  const log = { s1: [...round(1, { text: 'old work', at: runStart - 60000 }), ...round(2, { text: 'stage one', at: runStart + 1000 }), ...round(3, { round: 1, text: 'all done', at: runStart + 2000 })] }
+  const h = startHost({ goal, log }); t.after(h.close); await h.ready
+  const r = await h.call('follow', { session_id: 's1', since_ms: runStart, timeout_s: 5 })
+  assert.deepEqual([r.state, r.ended_because], ['goal_ended', 'complete'])
+  assert.deepEqual(r.rounds.map((x) => x.final_text ?? x.summary), ['stage one', 'all done'], 'the turn before the run is left out')
+  assert.equal(r.since, new Date(runStart).toISOString())
+  // Still going when the call is up: how many rounds wait, not their texts (they come with the report).
+  goal.s1 = goalValue()
+  const beat = await h.call('follow', { session_id: 's1', since_ms: runStart, timeout_s: 0.3 })
+  assert.deepEqual([beat.state, beat.timed_out, beat.rounds_since_report, 'rounds' in beat], ['following', true, 2, false])
+})
+
+test('a goal marked complete before the log shows its last round: the report waits for that round\'s reply', async (t) => {
+  process.env.DSH_BATON_GOAL_SETTLE_MS = '600'
+  t.after(() => { delete process.env.DSH_BATON_GOAL_SETTLE_MS })
+  const goal = { s1: goalValue() }
+  const log = { s1: [...round(1, { round: 1, text: 'r1', at: Date.now() - 5000 })] }
+  const h = startHost({ goal, log }); t.after(h.close); await h.ready
+  let result = null
+  const p = h.call('follow', { session_id: 's1', timeout_s: 10 }).then((r) => { result = r; return r })
+  await sleep(100)
+  // Complete now, while the log does not show the final round yet.
+  goal.s1 = { ...goalValue('complete'), updatedAt: Date.now() }
+  logged(h, 's1', 'goal/change')
+  await sleep(200)
+  assert.equal(result, null, 'waits for the round that completed the goal')
+  log.s1.push(...round(2, { round: 2, text: 'all done, summary' }))
+  logged(h, 's1', 'turn/end')
+  const r = await p
+  assert.deepEqual([r.state, r.rounds.at(-1).final_text], ['goal_ended', 'all done, summary'])
+  assert.equal('changedAt' in JSON.parse(JSON.stringify(r.goal)), false, 'not in results')
+  // Changed in the Harness UI with no round to come: returns once the settle time is up.
+  goal.s1 = { ...goalValue('paused'), updatedAt: Date.now() }
+  const t0 = Date.now()
+  const paused = await h.call('follow', { session_id: 's1', cursor: r.cursor, timeout_s: 10 })
+  assert.equal(paused.ended_because, 'paused')
+  assert.ok(Date.now() - t0 >= 400, 'after the settle time')
+})
+
+test('a call that runs out of time while the round that completed the goal still runs: timed out, and the next call gets that round', async (t) => {
+  const goal = { s1: goalValue('complete') }
+  const log = { s1: [...round(1, { round: 1, text: 'r1', at: Date.now() - 5000 }), ...round(2, { round: 2, open: true })] }
+  const h = startHost({ goal, log }); t.after(h.close); await h.ready
+  const first = await h.call('follow', { session_id: 's1', since_ms: Date.now() - 10000, timeout_s: 0.3 })
+  assert.deepEqual([first.state, first.timed_out], ['following', true], 'not goal_ended without the final round')
+  log.s1.push({ type: 'assistant/message', time: Date.now(), data: { message: { content: [{ type: 'text', text: 'wrap-up' }] } } }, { type: 'turn/end', time: Date.now(), data: { turn: 2, reason: { kind: 'completed' } } })
+  const next = await h.call('follow', { session_id: 's1', cursor: first.cursor, timeout_s: 5 })
+  assert.deepEqual([next.state, next.rounds.at(-1).final_text], ['goal_ended', 'wrap-up'])
+})
+
+test('goal edge cases: cleared within one call, a projection that cannot be read, a first call after the goal stopped', async (t) => {
+  const goal = { s1: goalValue(), s2: goalValue('complete') }
+  const log = { s1: [...round(1, { round: 1, text: 'r1', at: Date.now() - 3000 })], s2: [...round(1, { text: 'stage', at: Date.now() - 9000 }), ...round(2, { round: 1, text: 'final words', at: Date.now() - 5000 })] }
+  const h = startHost({ goal, log, goals: { get: () => ({ id: 'goal-1', activation: 'armed' }) }, agents: { get: (id) => ({ id }) } }); t.after(h.close); await h.ready
+  // Seen active, then cleared in the same call (no cursor): the goal ended, not "no goal".
+  const p = h.call('follow', { session_id: 's1', timeout_s: 10 })
+  await sleep(100)
+  goal.s1 = undefined
+  log.s1.push({ type: 'goal/change', time: Date.now() - 60000, data: { operation: 'clear' } })
+  logged(h, 's1', 'goal/change')
+  assert.deepEqual([(await p).state, (await p).ended_because], ['goal_ended', 'cleared'])
+  // The projection fails for a moment: not taken for a cleared goal.
+  Object.defineProperty(goal, 's1', { get() { throw new Error('projection failed') }, configurable: true })
+  const odd = await h.call('follow', { session_id: 's1', cursor: '1:1', timeout_s: 0.5 })
+  assert.deepEqual([odd.state, odd.timed_out], ['following', true])
+  // Following a goal that already stopped: its last round comes with the report.
+  const late = await h.call('follow', { session_id: 's2', timeout_s: 5 })
+  assert.deepEqual([late.state, late.rounds.map((x) => x.final_text)], ['goal_ended', ['final words']])
+})
+
+test('a run whose goal finished before anyone waited: the result still says so, so the wait reports the later rounds', async (t) => {
+  const goal = { s1: goalValue() }
+  const h = startHost({ goal }); t.after(h.close); await h.ready
+  const s = S('s1')
+  const r = await h.call('send', { session_id: 's1', message: 'go' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.emit(...s.text('first stage')); h.emit(...s.turnEnd())
+  h.emit(...s.turnStart())
+  h.emit('session/event', { id: 's1' }, { type: 'user/message', data: { source: { kind: 'goal', goalId: 'goal-1', revision: 1, round: 1 } } })
+  h.emit(...s.turnEnd()); h.emit(...s.status('idle'))
+  goal.s1 = { ...goalValue('complete'), updatedAt: Date.now() }
+  const w = await h.call('wait', { run_id: r.run_id, timeout_s: 5 })
+  assert.deepEqual([w.state, w.goal.phase, w.goal.ended_since_run], ['completed', 'complete', true])
+  // A goal complete before the run began is not this run's.
+  goal.s1 = { ...goalValue('complete'), updatedAt: 1 }
+  assert.equal('goal' in (await h.call('wait', { run_id: r.run_id, timeout_s: 5 })), false)
+})
+
+test('a report on a long wait: every round since is there, the latest in full and the ones before as one-line digests', async (t) => {
+  const start = Date.now() - 100000
+  const long = 'x'.repeat(400)
+  const goal = { s1: goalValue('complete') }
+  const log = { s1: Array.from({ length: 30 }, (_, i) => round(i + 1, { round: i + 1, text: i === 29 ? 'final summary' : `round ${i + 1} ${long}`, tools: ['bash'], at: start + i * 1000 })).flat() }
+  const h = startHost({ goal, log }); t.after(h.close); await h.ready
+  const r = await h.call('follow', { session_id: 's1', since_ms: start - 1, timeout_s: 5 })
+  assert.equal(r.rounds.length, 30, 'no round dropped')
+  assert.equal('earlier_rounds_not_shown' in r, false)
+  assert.deepEqual(r.rounds.at(-1).final_text, 'final summary')
+  assert.equal(r.rounds[0].final_text, undefined)
+  assert.ok(r.rounds[0].summary.startsWith('round 1 x') && r.rounds[0].summary.length <= 101, 'a digest is one short line')
+  assert.deepEqual(r.rounds[0].tools, { bash: 1 })
+})
+
 test('following until turn: a report at the first round end once every_s have passed, with every round since', async (t) => {
   const goal = { s1: goalValue() }
   const log = { s1: [] }
@@ -1025,7 +1131,7 @@ test('following until turn: a report at the first round end once every_s have pa
   const first = await p
   assert.equal(first.state, 'report')
   assert.ok(Date.now() - t0 >= 1300, 'not before round 3 ended')
-  assert.deepEqual(first.rounds.map((x) => x.final_text), ['one', 'two', 'three'])
+  assert.deepEqual(first.rounds.map((x) => x.final_text ?? x.summary), ['one', 'two', 'three'])
   // Next: one round ends at once and nothing runs after it, so it is reported when the time is up.
   const t1 = Date.now()
   const p2 = h.call('follow', { session_id: 's1', until: 'turn', every_s: 1, cursor: first.cursor, timeout_s: 10 })
@@ -1072,6 +1178,52 @@ test('a goal Harness will not go on with by itself comes back at once; with no w
   const stalled = await h3.call('follow', { session_id: 's4', timeout_s: 5 })
   assert.equal(stalled.state, 'goal_stalled')
   assert.ok(Date.now() - t0 < 2000)
+  // Also when the client follows in calls shorter than the quiet: it adds up through the cursor.
+  let st = await h3.call('follow', { session_id: 's4', timeout_s: 0.1 })
+  for (let i = 0; i < 20 && st.timed_out; i++) st = await h3.call('follow', { session_id: 's4', cursor: st.cursor, timeout_s: 0.1 })
+  assert.equal(st.state, 'goal_stalled')
+})
+
+test('Harness asking during a follow: a question that comes just after the waiting status is still one to answer; rounds before it stay for the report', async (t) => {
+  const start = Date.now() - 10000
+  const goal = { s1: goalValue() }
+  const log = { s1: [...round(1, { round: 1, text: 'r1', at: start + 1000 }), ...round(2, { round: 2, text: 'r2', at: start + 2000 })] }
+  const h = startHost({ goal, log, goals: { get: () => ({ id: 'goal-1', activation: 'armed' }) }, agents: { get: (id) => ({ id }) } }); t.after(h.close); await h.ready
+  const p = h.call('follow', { session_id: 's1', since_ms: start, timeout_s: 5 })
+  await sleep(100)
+  h.emit(...S('s1').status('waiting'))
+  await sleep(150)
+  h.ask('s1', [{ id: 'q', question: 'Which?', options: [{ label: 'A' }] }])
+  const q = await p
+  assert.deepEqual([q.state, q.needs_input, q.rounds_since_report, 'rounds' in q], ['needs_input', 'answer', 2, false], 'not an approval: the question came within the grace time')
+  assert.equal((await h.call('answer', { session_id: 's1', answers: [{ choose: [1] }] })).submitted, true)
+  h.emit(...S('s1').status('running'))
+  log.s1.push(...round(3, { round: 3, text: 'r3' }))
+  goal.s1 = goalValue('complete')
+  const end = await h.call('follow', { session_id: 's1', cursor: q.cursor, timeout_s: 5 })
+  assert.deepEqual([end.state, end.rounds.map((x) => x.final_text ?? x.summary)], ['goal_ended', ['r1', 'r2', 'r3']], 'no round lost to the question')
+  // A question asked between two calls of one follow is taken up too.
+  goal.s1 = goalValue()
+  h.ask('s1', [{ id: 'q2', question: 'Again?', options: [{ label: 'B' }] }])
+  const again = await h.call('follow', { session_id: 's1', cursor: end.cursor, timeout_s: 5 })
+  assert.deepEqual([again.state, again.question.questions[0].question], ['needs_input', 'Again?'])
+})
+
+test('the last round allowed: the report waits for it, also when the log does not show it running yet', async (t) => {
+  const goal = { s1: { ...goalValue('active', { maxGoalRounds: 3 }), roundsStarted: 2 } }
+  const log = { s1: [...round(1, { round: 2, text: 'r2', at: Date.now() - 1000 })] }
+  const h = startHost({ goal, log, goals: { get: () => ({ id: 'goal-1', activation: 'armed' }) }, agents: { get: (id) => ({ id }) } }); t.after(h.close); await h.ready
+  let result = null
+  const p = h.call('follow', { session_id: 's1', timeout_s: 10 }).then((r) => { result = r; return r })
+  await sleep(100)
+  goal.s1 = { ...goalValue('active', { maxGoalRounds: 3 }), roundsStarted: 3, updatedAt: Date.now() }
+  logged(h, 's1', 'goal/change')
+  await sleep(200)
+  assert.equal(result, null, 'the last round has not shown its end')
+  log.s1.push(...round(2, { round: 3, text: 'last round summary' }))
+  logged(h, 's1', 'turn/end')
+  const r = await p
+  assert.deepEqual([r.state, r.ended_because, r.rounds.at(-1).final_text], ['goal_ended', 'round_limit', 'last round summary'])
 })
 
 test('following: Harness asking or waiting for an approval comes back once, and its question is answered by session', async (t) => {

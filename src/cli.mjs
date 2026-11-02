@@ -16,7 +16,9 @@ const USAGE = `Usage: dsh-baton <command> [args]
   read <session_id> [--last <n>]                          show recent messages
   send [--session <id> | --cwd <dir> | --workspace <id>] [--mode followup|steer] <message...>  start a run (message may be "-" for stdin)
   status <run_id> | <session_id>                          show a run's progress, or a session's (with its goal)
-  wait <run_id> [--timeout <seconds>]                     block until the run ends (or asks a person), print it
+  wait <run_id> [--timeout <seconds>] [--until goal|turn] [--every 10m] [--cursor <c>]
+                                                          block until the run ends (or asks a person), print it; in a
+                                                          session with a Harness goal, until the goal stops
   follow <session_id> [--until goal|turn] [--every 10m] [--cursor <c>] [--timeout <seconds>]
                                                           follow a session's Harness goal without sending; print the next report
   rename <session_id> <title>                             rename a session
@@ -41,6 +43,11 @@ function parse(argv) {
 const self = (args) => `${process.versions.electron ? 'ELECTRON_RUN_AS_NODE=1 ' : ''}"${stableNodePath()}" "${process.argv[1]}" ${args}`
 
 const print = (v) => console.log(JSON.stringify(v, null, 2))
+// --every 10m | 600s | 10 (minutes), default 10 minutes.
+function everySeconds(v) {
+  const every = String(v ?? '10m').match(/^(\d+)\s*(m|min|s)?$/i)
+  return every ? Number(every[1]) * (/^s$/i.test(every[2] ?? '') ? 1 : 60) : 600
+}
 
 async function readStdin() {
   const chunks = []
@@ -81,7 +88,23 @@ async function main() {
     case 'status':
       return print(await core.api.status(rest[0]?.startsWith('session') || flags.session ? { session_id: flags.session ?? rest[0] } : { run_id: rest[0] }))
     case 'wait': {
-      const st = await core.api.wait({ run_id: rest[0], timeout_s: Number(flags.timeout) || 24 * 3600 })
+      const total_s = Number(flags.timeout) || 24 * 3600
+      const waitStarted = Date.now()
+      const st = await core.api.wait({ run_id: rest[0], timeout_s: total_s })
+      // A Harness goal goes on after the run's own round: so does this wait, until the goal
+      // stops (or the next report, with --until turn), with every round since the run began.
+      if (core.goalGoesOn(st)) {
+        const every_s = everySeconds(flags.every)
+        // --timeout bounds the whole command, the run and the goal after it.
+        const left = Math.max(1, total_s - Math.round((Date.now() - waitStarted) / 1000))
+        const f = core.throughGoal(st, core.followResult(await core.followThrough({ session_id: st.session_id, until: flags.until ?? 'goal', ...(flags.cursor ? { cursor: flags.cursor } : { since_ms: Date.parse(st.started_at) || Date.now() }), every_s }, { total_s: left })))
+        const again = f.cursor && ['report', 'following', 'needs_input'].includes(f.state)
+          ? self(`wait ${rest[0]} --until ${f.until} --cursor ${f.cursor}${f.until === 'turn' ? ` --every ${every_s}s` : ''}`)
+          : undefined
+        print({ ...f, ...(again ? { follow_command: again, hint: `${f.hint} To go on following, run follow_command in the background (not dsh_wait).` } : {}) })
+        process.exitCode = f.state === 'needs_input' ? 3 : 0
+        return
+      }
       print({
         ...(st.decided_for_user ? { hint: 'Required in your reply: you chose an answer for the user during this run, so start your reply by telling the user, in their language, what you chose and why (decided_for_user: answers and reason), then give the result. Passing on only final_text is not enough. ' + core.endedHint(st), decided_for_user: st.decided_for_user } : {}),
         run_id: st.run_id, state: st.state, session_id: st.session_id, timed_out: !!st.timed_out, error: st.error, final_text: st.final_text,
@@ -97,9 +120,8 @@ async function main() {
     case 'follow': {
       // Until the next report: waits in one call (no hour limit here), so a background
       // command wakes its client exactly then. --timeout makes it come back sooner.
-      const every = String(flags.every ?? '10m').match(/^(\d+)\s*(m|min|s)?$/i)
-      const every_s = every ? Number(every[1]) * (/^s$/i.test(every[2] ?? '') ? 1 : 60) : 600
-      const st = core.followResult(await core.api.follow({ session_id: rest[0], until: flags.until ?? 'goal', cursor: flags.cursor, every_s, timeout_s: Number(flags.timeout) || 24 * 3600 }))
+      const every_s = everySeconds(flags.every)
+      const st = core.followResult(await core.followThrough({ session_id: rest[0], until: flags.until ?? 'goal', cursor: flags.cursor, every_s }, { total_s: Number(flags.timeout) || 24 * 3600 }))
       const again = st.cursor && ['report', 'following', 'needs_input'].includes(st.state)
         ? self(`follow ${rest[0]} --until ${st.until} --cursor ${st.cursor}${st.until === 'turn' ? ` --every ${every_s}s` : ''}`)
         : undefined
