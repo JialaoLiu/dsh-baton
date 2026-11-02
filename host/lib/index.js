@@ -49,6 +49,8 @@ const probe = (sock) => new Promise((resolve) => {
 
 // Expand `~`, resolve, and follow symlinks when the path exists, so the same
 // folder always compares equal (on macOS /tmp is a link to /private/tmp).
+const isDirectory = (p) => { try { return fs.statSync(p).isDirectory() } catch { return false } }
+
 function normalizePath(p) {
   const abs = path.resolve(p.replace(/^~(?=$|[\\/])/, os.homedir()))
   try { return fs.realpathSync.native(abs) } catch { return abs }
@@ -149,6 +151,14 @@ export function apply(ctx) {
   const runs = new Map() // runId -> run
   let stopping = false // set when the plugin unloads: release every wait()
   const waiters = new Map() // runId -> Set<resolve>
+  // Followers of a session's Harness goal (see follow()): woken by what may end their wait.
+  const followers = new Map() // sessionId -> Set<wake>
+  const FOLLOW_EVENTS = new Set(['turn/start', 'turn/end', 'goal/change'])
+  // A moment's delay, so the event that woke a follower is in the log it reads.
+  const wakeFollowers = (sessionId) => { if (followers.has(sessionId)) setTimeout(guard('wake followers', () => { for (const wake of [...(followers.get(sessionId) ?? [])]) wake() }), 50) }
+  // Sessions whose agent waits for a person (agent/status waiting), and how often each began to.
+  const waitingSessions = new Set()
+  const uiEpisodes = new Map() // sessionId -> count
 
   // --- run bookkeeping ------------------------------------------------------
 
@@ -286,6 +296,7 @@ export function apply(ctx) {
 
   ctx.on('session/event', guard('session/event', (session, event) => {
     const data = event.data ?? {}
+    if (FOLLOW_EVENTS.has(event.type)) wakeFollowers(session.id)
     // Turn state is kept only for a turn in progress and dropped at its end.
     if (event.type === 'turn/start') turns.set(session.id, { hasOutput: false })
     else if (event.type === 'assistant/message' && turns.has(session.id)) turns.get(session.id).hasOutput = true
@@ -321,7 +332,9 @@ export function apply(ctx) {
           pushEvent(r, { type: 'human_input', text })
         }
       }
-      if (data.source?.kind === 'user' && opensTurn && run?.mode !== 'steer') {
+      // A round a Harness goal starts by itself counts like a user-started turn: the run whose
+      // turn just ended keeps that turn's reply instead of running on with the goal.
+      if ((data.source?.kind === 'user' || data.source?.kind === 'goal') && opensTurn && run?.mode !== 'steer') {
         // A new user-started turn: runs whose own turn already ended keep their
         // result instead of absorbing this turn's output, but still wait for any
         // sub-agents or jobs they started. Turns woken by sub-agent results carry
@@ -330,7 +343,7 @@ export function apply(ctx) {
         let closed = false
         for (const prev of active) {
           if (prev !== run && prev.sawPrompt && prev.turnEnd && !prev.outputClosed) {
-            Object.assign(prev, { outputClosed: true, supersededBy: run?.id ?? 'user' })
+            Object.assign(prev, { outputClosed: true, supersededBy: run?.id ?? (data.source.kind === 'goal' ? 'goal' : 'user') })
             closed = true
           }
         }
@@ -438,6 +451,9 @@ export function apply(ctx) {
 
   ctx.on('agent/status', guard('agent/status', ({ agent, status }) => {
     if (!agent) return
+    if (status === 'waiting') { if (!waitingSessions.has(agent.id)) uiEpisodes.set(agent.id, (uiEpisodes.get(agent.id) ?? 0) + 1); waitingSessions.add(agent.id) }
+    else waitingSessions.delete(agent.id)
+    wakeFollowers(agent.id)
     const receivers = receiversFor(agent.id)
     if (status === 'running' && receivers.length) lastRunningAt.set(agent.id, Date.now())
     for (const run of outputReceiversFor(agent.id)) {
@@ -574,10 +590,12 @@ export function apply(ctx) {
   function onQuestion(request, next) {
     const sessionId = request?.agent?.id
     const asked = sessionId && Array.isArray(request.questions) ? outputReceiversFor(sessionId) : []
-    if (!asked.length) return next()
+    // Taken up too when someone follows the session's goal: the follow wait brings it back.
+    if (!asked.length && !(followers.has(sessionId) && Array.isArray(request.questions))) return next()
     const entry = { id: `q-${crypto.randomBytes(4).toString('hex')}`, sessionId, items: request.questions, answers: new Map(), runs: asked }
     const ours = new Promise((resolve) => { entry.resolve = resolve })
     questions.set(sessionId, entry)
+    wakeFollowers(sessionId)
     for (const run of asked) {
       run.question = publicQuestion(entry)
       pushEvent(run, { type: 'question', question_id: entry.id, count: entry.items.length })
@@ -598,6 +616,7 @@ export function apply(ctx) {
     const fromBaton = ours.then((value) => { ui.abort(new Error('answered through dsh-baton')); return value })
     return Promise.race([theirs.then(answered('harness')), fromBaton.then(answered('dsh-baton')), aborted]).finally(() => {
       if (questions.get(sessionId) === entry) questions.delete(sessionId)
+      wakeFollowers(sessionId)
       for (const run of asked) {
         if (run.question?.question_id !== entry.id) continue
         delete run.question
@@ -607,15 +626,22 @@ export function apply(ctx) {
     })
   }
 
-  // Answer the open question of a run's turn. answers: [{ id?, choose?: [number | label],
-  // text?, skip? }]; questions not answered yet stay open until every one has an answer.
-  function answerQuestion({ run_id, answers }) {
-    const run = getRun(run_id)
-    const entry = questions.get(run.sessionId)
-    if (!isActive(run) || !entry || run.question?.question_id !== entry.id) {
+  // Answer the open question of a run's turn, or of a session a follow wait reported it for.
+  // answers: [{ id?, choose?: [number | label], text?, skip? }]; questions not answered yet
+  // stay open until every one has an answer.
+  function answerQuestion({ run_id, session_id, answers }) {
+    if (!run_id && !session_id) throw new Error('run_id or session_id is required')
+    const run = run_id ? getRun(run_id) : null
+    const entry = questions.get(run?.sessionId ?? session_id)
+    if (run && (!isActive(run) || !entry || run.question?.question_id !== entry.id)) {
       if (run.state === 'waiting') throw new Error(`Run ${run.id} is waiting for something in the Harness UI (an approval, for example) that cannot be answered from here; tell the user.`)
       throw new Error(`Run ${run.id} is ${run.state} and has no open question to answer.`)
     }
+    if (!entry) {
+      if (waitingSessions.has(session_id)) throw new Error(`Session ${session_id} is waiting for something in the Harness UI (an approval, for example) that cannot be answered from here; tell the user.`)
+      throw new Error(`Session ${session_id} has no open question to answer.`)
+    }
+    const shown = run ? publicRun(run, 0) : { session_id }
     if (!Array.isArray(answers) || !answers.length) throw new Error('answers must list at least one answer')
     const staged = new Map()
     for (const a of answers) {
@@ -639,10 +665,10 @@ export function apply(ctx) {
     const remaining = entry.items.filter((q) => !entry.answers.has(q.id)).map((q) => q.id)
     if (remaining.length) {
       for (const r of entry.runs) { if (r.question?.question_id === entry.id) { r.question = publicQuestion(entry); persist(r) } }
-      return { ...publicRun(run, 0), submitted: false, remaining }
+      return { ...shown, submitted: false, remaining }
     }
     entry.resolve({ answers: entry.items.map((q) => entry.answers.get(q.id)) })
-    return { ...publicRun(run, 0), submitted: true, answers: entry.items.map((q) => entry.answers.get(q.id)) }
+    return { ...shown, submitted: true, answers: entry.items.map((q) => entry.answers.get(q.id)) }
   }
 
   ctx.on('user-questions/request', guardWaterfall(onQuestion), { global: true, prepend: true })
@@ -718,6 +744,190 @@ export function apply(ctx) {
       }
     }
     return { session_id, ...(isArchived(session_id) ? { archived: true } : {}), cwd: meta?.cwd ?? null, title, total_messages: messages.length, messages: messages.slice(-last) }
+  }
+
+  // --- Harness goals --------------------------------------------------------------
+  // A session with a goal starts its next round by itself a few ms after a turn ends, until
+  // the goal is complete, paused or blocked, or its rounds run out. The goal's durable state is
+  // a session projection (values.goal). Whether this process will really go on with it
+  // (activation: armed, or disarmed, e.g. after a Harness restart until a person resumes it)
+  // is not in it: only Harness's goals service and its goal/activation-changed event say.
+
+  let goalsService = null
+  let agentsService = null
+  const activations = new Map() // sessionId -> 'armed' | 'disarmed', from goal/activation-changed
+  ctx.on('goal/activation-changed', guard('goal activation', ({ sessionId, goal } = {}) => {
+    if (!sessionId) return
+    if (goal?.activation) activations.set(sessionId, goal.activation)
+    else activations.delete(sessionId)
+    wakeFollowers(sessionId)
+  }))
+
+  // armed, disarmed, or null when this Harness does not say. A session not loaded (no live
+  // agent, as after a Harness restart until it is opened) runs nothing: disarmed.
+  function activationOf(sessionId, goalId) {
+    try {
+      if (agentsService && typeof goalsService?.get === 'function') {
+        const agent = agentsService.get(sessionId)
+        if (!agent) return 'disarmed'
+        const view = goalsService.get(agent)
+        if (view?.id === goalId && view.activation) return view.activation
+      }
+    } catch { /* not live here: the event is all there is */ }
+    return activations.get(sessionId) ?? null
+  }
+
+  const clipText = (s, n) => (typeof s === 'string' && s.length > n ? `${s.slice(0, n)}…` : s ?? null)
+
+  // The session's current goal, or null (none, or this Harness has no goals).
+  async function goalOf(sessionId) {
+    let current
+    try {
+      const p = typeof controller.projections === 'function' ? await controller.projections({ sessionId }, signal()) : null
+      // The projection's wire view is the current goal itself (null when none); the stored
+      // state, as the projection cache keeps it, wraps it in { current, seenGoalIds, failure }.
+      const v = p?.values?.goal
+      current = v && typeof v === 'object' && 'current' in v ? v.current : v
+    } catch { return null }
+    const g = current?.goal
+    if (!g?.id) return null
+    return {
+      id: g.id, phase: g.phase, objective: clipText(g.objective, 300),
+      rounds_started: current.roundsStarted ?? 0, max_rounds: g.maxGoalRounds ?? null,
+      activation: activationOf(sessionId, g.id),
+      ...(g.blockedReason ? { blocked_reason: { code: g.blockedReason.code, message: g.blockedReason.message } } : {}),
+    }
+  }
+
+  // A goal that will go on after this point (not complete): worth telling whoever waited on a turn.
+  const openGoal = async (sessionId) => {
+    const goal = await goalOf(sessionId)
+    return goal && goal.phase !== 'complete' ? goal : null
+  }
+
+  // A session log's turns, oldest first: when each ended, its goal round (when a goal started
+  // it), its closing text and the tools it called.
+  function turnsOf(events) {
+    const ended = []
+    let cur = null
+    for (const e of events ?? []) {
+      if (e.type === 'turn/start') cur = { turn: e.data?.turn ?? ended.length + 1, round: null, text: null, tools: {}, started_at: Date.parse(iso(e.time)) || null }
+      else if (!cur) continue
+      else if (e.type === 'user/message' && e.data?.source?.kind === 'goal') cur.round = e.data.source.round ?? null
+      else if (e.type === 'assistant/message') {
+        const content = e.data?.message?.content
+        const text = textOf(content)
+        if (text) cur.text = text
+        for (const call of toolCallsOf(content)) { const n = call.name ?? call.kind; cur.tools[n] = (cur.tools[n] ?? 0) + 1 }
+      } else if (e.type === 'turn/end') {
+        const { started_at, ...turn } = cur
+        ended.push({ ...turn, ended_at: iso(e.time) ?? new Date().toISOString(), end: e.data?.reason?.kind ?? null })
+        cur = null
+      }
+    }
+    return { ended, running: cur !== null, runningSince: cur?.started_at ?? null }
+  }
+
+  const MAX_ROUNDS_SHOWN = 10
+  const shownRound = (t) => ({
+    turn: t.turn, ...(t.round != null ? { goal_round: t.round } : {}), ended_at: t.ended_at,
+    ...(t.end && t.end !== 'completed' ? { ended_as: t.end } : {}),
+    final_text: clipText(t.text, 1500), ...(Object.keys(t.tools).length ? { tools: t.tools } : {}),
+  })
+  const shownRounds = (list) => ({
+    rounds: list.slice(-MAX_ROUNDS_SHOWN).map(shownRound),
+    ...(list.length > MAX_ROUNDS_SHOWN ? { earlier_rounds_not_shown: list.length - MAX_ROUNDS_SHOWN } : {}),
+  })
+
+  // Where a follow wait has got to: rounds already reported, and when it last reported.
+  const cursorOf = (mark) => `${mark.rounds}:${mark.at}`
+  function parseCursor(cursor) {
+    const m = /^(\d+):(\d+)$/.exec(String(cursor ?? ''))
+    return m ? { rounds: Number(m[1]), at: Number(m[2]) } : null
+  }
+  const GOAL_QUIET_MS = Number(process.env.DSH_BATON_GOAL_QUIET_MS) || 5 * 60_000
+  // The question or Harness UI wait a follower was already told about (one report per episode).
+  const noticed = new Map() // sessionId -> key
+
+  // Wait on a session's goal without sending anything. until "goal": until the goal stops
+  // (complete, paused, blocked, cleared). until "turn": at the first round end once every_s
+  // have passed since the last report, with every round since then. Both return at once when
+  // Harness needs a person, or the goal will not go on by itself (disarmed; when that cannot
+  // be read, no new round for GOAL_QUIET_MS). The cursor carries what was reported, so a
+  // next call, in either mode, neither repeats nor misses a round.
+  async function follow({ session_id, until = 'goal', cursor, every_s = 600, timeout_s = 300 }) {
+    if (!session_id) throw new Error('session_id is required')
+    if (until !== 'goal' && until !== 'turn') throw new Error('until must be goal or turn')
+    if (typeof controller.projections !== 'function') throw new Error('This DeepSeek Harness version has no session projections, so its goals cannot be followed.')
+    const every = Math.max(1, Number(every_s) || 600) * 1000
+    const seconds = Number.isFinite(Number(timeout_s)) ? Math.min(Math.max(Number(timeout_s), 0), MAX_WAIT_S) : 300
+    const deadline = Date.now() + seconds * 1000
+    let mark = parseCursor(cursor)
+    const startedAt = Date.now()
+    for (;;) {
+      const [goal, log] = await Promise.all([goalOf(session_id), controller.inspect(session_id, signal())])
+      const { ended, running, runningSince } = turnsOf(log?.events)
+      // A first call counts from the start of the round under way, so what it already wrote is reported.
+      mark ??= { rounds: ended.length, at: running && runningSince ? Math.min(runningSince, Date.now()) : Date.now() }
+      const fresh = ended.slice(Math.min(mark.rounds, ended.length))
+      const out = (state, extra = {}) => ({
+        session_id, state, until, goal, cwd: log?.meta?.cwd ?? null, since: iso(mark.at), ...shownRounds(fresh), ...extra,
+        cursor: extra.timed_out ? cursorOf(mark) : cursorOf({ rounds: ended.length, at: Date.now() }),
+      })
+      // A goal gone since a call that had one was cleared. Without one so far, the turn that
+      // sends "/goal …" creates it partway through: no_goal only once no turn is running.
+      const hadGoal = !!goal || (!!cursor && (log?.events ?? []).some((e) => e.type === 'goal/change'))
+      const endedBecause = !hadGoal ? null : !goal ? 'cleared' : goal.phase !== 'active' ? goal.phase : null
+      const lastEnd = ended.length ? Date.parse(ended.at(-1).ended_at) : 0
+      const quietSince = Math.max(lastEnd, startedAt)
+      if (!hadGoal) {
+        if (!running || stopping) return out('no_goal', { ended_because: null })
+      } else if (endedBecause) {
+        // The round that completed the goal is often still finishing: its reply goes with the report.
+        if (!running || stopping || Date.now() >= deadline) return out('goal_ended', { ended_because: endedBecause })
+      } else {
+        if (goal.max_rounds && goal.rounds_started >= goal.max_rounds && !running) return out('goal_ended', { ended_because: 'round_limit' })
+        const question = questions.get(session_id)
+        const key = question ? question.id : waitingSessions.has(session_id) ? `ui:${uiEpisodes.get(session_id)}` : null
+        if (key && noticed.get(session_id) !== key) {
+          noticed.set(session_id, key)
+          return out('needs_input', question ? { needs_input: 'answer', question: publicQuestion(question) } : { needs_input: 'harness-ui' })
+        }
+        if (goal.activation === 'disarmed') return out('needs_resume')
+        if (goal.activation == null && !running && Date.now() - quietSince >= GOAL_QUIET_MS) return out('goal_stalled')
+        if (until === 'turn' && fresh.length && (lastEnd >= mark.at + every || (Date.now() >= mark.at + every && !running))) return out('report')
+      }
+      if (stopping || Date.now() >= deadline) return out('following', { timed_out: true })
+      // Sleep until something happens, the next report is due, or the quiet runs out.
+      const due = [deadline, ...(until === 'turn' ? [mark.at + every] : []), ...(goal && goal.activation == null && !running ? [quietSince + GOAL_QUIET_MS] : [])]
+      const wakeAt = Math.max(Date.now() + 50, Math.min(...due.filter((t) => t > Date.now())))
+      await new Promise((resolve) => {
+        const set = followers.get(session_id) ?? new Set()
+        followers.set(session_id, set)
+        const done = () => {
+          clearTimeout(timer)
+          set.delete(done)
+          if (!set.size && followers.get(session_id) === set) followers.delete(session_id)
+          resolve()
+        }
+        const timer = setTimeout(done, wakeAt - Date.now())
+        set.add(done)
+      })
+    }
+  }
+
+  // A session at a glance, for a client that holds only its id: what it is doing, its goal
+  // and the reply of its last turn.
+  async function sessionStatus({ session_id }) {
+    const [act, goal, log] = await Promise.all([activity({ session_id }), goalOf(session_id), controller.inspect(session_id, signal()).catch(() => null)])
+    const { ended, running } = turnsOf(log?.events)
+    const question = questions.get(session_id)
+    return {
+      ...act, turn_running: running,
+      ...(goal ? { goal } : {}),
+      ...(question ? { needs_input: 'answer', question: publicQuestion(question) } : waitingSessions.has(session_id) ? { needs_input: 'harness-ui' } : {}),
+      ...(ended.length ? { last_turn: shownRound(ended.at(-1)) } : {}),
+    }
   }
 
   // --- models -----------------------------------------------------------------
@@ -885,6 +1095,15 @@ export function apply(ctx) {
       throw new Error(`Session ${sessionId} is archived. Unarchive it in Harness, or start a new session with cwd or workspace_id.`)
     }
     if (!sessionId && !cwd && !workspace_id) throw new Error('A new session needs cwd or workspace_id. Pass session_id to continue an existing one.')
+    // A missing folder is not created: a mistyped path, or a project on a drive that is not
+    // connected, would get an empty folder (under /Volumes, even). Checked before the registry,
+    // which answers a bare ENOENT, or nothing at all for a folder registered while it was there.
+    if (!sessionId) {
+      const dir = workspace_id ? registry.get?.(workspace_id)?.path : normalizePath(cwd)
+      if (dir && !isDirectory(dir)) {
+        throw new Error(`The folder ${dir}${workspace_id ? ` (workspace ${workspace_id})` : ''} does not exist, so no session was started and nothing was sent. Check the path (a project on an external drive needs that drive connected), or create the folder first.`)
+      }
+    }
     const plan = await planModel(sessionId, { model, reasoning_effort })
     const isNew = !sessionId
     if (isNew) {
@@ -969,7 +1188,13 @@ export function apply(ctx) {
       run.waitNoticed = true
       return { ...publicRun(run), needs_input: run.question ? 'answer' : 'harness-ui' }
     }
-    return { ...publicRun(run), ...(done ? {} : { timed_out: true }) }
+    return { ...publicRun(run), ...(done ? await goalField(run) : { timed_out: true }) }
+  }
+
+  // A run that completed in a session with a goal: the goal goes on after it.
+  const goalField = async (run) => {
+    const goal = run.state === 'completed' ? await openGoal(run.sessionId) : null
+    return goal ? { goal } : {}
   }
 
   // What a session is doing right now, as Harness reports it for archiving:
@@ -1045,7 +1270,12 @@ export function apply(ctx) {
     read_session: readSession,
     models,
     send,
-    status: ({ run_id, tail }) => publicRun(getRun(run_id), tail ?? 20),
+    status: async ({ run_id, session_id, tail }) => {
+      if (!run_id && session_id) return sessionStatus({ session_id })
+      const run = getRun(run_id)
+      return { ...publicRun(run, tail ?? 20), ...(isActive(run) ? {} : await goalField(run)) }
+    },
+    follow,
     wait,
     cancel,
     activity,
@@ -1132,6 +1362,14 @@ export function apply(ctx) {
       defaultModelService = child.agentDefaultModel
       child.effect(() => () => { if (defaultModelService === child.agentDefaultModel) defaultModelService = null }, 'dsh-baton-host default model')
     })
+    ctx.inject(['goals'], (child) => {
+      goalsService = child.goals
+      child.effect(() => () => { if (goalsService === child.goals) goalsService = null }, 'dsh-baton-host goals')
+    })
+    ctx.inject(['agents'], (child) => {
+      agentsService = child.agents
+      child.effect(() => () => { if (agentsService === child.agents) agentsService = null }, 'dsh-baton-host agents')
+    })
     ctx.inject(['webServer'], (web) => {
       web.effect(() => web.webServer.register({
         kind: 'exact',
@@ -1168,6 +1406,7 @@ export function apply(ctx) {
       // unloaded or reloaded plugin leaves no timers or sockets behind.
       for (const set of waiters.values()) for (const done of [...set]) done()
       waiters.clear()
+      for (const set of followers.values()) for (const done of [...set]) done()
       for (const conn of connections) conn.destroy()
       if (!server) return
       server.close()

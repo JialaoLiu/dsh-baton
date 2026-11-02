@@ -36,7 +36,9 @@ function start(env, clientName = 'codex-mcp-client', script = SERVER) {
   }
   send({ id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: clientName } } })
   const stop = () => new Promise((r) => { child.on('close', r); child.stdin.end() })
-  return { send, reply, stop, replies }
+  // A server still holding a long wait does not end on stdin's close: take it down.
+  const kill = () => new Promise((r) => { child.on('close', r); child.kill() })
+  return { send, reply, stop, kill, replies }
 }
 
 async function waitDescription(codexHome, clientName) {
@@ -182,6 +184,54 @@ test('a conversation started after tool_timeout_sec was written waits long; an o
   assert.equal(codexWaitSeconds({ value: 3600, since: 1000, prev: null }, 500), 270)
 })
 
+test('an old conversation loaded again after the value was written (a Codex restart) waits long too', async () => {
+  const { codexConfigReadAt, codexProcessStartedAt, processInfo } = await import('../src/register.mjs')
+  const old = '00000000-0001-7000-8000-000000000000' // started at 1 ms
+  assert.equal(codexConfigReadAt(old, 5000), 5000, 'Codex started later: it read the config then')
+  assert.equal(codexConfigReadAt(old, null), 1, 'no Codex process found: the thread id alone')
+  assert.equal(codexConfigReadAt('01a18e43-ef83-7561-a6aa-f15eea378837', 5000), 0x01a18e43ef83)
+  assert.equal(codexConfigReadAt(undefined, null), null)
+
+  // The nearest ancestor named codex counts, past a launcher; none at all: unknown.
+  const tree = { 10: { ppid: 9, name: 'node', started: 900 }, 9: { ppid: 8, name: 'npx', started: 800 }, 8: { ppid: 1, name: 'codex', started: 700 }, 7: { ppid: 1, name: 'Codex.exe', started: 600 } }
+  const info = (pid) => tree[pid] ?? null
+  assert.equal(codexProcessStartedAt(10, info), 700)
+  assert.equal(codexProcessStartedAt(7, info), 600, 'Windows: codex.exe in any case')
+  assert.equal(codexProcessStartedAt(9, (pid) => (pid === 8 ? { ppid: 1, name: 'claude', started: 1 } : info(pid))), null, 'Claude Code started it: not Codex')
+  assert.equal(codexProcessStartedAt(42, info), null, 'a process that is gone')
+
+  // Read from the system for this very process (ps, or PowerShell on Windows).
+  const me = processInfo(process.pid)
+  assert.ok(me, 'process info for this process')
+  assert.match(me.name, /^node(?:\.exe)?$/i)
+  assert.equal(me.ppid, process.ppid)
+  const started = Date.now() - process.uptime() * 1000
+  assert.ok(me.started <= started + 1000 && me.started > started - 5000, `started ${me.started} vs ${started}`)
+
+  // Through server.mjs, started by this test (not Codex): an old thread keeps the short wait
+  // even though the server itself started after the value was written. prev 2 makes it 1 s.
+  const { socketEndpoint } = await import('../host/lib/socket.js')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-lw-'))
+  const sock = path.join(dir, 'h.sock')
+  const server = net.createServer((c) => c.on('data', (d) => {
+    const req = JSON.parse(String(d).split('\n')[0])
+    setTimeout(() => c.end(JSON.stringify({ id: req.id, result: { run_id: req.params.run_id, state: 'running', timed_out: true } }) + '\n'), 50)
+  }))
+  await new Promise((r) => server.listen(socketEndpoint(sock), r))
+  fs.writeFileSync(path.join(dir, 'config.toml'), "[mcp_servers.dsh-baton]\ncommand = '/n'\nargs = ['/s']\ntool_timeout_sec = 3600\n")
+  fs.writeFileSync(path.join(dir, 'codex-timeout.json'), JSON.stringify({ value: 3600, since: Date.now() - 60000, prev: 2 }))
+  const s = start({ CODEX_HOME: dir, DSH_BATON_SOCKET: sock, DSH_BATON_HOME: dir })
+  try {
+    await s.reply(1)
+    s.send({ id: 2, method: 'tools/call', params: { name: 'dsh_wait', arguments: { run_id: 'hrun-x' }, _meta: { threadId: old } } })
+    assert.ok(await s.reply(2, 4000), 'the short wait: the server\'s own start proves nothing about the config')
+  } finally {
+    await s.kill()
+    server.close()
+    rm(dir)
+  }
+})
+
 test('the time tool_timeout_sec appears or changes is noted once', async () => {
   const { noteCodexToolTimeout, codexTimeoutNoteFile } = await import('../src/register.mjs')
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-lw-'))
@@ -222,14 +272,15 @@ test('tool_timeout_sec is read under a quoted key too, and never added twice', a
 })
 
 test('a Codex config written with CRLF keeps CRLF when dsh-baton edits it', async () => {
-  const { rewrite, addCodexToolTimeout } = await import('../src/register.mjs')
+  const { rewrite, addCodexToolTimeout, addCodexCwd } = await import('../src/register.mjs')
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-lw-'))
   const file = path.join(dir, 'config.toml')
   try {
     fs.writeFileSync(file, "model = 'x'\r\n\r\n[mcp_servers.dsh-baton]\r\ncommand = '/n'\r\nargs = ['/s']\r\n")
-    assert.equal(rewrite(file, addCodexToolTimeout), 'updated')
+    // As autoRegister edits it: cwd and tool_timeout_sec in one write.
+    assert.equal(rewrite(file, (t) => addCodexToolTimeout(addCodexCwd(t, '/home/o'))), 'updated')
     const text = fs.readFileSync(file, 'utf8')
-    assert.match(text, /args = \['\/s'\]\r\ntool_timeout_sec = 3600\r\n/)
+    assert.match(text, /\[mcp_servers\.dsh-baton\]\r\ncwd = '\/home\/o'\r\ncommand = '\/n'\r\nargs = \['\/s'\]\r\ntool_timeout_sec = 3600\r\n/)
     assert.equal(text.replace(/\r\n/g, '').includes('\n'), false, 'no bare LF')
   } finally {
     rm(dir)

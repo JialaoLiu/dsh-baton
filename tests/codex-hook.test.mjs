@@ -361,13 +361,13 @@ test('taking the hook out drops the trust Codex gave it; the user\'s own hooks k
 test('moving the MCP table keeps an old hook block that follows it whole, for its removal', async () => {
   const { editCodexConfig } = await import('../src/register.mjs')
   const entry = { command: '/n', args: ['/s'] }
-  const withHook = addHook(editCodexConfig('model = "x"\n', entry), WRAPPER)
+  const withHook = addHook(editCodexConfig('model = "x"\n', entry, '/home/o'), WRAPPER)
   const block = withHook.slice(withHook.indexOf('# dsh-baton: wakes'))
-  assert.match(withHook, /args = \['\/s'\]\ntool_timeout_sec = 3600\n\n# dsh-baton: wakes/, 'the hook block directly follows the MCP table')
+  assert.match(withHook, /args = \['\/s'\]\ncwd = '\/home\/o'\ntool_timeout_sec = 3600\n\n# dsh-baton: wakes/, 'the hook block directly follows the MCP table')
   const moved = editCodexConfig(withHook, { command: '/n2', args: ['/s2'] })
   assert.ok(moved.includes(block.trimEnd()), 'marker and the 4 hook fields are kept byte for byte')
   assert.match(moved, /\[mcp_servers\.dsh-baton\]\ncommand = '\/n2'/)
-  assert.equal(removeCodexHookBlock(moved), editCodexConfig('model = "x"\n', { command: '/n2', args: ['/s2'] }), 'and taken out whole')
+  assert.equal(removeCodexHookBlock(moved), editCodexConfig('model = "x"\n', { command: '/n2', args: ['/s2'] }, '/home/o'), 'and taken out whole (the cwd already there kept)')
   assert.equal(editCodexConfig(moved, null).includes('# dsh-baton: wakes'), true, 'removing the MCP server leaves the hook alone')
 })
 

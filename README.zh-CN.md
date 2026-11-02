@@ -156,7 +156,8 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 <summary>各客户端怎么等待</summary>
 
 - **Claude Code** 在后台等待任务（`dsh_send` 返回的 `wait_command`），任务结束时只被唤醒一次。
-- **Codex** 在 `dsh_wait` 里等待。插件把 Codex 对 dsh-baton 的工具超时设为一小时（`tool_timeout_sec = 3600`），所以一次调用最多能等 59 分钟：一小时以内跑完的任务，不管跑多久，等待只花一次模型请求，结果作为普通的工具结果回到对话里。超过 59 分钟会返回 `timed_out`，只带状态，Codex 直接再调用一次，不会去总结进度。等待中按停止会立刻停下。Codex 不会收到 `wait_command`：它的终端无法在命令结束时唤醒它，只能轮询。插件设好超时之前就开着的对话，或者你自己写的、没有这项设置的条目，每次最多等 270 秒，刚好低于 Codex 默认 300 秒的工具超时。实测（Codex 桌面端）：28 分钟的任务只调了 1 次 `dsh_wait`；62 分钟的任务调了 2 次，第一次等满 59 分钟返回 `timed_out`，接着再等 3 分钟拿到结果；期间没有调用 `dsh_status`。
+- **Codex** 在 `dsh_wait` 里等待。插件把 Codex 对 dsh-baton 的工具超时设为一小时（`tool_timeout_sec = 3600`），所以一次调用最多能等 59 分钟：一小时以内跑完的任务，不管跑多久，等待只花一次模型请求，结果作为普通的工具结果回到对话里。超过 59 分钟会返回 `timed_out`，只带状态，Codex 直接再调用一次，不会去总结进度。等待中按停止会立刻停下。Codex 不会收到 `wait_command`：它的终端无法在命令结束时唤醒它，只能轮询。插件设好超时之前就一直开着的对话，或者你自己写的、没有这项设置的条目，每次最多等 270 秒，刚好低于 Codex 默认 300 秒的工具超时；Codex 重启之后，这些对话也能长时间等待。实测（Codex 桌面端）：28 分钟的任务只调了 1 次 `dsh_wait`；62 分钟的任务调了 2 次，第一次等满 59 分钟返回 `timed_out`，接着再等 3 分钟拿到结果；期间没有调用 `dsh_status`。
+- **带 Harness 目标的会话**。有了目标，Harness 在一个回合结束后会自己开始下一轮。发给这种会话的任务仍然在它自己那一轮结束时返回，结果里带 `goal`（阶段、已开始的轮数和上限、Harness 会不会自己接着做），并说明工作还没完。想不发消息继续跟进，客户端用 `session_id` 调 `dsh_wait`（Claude Code 则在后台运行 `follow_command`）。`until` 为 `goal`（默认）时，目标停下才报告一次；为 `turn` 时，距上次报告满 10 分钟（`every_minutes`）后的第一个回合结束时报告，带上这期间的每一轮。每份报告带着每一轮的结尾回复和用过的工具、文件夹里自上次报告以来改动的文件、目标状态，以及下次调用要传回的 `cursor`，所以两种方式之间切换既不会重复也不会漏掉哪一轮。两种方式在这些情况下都会立刻返回：Harness 提问（用 `dsh_answer` 加 `session_id` 回答）或等待审批；目标完成、暂停、受阻或被清除；Harness 不会自己接着做（比如 Harness 重启后，要等你按“继续”）。在 Codex 里，这样的一次调用最多等 15 分钟，所以你打的新消息最晚 15 分钟内就能被看到。
 - **等待中想改需求**。Codex：在输入框里用**引导**发出新要求，Codex 会立刻停止等待，用 `dsh_send`（`mode` 为 `steer`）把它插进同一个 Harness 对话，改等新的任务，Harness 在同一轮里把新要求一起做完；用**排队**发的话，要等这次任务做完才会被看到。也可以先按停止再发。Claude Code：随时发就行，它在后台等待，马上就能把新要求插队转给 Harness。插队的任务和原任务同时结束，共用一份结果；排队的任务单独返回。同一个文件夹里同时跑多个任务时，结果里会标出其他任务，不会删掉别人的文件。
 
 </details>
@@ -196,8 +197,8 @@ Codex 和 Claude 轮流往同一个 Harness 对话发消息，每条都标明是
 | `dsh_list_models` | 列出 Harness 能用的模型（provider、id、名称、推理强度）和它的默认模型 |
 | `dsh_read_session` | 读某个对话最近的消息和回复（含用到的工具名）；已归档的对话会带 `archived: true` |
 | `dsh_send` | 发消息。带 `session_id` 续接那个对话；否则新开对话，建在 `cwd` 或 `workspace_id` 指定的位置，都不带时建在当前对话所在的文件夹（`cwd` 还不是工作区时会先登记；指定的 `cwd` 在当前对话文件夹之外也可以，结果里的 `folder_note` 会提醒）。`checks`：运行结束后 dsh-baton 自己跑的测试命令（见[转交之后怎么验收](#转交之后怎么验收)）。立即返回 `run_id`。Harness 里这条消息会标注「由 Claude / ChatGPT 从另一个聊天发送」。已归档的对话会被拒绝：先在 Harness 里取消归档，或新开对话。对话正忙时，`mode` 为 `followup` 会排在当前回合之后，`steer` 会插进正在跑的回合；不传时跟随 Harness 自己的设置（设置 → 繁忙时的发送行为：排队发送或插话发送），读不到设置时按 `followup`。返回里的 `mode_source` 说明用的是哪种。`model` 只在用户点名模型时传（如“DeepSeek-V4 Pro”“v4-pro”；`reasoning_effort` 同理）：按 Harness 自己的模型列表匹配，不分大小写，忽略空格、连字符和开头的 DeepSeek，所以 Harness 以后上线的模型（如 V4.1 Pro）一出现在列表里就能用；匹配不到或匹配到多个时，发送直接失败、什么都不创建，并列出可用模型（用 `provider/model` 指定其一）。模型在消息发出前设到该对话上，Harness 的默认模型会恢复原样（Harness 会把对话里选的模型同时存成默认）。不传时，续接的对话沿用它自己的模型，新对话用 Harness 默认模型。返回值的 `model` 和 `model_source` 写明用的是哪个 |
-| `dsh_status` | 查看运行进度：状态、最近的文字和工具调用、最终回复；回合结束但子智能体/后台任务还在跑时给出 `waiting_on`；中途有人在 Harness 界面里发消息时给出 `human_interjections`；被 Harness 重启打断的任务状态为 `interrupted`；以及这次运行发送时用的 `model` |
-| `dsh_wait` | 等运行结束；发消息时带了 `checks` 的，结束后会附上 `evidence`（改了哪些文件、测试结果）（或者等到它停下来问人，见 `dsh_answer`）：Codex 每次最多等 3540 秒（它对 dsh-baton 的工具超时减 60 秒；没设时 270 秒），其他客户端 50 秒。没做完会带 `timed_out`，只返回状态，再调用一次即可。能在后台等待的客户端改用 `dsh_send` 返回的 `wait_command`。`dsh_status` 只用来看一眼，不用来等待 |
+| `dsh_status` | 查看运行进度：状态、最近的文字和工具调用、最终回复；回合结束但子智能体/后台任务还在跑时给出 `waiting_on`；中途有人在 Harness 界面里发消息时给出 `human_interjections`；被 Harness 重启打断的任务状态为 `interrupted`；以及这次运行发送时用的 `model`。用 `session_id` 代替 `run_id` 时：会话正在做什么、它的 Harness 目标，以及上一回合的回复 |
+| `dsh_wait` | 等运行结束；发消息时带了 `checks` 的，结束后会附上 `evidence`（改了哪些文件、测试结果）（或者等到它停下来问人，见 `dsh_answer`）：Codex 每次最多等 3540 秒（它对 dsh-baton 的工具超时减 60 秒；没设时 270 秒），其他客户端 50 秒。没做完会带 `timed_out`，只返回状态，再调用一次即可。能在后台等待的客户端改用 `dsh_send` 返回的 `wait_command`。`dsh_status` 只用来看一眼，不用来等待。用 `session_id` 代替 `run_id` 时，不发任何消息，跟进这个会话的 Harness 目标（`until`、`cursor`、`every_minutes`；见“各客户端怎么等待”） |
 | `dsh_answer` | 回答运行中途提出的问题（Harness 的 ask_user_question）：每道题可以填选项编号或选项文字、自由填写，或者跳过；可以逐题回答，也可以一次答完。运行一提问，`dsh_wait` 和 `wait_command` 就会立刻返回，并带上题目（`needs_input`、`question`；Harness 那边模型推荐的选项单独放在 `harness_suggested` 里，不再写在选项文字中）。只有你说过让它自己决定时，助手才会按自己的判断回答，这时它会带上 `reason`，并告诉你选了什么、为什么；否则它会把题目转给你，开头先写它自己的建议和理由。你也可以直接在 Harness 窗口里回答，谁先答就算谁的 |
 | `dsh_session_activity` | 经 `dsh_call` 调用。对话此刻在做什么：正在跑的回合、子智能体（任意层级）、后台任务；已归档的对话会带 `archived: true` |
 | `dsh_update_queued` | 经 `dsh_call` 调用。按 `run_id` 修改还在忙碌对话队列里等待的消息：`edit` 改文字，`remove` 撤回，`steer` 立刻插进正在跑的回合。消息一旦进入对话就改不了了 |
@@ -227,6 +228,7 @@ dsh-baton send --session session-xxxx "继续：补上测试"
 dsh-baton send --session session-xxxx --mode steer "插话：先别改 API"
 dsh-baton wait hrun-xxxx              # 阻塞到结束，打印最终回复；成功退出码 0
 dsh-baton status hrun-xxxx
+dsh-baton follow session-xxxx --until turn --every 10m   # 跟进会话的 Harness 目标：阻塞到下一份报告
 dsh-baton activity session-xxxx       # 正在跑的回合、子智能体、后台任务
 dsh-baton cancel --session session-xxxx
 dsh-baton rename session-xxxx 新标题
@@ -275,7 +277,9 @@ Harness 插件连不上时：
 
 **插件启用时做了什么**。它把 MCP 服务器复制到 `~/.dsh-baton/app` 这个固定的文件夹，再直接把 MCP 注册写进 `~/.claude.json` 和 `~/.codex/config.toml`，各留一份 `*.bak-dsh-baton` 备份。电脑上有 Node.js ≥ 22.15（在 `PATH` 里能找到）就用它启动服务器；没有的话，就用 Harness 自带的运行环境（Harness 应用本身以 Node 模式运行，`ELECTRON_RUN_AS_NODE=1`），不用另外安装任何东西。两种情况下，只装了桌面应用、`claude` / `codex` 不在 `PATH` 里也能用。每次 Harness 启动都会再检查一遍：已经正确的注册、或者指向另一份可用 dsh-baton 的注册，都不会改动。在 Harness 里输入包名后，安装源会自动切到「npm 官方源」（英文界面是 "Official npm registry"），不用另外选择，也不用重启。不想让插件自动注册，给 Harness 设置 `DSH_BATON_AUTO_REGISTER=0`。
 
-**Codex 的工具超时**。Codex 默认 300 秒就会停掉一次 MCP 工具调用，除非服务器那张表里设了 `tool_timeout_sec`。插件会在 `~/.codex/config.toml` 的 `[mcp_servers.dsh-baton]` 里写入 `tool_timeout_sec = 3600`，已有的表没有这一项时也会补上；你自己设过的值会保留。服务器读这个值，每次 `dsh_wait` 等它减 60 秒。Codex 在新开对话时读取这项设置，并且一直沿用：新对话不用重启 Codex 就能用上，已经开着的对话仍然是 Codex 的 300 秒上限。dsh-baton 按对话的开始时间区分（`~/.dsh-baton/codex-timeout.json` 记着这项设置写入的时间），这些对话每次照旧只等 270 秒。
+**Codex 的工具超时**。Codex 默认 300 秒就会停掉一次 MCP 工具调用，除非服务器那张表里设了 `tool_timeout_sec`。插件会在 `~/.codex/config.toml` 的 `[mcp_servers.dsh-baton]` 里写入 `tool_timeout_sec = 3600`，已有的表没有这一项时也会补上；你自己设过的值会保留。服务器读这个值，每次 `dsh_wait` 等它减 60 秒。Codex 在启动或载入对话时读取这项设置，并且一直沿用：新对话不用重启 Codex 就能用上，Codex 重启后的所有对话也一样；只有从那之前一直开着的对话仍然是 Codex 的 300 秒上限。dsh-baton 按对话和 Codex 进程的开始时间区分（`~/.dsh-baton/codex-timeout.json` 记着这项设置写入的时间），这些对话每次照旧只等 270 秒。
+
+**Codex 里 dsh-baton 的 cwd**。除非那张表里设了 `cwd`，Codex 会在对话所在的文件夹里启动 MCP 服务器；那个文件夹不在了（比如项目在没接上的移动硬盘上），服务器就启动不了，这个对话里也就没有 `dsh_*` 工具。插件会在 `[mcp_servers.dsh-baton]` 里写入 `cwd`（你的主文件夹），已有的表没有这一项时也会补上；你自己设过的 `cwd` 会保留。
 
 **更新到 0.6.4**。不用重启，不用批准，也不用改任何设置。在 Harness 里更新插件后，新的服务器会装到 `~/.dsh-baton/app`，超时设置也会写好；Codex 里正在运行的服务器在下一次调用时就换成新版本（每次 `tools/list` 和 `tools/call` 前都会检查有没有更新的版本）。新对话每次最多等 59 分钟；已经开着的对话照常运行，每次等 270 秒。0.6.0 到 0.6.3 的插件加的 Stop 钩子会连同信任记录自动移除，不用去 Codex 设置里取消勾选。新开的对话，以及 Codex 重启后的所有对话，都完全没有钩子。
 

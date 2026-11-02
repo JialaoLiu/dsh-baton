@@ -84,6 +84,32 @@ export function addCodexToolTimeout(text) {
   return lines.join('\n')
 }
 
+// Codex starts an MCP server in the conversation's folder unless the table sets cwd, and when
+// that folder is gone (a project on a drive that is not plugged in) the server cannot start
+// and the conversation has no dsh_* tools. The server reads nothing from its folder, so it
+// starts in the home folder: always there, never a project (folder.mjs skips it), and never
+// one an update deletes. Its own src folder would be: Windows will not remove a folder a
+// running process works in, so updating it with a conversation open would fail half-way.
+const HAS_CWD = /^\s*(["']?)cwd\1\s*=/
+
+// The cwd line in [mcp_servers.dsh-baton], as written, or null.
+function ownCwdLine(text) {
+  const lines = String(text ?? '').split(/\r?\n/)
+  const t = ownMainTable(lines)
+  return t ? lines.slice(...t).find((l) => HAS_CWD.test(l))?.trim() ?? null : null
+}
+
+// Adds cwd to an existing [mcp_servers.dsh-baton] that has none (entries written before it
+// existed), right under the table's header: the one line sure to be whole (args may span
+// lines, or be missing). A cwd already there, the user's own, is kept.
+export function addCodexCwd(text, home = os.homedir()) {
+  const lines = String(text ?? '').split(/\r?\n/)
+  const t = ownMainTable(lines)
+  if (!t || ownCwdLine(text)) return text
+  lines.splice(t[0] + 1, 0, `cwd = ${tomlString(home)}`)
+  return lines.join('\n')
+}
+
 // Codex reads tool_timeout_sec when a conversation starts and keeps it: a conversation opened
 // before the value was written still stops calls at 300 s. So when the value appears or
 // changes, the time is noted here; the server gives the long wait only to conversations
@@ -105,13 +131,55 @@ export function noteCodexToolTimeout(file, env = process.env, home = os.homedir(
 }
 
 // How long one Codex dsh_wait may wait: tool_timeout_sec less 60 s for a conversation that
-// started after the value was written (started: from its UUIDv7 thread id), else 270 s,
+// read the config after the value was written (started: see codexConfigReadAt), else 270 s,
 // under Codex's default 300 s, or under the value before when the user had set one. A value
 // too short for the long wait (the user's own) is kept under, less 30 s (half, under a
 // minute). started undefined: the length a new conversation gets.
 export const threadStartedAt = (threadId) => {
   const id = String(threadId ?? '').replace(/-/g, '')
   return /^[0-9a-f]{12}7/i.test(id) ? parseInt(id.slice(0, 12), 16) : null
+}
+// When a conversation read Codex's config, at the earliest. Codex reads it when it starts or
+// loads the conversation: a Codex restart loads an old conversation again with the value then
+// written (checked 2026-11-01: a thread resumed in a new Codex process got that process's
+// tool_timeout_sec). So the Codex process's own start counts as much as the thread id's. Not
+// the server's start: Codex may start or restart a server later in a conversation it loaded
+// long before, with the value it read then.
+export const codexConfigReadAt = (threadId, codexStartedAt) => {
+  const started = Math.max(threadStartedAt(threadId) ?? 0, codexStartedAt ?? 0)
+  return started > 0 ? started : null
+}
+
+// A process's parent, executable name and start (ms, rounded down to the second), or null.
+export function processInfo(pid) {
+  try {
+    if (process.platform === 'win32') {
+      const out = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+        `$p = Get-CimInstance Win32_Process -Filter 'ProcessId=${Number(pid)}'; if ($p) { "$($p.ParentProcessId)|$($p.Name)|$($p.CreationDate.ToUniversalTime().ToString('o'))" }`],
+      { encoding: 'utf8', timeout: 10000, windowsHide: true }).trim()
+      const [ppid, name, started] = out.split('|')
+      const ms = Date.parse(started)
+      return ms > 0 ? { ppid: Number(ppid), name, started: Math.floor(ms / 1000) * 1000 } : null
+    }
+    const out = execFileSync('ps', ['-o', 'ppid=,lstart=,comm=', '-p', String(Number(pid))], { encoding: 'utf8', timeout: 5000, env: { ...process.env, LC_ALL: 'C' } }).trim()
+    const m = out.match(/^(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s+(.+)$/)
+    const ms = m && Date.parse(m[2])
+    return ms > 0 ? { ppid: Number(m[1]), name: path.basename(m[3]), started: ms } : null
+  } catch {
+    return null
+  }
+}
+
+// When the Codex process that started this server started: the nearest ancestor named codex
+// (a launcher such as npx may sit between), or null when there is none.
+export function codexProcessStartedAt(pid, info = processInfo) {
+  for (let i = 0; i < 4 && pid > 1; i++) {
+    const p = info(pid)
+    if (!p) return null
+    if (/^codex(?:\.exe)?$/i.test(p.name)) return p.started
+    pid = p.ppid
+  }
+  return null
 }
 const shortWait = (value) => (!value ? 270 : value > 60 ? Math.min(270, Math.floor(value - 30)) : Math.max(1, Math.floor(value / 2)))
 export function codexWaitSeconds({ value, since, prev = null }, started) {
@@ -123,9 +191,11 @@ export function codexWaitSeconds({ value, since, prev = null }, started) {
 }
 
 // ~/.codex/config.toml: replace any earlier dsh-baton tables with one fresh table at the
-// end, with tool_timeout_sec (see CODEX_TOOL_TIMEOUT_S; a value the user set is kept).
-export function editCodexConfig(text, entry) {
+// end, with cwd (see addCodexCwd) and tool_timeout_sec (see CODEX_TOOL_TIMEOUT_S); a cwd or
+// a tool_timeout_sec the user set is kept.
+export function editCodexConfig(text, entry, home = os.homedir()) {
   const timeout = readCodexToolTimeout(text) ?? CODEX_TOOL_TIMEOUT_S
+  const cwd = ownCwdLine(text) ?? `cwd = ${tomlString(home)}`
   const kept = []
   let skipping = false
   for (const line of text.split(/\r?\n/)) {
@@ -136,7 +206,7 @@ export function editCodexConfig(text, entry) {
   }
   let out = kept.join('\n').replace(/\s+$/, '')
   if (entry) {
-    out += `${out ? '\n\n' : ''}[mcp_servers.${NAME}]\ncommand = ${tomlString(entry.command)}\nargs = [${entry.args.map(tomlString).join(', ')}]\ntool_timeout_sec = ${timeout}`
+    out += `${out ? '\n\n' : ''}[mcp_servers.${NAME}]\ncommand = ${tomlString(entry.command)}\nargs = [${entry.args.map(tomlString).join(', ')}]\n${cwd}\ntool_timeout_sec = ${timeout}`
     const env = Object.entries(entry.env ?? {})
     if (env.length) out += `\n\n[mcp_servers.${NAME}.env]\n${env.map(([k, v]) => `${k} = ${tomlString(v)}`).join('\n')}`
   }
@@ -323,7 +393,7 @@ export function clients(env = process.env, home = os.homedir()) {
   const codex = codexConfigPath(env, home)
   return [
     { id: 'claude', label: 'Claude Code', file: claude, present: fs.existsSync(claude) || fs.existsSync(path.join(home, '.claude')), edit: editClaudeConfig, read: readClaudeEntry },
-    { id: 'codex', label: 'Codex', file: codex, present: fs.existsSync(path.dirname(codex)), edit: editCodexConfig, read: readCodexEntry },
+    { id: 'codex', label: 'Codex', file: codex, present: fs.existsSync(path.dirname(codex)), edit: (t, e) => editCodexConfig(t, e, home), read: readCodexEntry },
   ]
 }
 
@@ -500,14 +570,14 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
       }
     }
     const codex = list.find((c) => c.id === 'codex')
-    // Entries written before tool_timeout_sec existed get it here, and the old Codex Stop
-    // hook goes (see removeCodexHookBlock), in one write: Codex may still have the file open
-    // from the edit before, and Windows refuses to replace it then.
+    // Entries written before cwd or tool_timeout_sec existed get them here, and the old Codex
+    // Stop hook goes (see removeCodexHookBlock), in one write: Codex may still have the file
+    // open from the edit before, and Windows refuses to replace it then.
     result.codexHook = 'none'
     try {
       if (codex?.present && fs.existsSync(codex.file)) {
         rewrite(codex.file, (t) => {
-          const timed = addCodexToolTimeout(t)
+          const timed = addCodexToolTimeout(addCodexCwd(t, home))
           const out = removeCodexHookBlock(timed, codex.file)
           result.codexHook = out === timed ? 'none' : 'removed'
           return out

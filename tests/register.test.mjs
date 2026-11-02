@@ -56,6 +56,24 @@ test('first switch-on copies the server to the app folder and registers it for b
   } finally { s.done() }
 })
 
+test('a working table from before cwd gets it on the next start; a cwd the user set is kept', () => {
+  const s = sandbox()
+  try {
+    s.run()
+    const script = path.join(s.app, 'src', 'server.mjs')
+    // As 0.6.4 left it: our table, working, without cwd.
+    fs.writeFileSync(s.codexFile, `model = "x"\n\n[mcp_servers.dsh-baton]\ncommand = '${process.execPath}'\nargs = ['${script}']\ntool_timeout_sec = 3600\n`)
+    assert.deepEqual(states(s.run()), { claude: 'unchanged', codex: 'unchanged' })
+    const codex = fs.readFileSync(s.codexFile, 'utf8')
+    assert.ok(codex.includes(`[mcp_servers.dsh-baton]\ncwd = '${s.home}'\ncommand = '${process.execPath}'\nargs = ['${script}']\ntool_timeout_sec = 3600`), codex)
+    assert.match(codex, /^model = "x"/)
+    fs.writeFileSync(s.codexFile, codex.replace(/^cwd = .*$/m, "cwd = '/mine'"))
+    s.run()
+    assert.match(fs.readFileSync(s.codexFile, 'utf8'), /^cwd = '\/mine'$/m)
+    assert.equal(fs.readFileSync(s.codexFile, 'utf8').match(/^cwd =/gm).length, 1)
+  } finally { s.done() }
+})
+
 test('keeps other servers and a working entry that starts another copy; repairs a broken one', () => {
   const s = sandbox()
   try {
@@ -203,9 +221,9 @@ test('the Codex Stop hook plugins 0.6.0-0.6.3 added is taken out with its trust,
   const s = sandbox()
   try {
     assert.equal(s.run().codexHook, 'none') // never had one
-    // A config as 0.6.3 left it: our table without tool_timeout_sec, the hook, Codex's trust.
+    // A config as 0.6.3 left it: our table without cwd or tool_timeout_sec, the hook, Codex's trust.
     const script = path.join(s.app, 'src', 'server.mjs')
-    const table = editCodexConfig('model = "x"\n', { command: process.execPath, args: [script] }).replace(/^tool_timeout_sec = .*\n/m, '')
+    const table = editCodexConfig('model = "x"\n', { command: process.execPath, args: [script] }).replace(/^(?:tool_timeout_sec|cwd) = .*\n/gm, '')
     const old = `${table.replace(/\s+$/, '')}\n\n${codexHookBlockFor('/x/.dsh-baton/bin/codex-stop-hook')}\n[hooks.state.${JSON.stringify(`${s.codexFile}:stop:0:0`)}]\ntrusted_hash = "sha256:a"\n`
     fs.writeFileSync(s.codexFile, old)
     // What the old hook kept beside it, read by nothing now.
@@ -219,6 +237,7 @@ test('the Codex Stop hook plugins 0.6.0-0.6.3 added is taken out with its trust,
     const text = fs.readFileSync(s.codexFile, 'utf8')
     assert.doesNotMatch(text, /codex-stop-hook|hooks\.|trusted_hash/)
     assert.match(text, /^tool_timeout_sec = 3600$/m)
+    assert.ok(text.includes(`[mcp_servers.dsh-baton]\ncwd = '${s.home}'\n`), 'cwd too, in the same write')
     assert.match(text, /^model = "x"$/m)
     // Later starts find nothing to take out and leave the file as it is.
     assert.equal(s.run().codexHook, 'none')

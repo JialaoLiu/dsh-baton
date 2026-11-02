@@ -11,7 +11,11 @@ import { spawnSync } from 'node:child_process'
 const SKIP = new Set(['node_modules', '.git', '.hg', '.svn', 'dist', 'build', '.next', '.cache', 'coverage', '__pycache__', '.venv', 'venv', 'target', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.tox', '.gradle'])
 // Files no one wrote on purpose.
 const SKIP_FILES = new Set(['.DS_Store', 'Thumbs.db'])
-const MAX_FILES = 3000
+// Files looked at (by size and time only) and, of those, the newest read at dsh_send for a
+// line count and hash. A folder full of reference material (thousands of files) used to fill
+// a 3000-file cap in directory order, so the files the run worked on were never seen.
+const MAX_ENTRIES = 100_000
+const MAX_READ = 3000
 const MAX_TEXT = 512 * 1024
 const CHECK_TIMEOUT_MS = 120_000
 const CHECKS_TOTAL_MS = 180_000
@@ -20,31 +24,67 @@ const DAY_MS = 24 * 3600 * 1000
 
 const fileOf = (home, runId) => path.join(home, 'evidence', `${String(runId).replace(/[^\w.-]/g, '_')}.json`)
 
-// path -> { hash, lines } for the files under dir (bounded; big or binary files keep only a hash).
-function snapshot(dir) {
-  const files = {}
-  let count = 0, truncated = false
-  const walk = (d) => {
+// The files under dir, skipping dependency, build and cache folders: [{ rel, abs, m, s }].
+function walk(dir) {
+  const out = []
+  let truncated = false
+  const visit = (d) => {
     let entries = []
     try { entries = fs.readdirSync(d, { withFileTypes: true }) } catch { return }
     for (const e of entries) {
-      if (count >= MAX_FILES) { truncated = true; return }
-      const p = path.join(d, e.name)
-      if (e.isDirectory()) { if (!SKIP.has(e.name)) walk(p); continue }
+      if (out.length >= MAX_ENTRIES) { truncated = true; return }
+      const abs = path.join(d, e.name)
+      if (e.isDirectory()) { if (!SKIP.has(e.name)) visit(abs); continue }
       if (!e.isFile() || SKIP_FILES.has(e.name)) continue
-      count++
       try {
-        const buf = fs.readFileSync(p)
-        const text = buf.length <= MAX_TEXT && !buf.includes(0)
-        files[path.relative(dir, p).split(path.sep).join('/')] = {
-          hash: crypto.createHash('sha1').update(buf).digest('hex'),
-          lines: text ? (buf.length ? buf.toString('utf8').split('\n').length - (buf.at(-1) === 10 ? 1 : 0) : 0) : null,
-        }
-      } catch { /* unreadable: left out */ }
+        const st = fs.statSync(abs)
+        out.push({ rel: path.relative(dir, abs).split(path.sep).join('/'), abs, m: st.mtimeMs, s: st.size })
+      } catch { /* gone or unreadable: left out */ }
     }
   }
-  walk(dir)
+  visit(dir)
+  return { list: out, truncated }
+}
+
+// hash and line count (null for a big or binary file), or null when it cannot be read.
+function readFile(abs) {
+  try {
+    const buf = fs.readFileSync(abs)
+    const text = buf.length <= MAX_TEXT && !buf.includes(0)
+    return {
+      hash: crypto.createHash('sha1').update(buf).digest('hex'),
+      lines: text ? (buf.length ? buf.toString('utf8').split('\n').length - (buf.at(-1) === 10 ? 1 : 0) : 0) : null,
+    }
+  } catch { return null }
+}
+
+// path -> { m, s } for every file under dir, plus hash and lines for the newest MAX_READ.
+function snapshot(dir) {
+  const { list, truncated } = walk(dir)
+  const files = {}
+  for (const f of list) files[f.rel] = { m: f.m, s: f.s }
+  for (const f of [...list].sort((a, b) => b.m - a.m).slice(0, MAX_READ)) Object.assign(files[f.rel], readFile(f.abs) ?? {})
   return { files, truncated }
+}
+
+// The files under dir changed since a time, for a follow report: how many, per folder, and
+// the newest by name (progress notes such as STATUS or CHECKLIST files first).
+const PROGRESS_FILE = /status|checklist|progress|todo|changelog|plan/i
+export function changedSince(dir, sinceMs, { max = 20 } = {}) {
+  if (!dir || !fs.existsSync(dir)) return null
+  const { list, truncated } = walk(dir)
+  const changed = list.filter((f) => f.m > sinceMs).sort((a, b) => b.m - a.m)
+  const folders = new Map()
+  for (const f of changed) { const d = path.posix.dirname(f.rel); folders.set(d, (folders.get(d) ?? 0) + 1) }
+  const progress = changed.filter((f) => PROGRESS_FILE.test(path.posix.basename(f.rel)))
+  const files = [...progress, ...changed.filter((f) => !progress.includes(f))].slice(0, max).map((f) => f.rel)
+  return {
+    count: changed.length,
+    folders: [...folders].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([folder, count]) => ({ folder, count })),
+    files,
+    ...(changed.length > files.length ? { files_not_listed: changed.length - files.length } : {}),
+    ...(truncated ? { truncated: true } : {}),
+  }
 }
 
 export function prepare(home, { run_id, session_id = null, cwd, checks }) {
@@ -94,14 +134,25 @@ export function collect(home, runId) {
   let rec
   try { rec = JSON.parse(fs.readFileSync(file, 'utf8')) } catch { return null }
   if (rec.result) return rec.result
-  const after = snapshot(rec.cwd)
+  const after = walk(rec.cwd)
   const before = rec.before.files
   const created = [], modified = [], deleted = []
-  for (const [p, f] of Object.entries(after.files)) {
-    if (!before[p]) created.push({ path: p, lines: f.lines })
-    else if (before[p].hash !== f.hash) modified.push({ path: p, lines_before: before[p].lines, lines_after: f.lines })
+  const seen = new Set()
+  for (const f of after.list) {
+    seen.add(f.rel)
+    const b = before[f.rel]
+    if (!b) { created.push({ path: f.rel, lines: readFile(f.abs)?.lines ?? null }); continue }
+    // Same size and time: unchanged. Otherwise the content decides when it was read before
+    // (a record from before 0.6.5 has only the hash).
+    if (b.m === f.m && b.s === f.s) continue
+    const now = b.hash || b.m === undefined ? readFile(f.abs) : null
+    if (b.hash && now?.hash === b.hash) continue
+    modified.push({ path: f.rel, lines_before: b.lines ?? null, lines_after: (now ?? readFile(f.abs))?.lines ?? null })
   }
-  for (const p of Object.keys(before)) if (!after.files[p]) deleted.push(p)
+  for (const p of Object.keys(before)) if (!seen.has(p)) deleted.push(p)
+  created.sort((a, b) => a.path.localeCompare(b.path))
+  modified.sort((a, b) => a.path.localeCompare(b.path))
+  deleted.sort()
   // Other runs in the same folder at the same time: their changes show up here too, and
   // cannot be told from this run's.
   const now = Date.now()

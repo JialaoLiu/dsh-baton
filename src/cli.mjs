@@ -3,7 +3,7 @@
 // background shell command and is woken up when the command exits.
 import path from 'node:path'
 import * as core from './core.mjs'
-import { setup } from './setup.mjs'
+import { setup, stableNodePath } from './setup.mjs'
 import { runHook, parseHookInput } from './codex-hook.mjs'
 
 const USAGE = `Usage: dsh-baton <command> [args]
@@ -15,8 +15,10 @@ const USAGE = `Usage: dsh-baton <command> [args]
   sessions [--cwd <dir>] [--query <text>] [--limit <n>]   list saved sessions
   read <session_id> [--last <n>]                          show recent messages
   send [--session <id> | --cwd <dir> | --workspace <id>] [--mode followup|steer] <message...>  start a run (message may be "-" for stdin)
-  status <run_id>                                         show a run's progress
+  status <run_id> | <session_id>                          show a run's progress, or a session's (with its goal)
   wait <run_id> [--timeout <seconds>]                     block until the run ends (or asks a person), print it
+  follow <session_id> [--until goal|turn] [--every 10m] [--cursor <c>] [--timeout <seconds>]
+                                                          follow a session's Harness goal without sending; print the next report
   rename <session_id> <title>                             rename a session
   rename-workspace <workspace_id|dir> <title>             rename a workspace (sidebar title)
   activity <session_id>                                   what the session is doing now (turn, sub-agents, jobs)
@@ -33,6 +35,10 @@ function parse(argv) {
   }
   return { flags, rest }
 }
+
+// This command line again, for a background command the client runs next (in Node mode when it
+// runs on Harness's own binary).
+const self = (args) => `${process.versions.electron ? 'ELECTRON_RUN_AS_NODE=1 ' : ''}"${stableNodePath()}" "${process.argv[1]}" ${args}`
 
 const print = (v) => console.log(JSON.stringify(v, null, 2))
 
@@ -73,17 +79,32 @@ async function main() {
       return print(await core.api.send({ message, sender: core.senderOf(), session_id: flags.session, cwd: flags.cwd, workspace_id: flags.workspace, ...(flags.mode ? { mode: flags.mode } : {}) }))
     }
     case 'status':
-      return print(await core.api.status({ run_id: rest[0] }))
+      return print(await core.api.status(rest[0]?.startsWith('session') || flags.session ? { session_id: flags.session ?? rest[0] } : { run_id: rest[0] }))
     case 'wait': {
       const st = await core.api.wait({ run_id: rest[0], timeout_s: Number(flags.timeout) || 24 * 3600 })
       print({
         ...(st.decided_for_user ? { hint: 'Required in your reply: you chose an answer for the user during this run, so start your reply by telling the user, in their language, what you chose and why (decided_for_user: answers and reason), then give the result. Passing on only final_text is not enough. ' + core.endedHint(st), decided_for_user: st.decided_for_user } : {}),
         run_id: st.run_id, state: st.state, session_id: st.session_id, timed_out: !!st.timed_out, error: st.error, final_text: st.final_text,
+        // A goal goes on after this run: the hint says so and how to follow it.
+        ...(st.goal ? { goal: st.goal, ...(st.goal.phase === 'active' ? { follow_command: self(`follow ${st.session_id}`) } : {}) } : {}),
         // The hint points at evidence: it goes with it (files changed, checks run, other runs in the folder).
         ...(st.evidence ? { evidence: st.evidence } : {}),
         ...(st.state === 'completed' && !st.decided_for_user ? { hint: core.endedHint(st) } : {}),
         ...(st.needs_input ? { needs_input: st.needs_input, question: st.question, ...(st.question ? { relay: core.relayText(st.question) } : {}), hint: st.question ? 'The run asks the user something. If the user allowed you to decide, choose by your own judgment and answer with dsh_answer (or dsh-baton answer), passing reason, and tell the user what you chose and why. Otherwise show the user relay, written in the user\'s language, with its first line filled in with your own pick and a reason from your own judgment of the question and the task (harness_suggested is only the asker\'s pick, never a reason by itself), and ask the user first. Then wait again.' : 'The run waits for a person in the Harness UI. Tell the user, then wait again.' } : {}) })
       process.exitCode = st.state === 'completed' ? 0 : st.needs_input ? 3 : 1
+      return
+    }
+    case 'follow': {
+      // Until the next report: waits in one call (no hour limit here), so a background
+      // command wakes its client exactly then. --timeout makes it come back sooner.
+      const every = String(flags.every ?? '10m').match(/^(\d+)\s*(m|min|s)?$/i)
+      const every_s = every ? Number(every[1]) * (/^s$/i.test(every[2] ?? '') ? 1 : 60) : 600
+      const st = core.followResult(await core.api.follow({ session_id: rest[0], until: flags.until ?? 'goal', cursor: flags.cursor, every_s, timeout_s: Number(flags.timeout) || 24 * 3600 }))
+      const again = st.cursor && ['report', 'following', 'needs_input'].includes(st.state)
+        ? self(`follow ${rest[0]} --until ${st.until} --cursor ${st.cursor}${st.until === 'turn' ? ` --every ${every_s}s` : ''}`)
+        : undefined
+      print({ ...st, ...(again ? { follow_command: again, hint: `${st.hint} To go on following, run follow_command in the background (not dsh_wait).` } : {}) })
+      process.exitCode = st.state === 'needs_input' ? 3 : 0
       return
     }
     case 'cancel':

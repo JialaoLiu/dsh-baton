@@ -10,12 +10,18 @@ import path from 'node:path'
 import { apply } from '../host/lib/index.js'
 import { socketEndpoint } from '../host/lib/socket.js'
 
+// A real folder for sends that start a session: a missing one is refused.
+const W = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-ws-'))
+
 const IS_WIN = process.platform === 'win32'
 // Switching the plugin on registers the MCP server in the user's real config files: off
 // here, except in the test that points it at a throwaway home.
 process.env.DSH_BATON_AUTO_REGISTER = '0'
 
-function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web, settings, queue = false, recheckMs = 300, models, account } = {}) {
+// goal: sessionId -> the goal projection's wire value (Harness's values.goal);
+// log: sessionId -> the session's event log as inspect returns it; goals / agents: Harness's
+// goals and agents services, reached through inject.
+function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web, settings, queue = false, recheckMs = 300, models, account, goal, log, goals, agents } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-'))
   // Run records go to the bridge home: keep them out of the real ~/.dsh-baton.
   process.env.DSH_BATON_HOME = home ?? path.join(dir, 'bridge')
@@ -34,9 +40,9 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
     effect: (fn) => disposers.push(fn()),
     waterfall: async (ev, { sessionId }) => activity(sessionId),
     logger: { info: () => {}, error: (m) => logs.push(m) },
-    ...(web || settings || models?.viaInject || account ? {
+    ...(web || settings || models?.viaInject || account || goals || agents ? {
       inject: (deps, fn) => {
-        const services = { webServer: web, settings, agentDefaultModel: models?.viaInject ? models.agentDefaultModel : undefined, accountController: account }
+        const services = { webServer: web, settings, agentDefaultModel: models?.viaInject ? models.agentDefaultModel : undefined, accountController: account, goals, agents }
         if (deps.every((d) => services[d])) fn({ effect: (f) => disposers.push(f()), ...services })
       },
     } : {}),
@@ -54,15 +60,17 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
     },
     sessionController: {
       list: async () => ({ items: sessions }),
-      inspect: async () => ({ meta: { cwd: '/w' }, events: [] }),
+      inspect: async (id) => ({ meta: { cwd: '/w' }, events: log?.[id] ?? [] }),
       create: async (r) => { calls.create.push(r); return { sessionId: `new-${calls.create.length}` } },
       prompt: async (r) => {
         calls.prompt.push(r)
         if (queue) pending(r.sessionId)[r.mode === 'steer' ? 'next-step' : 'next-turn'].push({ id: `m${calls.prompt.length}`, content: r.content, source: { kind: 'user', rpcId: r.requestId } })
         return { accepted: true }
       },
+      // Harness's wire view of the goal projection: the current goal itself, or null.
+      ...(goal && !queue ? { projections: async ({ sessionId }) => ({ kind: 'sequenced', asOfSeq: 1, values: { goal: goal[sessionId] ?? null } }) } : {}),
       ...(queue ? {
-        projections: async ({ sessionId }) => ({ kind: 'sequenced', asOfSeq: 1, values: { inbox: pending(sessionId) } }),
+        projections: async ({ sessionId }) => ({ kind: 'sequenced', asOfSeq: 1, values: { inbox: pending(sessionId), ...(goal ? { goal: goal[sessionId] ?? null } : {}) } }),
         updateQueue: async (r) => {
           calls.updateQueue.push(r)
           const box = pending(r.sessionId)
@@ -129,7 +137,8 @@ test('ping reports the plugin version', async (t) => {
   assert.match(r.version, /^\d+\.\d+\.\d+(-[\w.]+)?$/)
 })
 
-test('switched on, the plugin registers the MCP server and serves the outcome to the Plugins page', async (t) => {
+// It registers this repo's own server, which it only does for a git checkout (an unpacked copy is copied to the app folder).
+test('switched on, the plugin registers the MCP server and serves the outcome to the Plugins page', { skip: !fs.existsSync(path.join(import.meta.dirname, '..', '.git')) && 'needs a git checkout' }, async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-home-'))
   const saved = { ...process.env }
   t.after(() => { process.env = saved; fs.rmSync(dir, { recursive: true, force: true }) })
@@ -180,10 +189,27 @@ test('create_workspace is idempotent', async (t) => {
 
 test('send with cwd registers the folder as a workspace before creating the session', async (t) => {
   const h = startHost(); t.after(h.close); await h.ready
-  const r = await h.call('send', { cwd: '/proj', message: 'hi' })
+  const r = await h.call('send', { cwd: W, message: 'hi' })
   assert.deepEqual(h.calls.create, [{ workspaceId: 'w1' }])
   assert.equal(r.session_id, 'new-1')
   assert.equal(r.workspace.created, true)
+})
+
+test('send to a folder that does not exist says so plainly, and creates nothing', async (t) => {
+  // Also when the folder is a workspace already (registered while its drive was connected).
+  const gone = path.join(W, 'gone', 'proj')
+  const h = startHost({ workspaces: [{ id: 'w1', path: gone, title: 'proj' }] }); t.after(h.close); await h.ready
+  await assert.rejects(h.call('send', { cwd: gone, message: 'hi' }),
+    /^Error: The folder .*proj does not exist, so no session was started and nothing was sent\. Check the path \(a project on an external drive needs that drive connected\)/)
+  assert.deepEqual(h.calls.create, [])
+  assert.equal(fs.existsSync(path.join(W, 'gone')), false)
+  // By workspace_id, a folder never registered, and a file where a folder should be: the same.
+  await assert.rejects(h.call('send', { workspace_id: 'w1', message: 'hi' }), /^Error: The folder .*proj \(workspace w1\) does not exist/)
+  await assert.rejects(h.call('send', { cwd: path.join(W, 'never', 'seen'), message: 'hi' }), /does not exist, so no session was started/)
+  const file = path.join(W, 'a-file.txt')
+  fs.writeFileSync(file, '')
+  await assert.rejects(h.call('send', { cwd: file, message: 'hi' }), /a-file\.txt does not exist/)
+  assert.deepEqual(h.calls.create, [])
 })
 
 test('a run completes with its final text once the session is idle', async (t) => {
@@ -708,7 +734,7 @@ test('a send on the DeepSeek account is refused when every wallet is empty; any 
   const account = { getBalance: async (client) => { reads.push(client); if (balance instanceof Error) throw balance; return balance } }
   const h = startHost({ models: m, account }); t.after(h.close); await h.ready
   await assert.rejects(h.call('send', { message: 'go', session_id: 's1' }), /No message was sent: the DeepSeek account has no balance left \(CNY 0\.00, CNY 0\)/)
-  await assert.rejects(h.call('send', { message: 'go', cwd: '/w' }), /Session new-1 was created, but no message was sent: the DeepSeek account has no balance left/)
+  await assert.rejects(h.call('send', { message: 'go', cwd: W }), /Session new-1 was created, but no message was sent: the DeepSeek account has no balance left/)
   assert.equal(m.calls.prompt.length, 0, 'nothing reached Harness')
   assert.equal(typeof reads[0].version, 'string')
   assert.equal(typeof reads[0].timezoneOffsetSeconds, 'number')
@@ -733,11 +759,11 @@ test('model matches Harness\'s catalog by id or name, ignoring case, spaces, hyp
   const m = fakeModels()
   const h = startHost({ models: m }); t.after(h.close); await h.ready
   for (const asked of ['V4 Pro', 'v4-pro', 'DeepSeek-V4-Pro', 'deepseek v4 pro', 'DEEPSEEK_V4_PRO', 'deepseek-account/V4 Pro']) {
-    const r = await h.call('send', { message: 'go', cwd: '/w', model: asked })
+    const r = await h.call('send', { message: 'go', cwd: W, model: asked })
     assert.deepEqual(r.model, { provider: 'deepseek-account', model: 'deepseek-v4-pro', reasoning_effort: 'high' }, asked)
     assert.equal(r.model_source, 'requested')
   }
-  const flash = await h.call('send', { message: 'go', cwd: '/w', model: 'V4.1 Flash' })
+  const flash = await h.call('send', { message: 'go', cwd: W, model: 'V4.1 Flash' })
   assert.equal(flash.model.model, 'deepseek-v4.1-flash')
   const status = await h.call('status', { run_id: flash.run_id })
   assert.equal(status.model.model, 'deepseek-v4.1-flash', 'dsh_status shows the run\'s model')
@@ -747,21 +773,21 @@ test('a model added to the catalog later (V4.1 Pro) is found with no change here
   const groups = [{ ...CATALOG[0], models: [...CATALOG[0].models, { id: 'deepseek-v4.1-pro', name: 'DeepSeek-V4.1-Pro' }] }]
   const m = fakeModels({ groups })
   const h = startHost({ models: m }); t.after(h.close); await h.ready
-  assert.equal((await h.call('send', { message: 'go', cwd: '/w', model: 'V4.1 Pro' })).model.model, 'deepseek-v4.1-pro')
-  assert.equal((await h.call('send', { message: 'go', cwd: '/w', model: 'v4 pro' })).model.model, 'deepseek-v4-pro', 'V4 Pro is still its own model')
+  assert.equal((await h.call('send', { message: 'go', cwd: W, model: 'V4.1 Pro' })).model.model, 'deepseek-v4.1-pro')
+  assert.equal((await h.call('send', { message: 'go', cwd: W, model: 'v4 pro' })).model.model, 'deepseek-v4-pro', 'V4 Pro is still its own model')
 })
 
 test('a model that matches nothing, or several, fails the send before anything is created, listing what is there', async (t) => {
   const groups = [...CATALOG, { id: 'deepseek-api', name: 'DeepSeek API', models: [{ id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' }] }]
   const m = fakeModels({ groups })
   const h = startHost({ models: m }); t.after(h.close); await h.ready
-  await assert.rejects(h.call('send', { message: 'go', cwd: '/w', model: 'V5 Ultra' }), /No model in Harness matches "V5 Ultra"\. Available: deepseek-account\/deepseek-v4\.1-flash \(DeepSeek-V4\.1-Flash\), deepseek-account\/deepseek-v4-pro/)
-  await assert.rejects(h.call('send', { message: 'go', cwd: '/w', model: 'Pro' }), /No model in Harness matches "Pro"/, 'a part of a name is no match')
-  await assert.rejects(h.call('send', { message: 'go', cwd: '/w', model: 'V4 Pro' }), /matches several models: deepseek-account\/deepseek-v4-pro, deepseek-api\/deepseek-v4-pro\. Pass one of them as provider\/model/)
-  await assert.rejects(h.call('send', { message: 'go', cwd: '/w', model: 'deepseek-account/V4 Pro', reasoning_effort: 'max' }), /has no reasoning effort "max"; it has low, high/)
+  await assert.rejects(h.call('send', { message: 'go', cwd: W, model: 'V5 Ultra' }), /No model in Harness matches "V5 Ultra"\. Available: deepseek-account\/deepseek-v4\.1-flash \(DeepSeek-V4\.1-Flash\), deepseek-account\/deepseek-v4-pro/)
+  await assert.rejects(h.call('send', { message: 'go', cwd: W, model: 'Pro' }), /No model in Harness matches "Pro"/, 'a part of a name is no match')
+  await assert.rejects(h.call('send', { message: 'go', cwd: W, model: 'V4 Pro' }), /matches several models: deepseek-account\/deepseek-v4-pro, deepseek-api\/deepseek-v4-pro\. Pass one of them as provider\/model/)
+  await assert.rejects(h.call('send', { message: 'go', cwd: W, model: 'deepseek-account/V4 Pro', reasoning_effort: 'max' }), /has no reasoning effort "max"; it has low, high/)
   assert.equal(m.calls.create.length, 0)
   assert.equal(m.calls.prompt.length, 0)
-  assert.equal((await h.call('send', { message: 'go', cwd: '/w', model: 'deepseek-api/v4-pro' })).model.provider, 'deepseek-api')
+  assert.equal((await h.call('send', { message: 'go', cwd: W, model: 'deepseek-api/v4-pro' })).model.provider, 'deepseek-api')
 })
 
 test('the model is set on the session before its prompt, and Harness\'s default model is left as it was', async (t) => {
@@ -794,11 +820,11 @@ test('concurrent sends with different models and slow, uneven default saves leav
   const h = startHost({ models: m }); t.after(h.close); await h.ready
   const original = { ...m.state.default }
   const sends = await Promise.all([
-    h.call('send', { message: 'a', cwd: '/w', model: 'V4 Pro' }),
-    h.call('send', { message: 'b', cwd: '/w' }),
-    h.call('send', { message: 'c', cwd: '/w', model: 'V4.1 Flash', reasoning_effort: 'low' }),
-    h.call('send', { message: 'd', cwd: '/w', model: 'V4 Pro' }),
-    h.call('send', { message: 'e', cwd: '/w' }),
+    h.call('send', { message: 'a', cwd: W, model: 'V4 Pro' }),
+    h.call('send', { message: 'b', cwd: W }),
+    h.call('send', { message: 'c', cwd: W, model: 'V4.1 Flash', reasoning_effort: 'low' }),
+    h.call('send', { message: 'd', cwd: W, model: 'V4 Pro' }),
+    h.call('send', { message: 'e', cwd: W }),
   ])
   assert.deepEqual(sends.map((s) => s.model.model), ['deepseek-v4-pro', 'deepseek-v4.1-flash', 'deepseek-v4.1-flash', 'deepseek-v4-pro', 'deepseek-v4.1-flash'])
   // A new session without model is pinned to the default as it stood, never to another send's pick.
@@ -811,7 +837,7 @@ test('concurrent sends with different models and slow, uneven default saves leav
   assert.deepEqual(m.state.saves.at(-1), original)
   // The next pick after the spell reads the default afresh.
   m.state.default = { provider: 'deepseek-account', model: 'deepseek-v4-pro', reasoningEffort: 'high' }
-  await h.call('send', { message: 'f', cwd: '/w', model: 'V4.1 Flash' })
+  await h.call('send', { message: 'f', cwd: W, model: 'V4.1 Flash' })
   await m.settled()
   assert.equal(m.state.default.model, 'deepseek-v4-pro', 'a default the user changed in between is kept')
 })
@@ -819,9 +845,9 @@ test('concurrent sends with different models and slow, uneven default saves leav
 test('a Harness without selectModel/modelCatalog, or without its default-model service, refuses model clearly and still sends without it', async (t) => {
   const old = fakeModels({ selectModel: false })
   const h = startHost({ models: old }); t.after(h.close); await h.ready
-  await assert.rejects(h.call('send', { message: 'go', cwd: '/w', model: 'V4 Pro' }), /cannot choose a model per session/)
+  await assert.rejects(h.call('send', { message: 'go', cwd: W, model: 'V4 Pro' }), /cannot choose a model per session/)
   assert.equal(old.calls.create.length, 0)
-  const plain = await h.call('send', { message: 'go', cwd: '/w' })
+  const plain = await h.call('send', { message: 'go', cwd: W })
   assert.equal(plain.state, 'queued')
   assert.equal(old.calls.prompt.length, 1)
 
@@ -830,7 +856,7 @@ test('a Harness without selectModel/modelCatalog, or without its default-model s
   await assert.rejects(h2.call('send', { message: 'go', session_id: 's1', model: 'V4 Pro' }), /No message was sent: the model could not be set \(.*keep its default model/)
   assert.equal(noDefault.calls.prompt.length, 0)
   assert.equal(noDefault.state.order.length, 0, 'selectModel was never called, so the default never moved')
-  assert.equal((await h2.call('send', { message: 'go', cwd: '/w' })).state, 'queued')
+  assert.equal((await h2.call('send', { message: 'go', cwd: W })).state, 'queued')
 
   const bare = startHost(); t.after(bare.close); await bare.ready
   await assert.rejects(bare.call('models'), /cannot choose a model per session/)
@@ -855,8 +881,8 @@ test('Harness\'s default-model service is taken through inject, as Harness requi
   const h = startHost({ models: m }); t.after(h.close); await h.ready
   const original = { ...m.state.default }
   const [pro, plain] = await Promise.all([
-    h.call('send', { message: 'a', cwd: '/w', model: 'DeepSeek-V4 Pro' }),
-    h.call('send', { message: 'b', cwd: '/w' }),
+    h.call('send', { message: 'a', cwd: W, model: 'DeepSeek-V4 Pro' }),
+    h.call('send', { message: 'b', cwd: W }),
   ])
   assert.equal(pro.model.model, 'deepseek-v4-pro')
   assert.deepEqual(m.state.sessions[plain.session_id], original)
@@ -867,8 +893,217 @@ test('Harness\'s default-model service is taken through inject, as Harness requi
   const none = fakeModels({ defaultService: false })
   none.viaInject = true
   const h2 = startHost({ models: none }); t.after(h2.close); await h2.ready
-  const r = await h2.call('send', { message: 'b', cwd: '/w' })
+  const r = await h2.call('send', { message: 'b', cwd: W })
   assert.equal(r.state, 'queued')
   assert.equal(r.model_source, 'default')
   assert.equal(none.state.order.length, 0)
+})
+
+// --- Harness goals ---------------------------------------------------------------
+// A goal makes Harness start the next round by itself a few ms after a turn ends.
+
+// The goal projection's wire value (values.goal): the current goal, as Harness sends it.
+const goalValue = (phase = 'active', extra = {}) => ({ goal: { id: 'goal-1', revision: 1, objective: 'finish the app', phase, maxGoalRounds: 256, ...extra }, roundsStarted: 25, createdAt: 1, updatedAt: 2 })
+// One turn of a session log: the goal's message (round r), tool calls, text, and its end unless open.
+const round = (turn, { round: r, text, tools = [], open = false, at = Date.now() } = {}) => [
+  { type: 'turn/start', time: at, data: { turn } },
+  ...(r != null ? [{ type: 'user/message', time: at, data: { source: { kind: 'goal', goalId: 'goal-1', revision: 1, round: r }, content: [] } }] : []),
+  ...tools.map((name) => ({ type: 'assistant/message', time: at, data: { message: { content: [{ type: 'tool-call', name }] } } })),
+  ...(text ? [{ type: 'assistant/message', time: at, data: { message: { content: [{ type: 'text', text }] } } }] : []),
+  ...(open ? [] : [{ type: 'turn/end', time: at, data: { turn, reason: { kind: 'completed' } } }]),
+]
+const logged = (h, id, type) => h.emit('session/event', { id }, { type, data: {} })
+
+test('a run in a session with an active goal ends with its own round and says the goal goes on', async (t) => {
+  const h = startHost({ goal: { s1: goalValue() } }); t.after(h.close); await h.ready
+  const s = S('s1')
+  const r = await h.call('send', { session_id: 's1', message: 'keep going' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.emit(...s.text('stage one done')); h.emit(...s.turnEnd())
+  // The goal's next round starts at once, before any quiet check: its work is not this run's.
+  h.emit(...s.turnStart())
+  h.emit('session/event', { id: 's1' }, { type: 'user/message', data: { source: { kind: 'goal', goalId: 'goal-1', revision: 1, round: 19 } } })
+  h.emit(...s.text('round 19 work'))
+  const w = await h.call('wait', { run_id: r.run_id, timeout_s: 5 })
+  assert.equal(w.state, 'completed')
+  assert.equal(w.final_text, 'stage one done')
+  assert.equal(w.superseded_by, 'goal')
+  assert.deepEqual(w.goal, { id: 'goal-1', phase: 'active', objective: 'finish the app', rounds_started: 25, max_rounds: 256, activation: null })
+  assert.equal((await h.call('status', { run_id: r.run_id })).goal.phase, 'active')
+
+  // A session without a goal: no goal field at all, as before.
+  const s2 = S('s2')
+  const r2 = await h.call('send', { session_id: 's2', message: 'hi' })
+  h.emit(...s2.turnStart()); h.emit(...s2.userMessage(h.calls.prompt[1].requestId)); h.emit(...s2.text('hello')); h.emit(...s2.turnEnd()); h.emit(...s2.status('idle'))
+  const w2 = await h.call('wait', { run_id: r2.run_id, timeout_s: 5 })
+  assert.equal(w2.state, 'completed')
+  assert.equal('goal' in w2, false)
+})
+
+test('following a goal: nothing to follow without one; until goal returns when the goal stops, with every round since', async (t) => {
+  const goal = { s1: goalValue() }
+  const log = { s1: [...round(1, { round: 1, text: 'r1' })] }
+  const h = startHost({ goal, log }); t.after(h.close); await h.ready
+  const none = await h.call('follow', { session_id: 's2', timeout_s: 5 })
+  assert.equal(none.state, 'no_goal')
+  await assert.rejects(h.call('follow', { session_id: 's1', until: 'forever' }), /until must be goal or turn/)
+  let result = null
+  const p = h.call('follow', { session_id: 's1', timeout_s: 10 }).then((r) => { result = r; return r })
+  await sleep(100)
+  log.s1.push(...round(2, { round: 2, text: 'r2', tools: ['pwsh', 'pwsh', 'read_image'] }))
+  logged(h, 's1', 'turn/end')
+  await sleep(200)
+  assert.equal(result, null, 'a round end alone does not report in goal mode')
+  // The goal is marked complete during round 3, which still finishes its reply after that.
+  log.s1.push(...round(3, { round: 3, open: true }))
+  goal.s1 = goalValue('complete')
+  logged(h, 's1', 'goal/change')
+  await sleep(200)
+  assert.equal(result, null, 'waits for the round that completed the goal to end')
+  log.s1.push({ type: 'assistant/message', time: Date.now(), data: { message: { content: [{ type: 'text', text: 'all done' }] } } }, { type: 'turn/end', time: Date.now(), data: { turn: 3, reason: { kind: 'completed' } } })
+  logged(h, 's1', 'turn/end')
+  const r = await p
+  assert.equal(r.state, 'goal_ended')
+  assert.equal(r.ended_because, 'complete')
+  assert.deepEqual(r.rounds.map((x) => [x.goal_round, x.final_text]), [[2, 'r2'], [3, 'all done']], 'round 1 was before the follow began')
+  assert.deepEqual(r.rounds[0].tools, { pwsh: 2, read_image: 1 })
+  assert.match(r.cursor, /^3:\d+$/)
+  assert.equal(r.cwd, '/w')
+  // Blocked comes back with Harness's reason; a cleared goal ends a follow that had one.
+  goal.s1 = goalValue('blocked', { blockedReason: { code: 'needs-key', message: 'An API key is missing' } })
+  const b = await h.call('follow', { session_id: 's1', cursor: r.cursor, timeout_s: 5 })
+  assert.deepEqual([b.state, b.ended_because, b.goal.blocked_reason.code], ['goal_ended', 'blocked', 'needs-key'])
+  goal.s1 = undefined
+  log.s1.push({ type: 'goal/change', time: Date.now(), data: { operation: 'clear' } })
+  assert.deepEqual([(await h.call('follow', { session_id: 's1', cursor: r.cursor, timeout_s: 5 })).ended_because], ['cleared'])
+})
+
+test('following right after "/goal …" was sent: waits for that turn to create the goal, and counts from its start', async (t) => {
+  const goal = {}
+  const turnStart = Date.now() - 3000
+  const log = { s1: [...round(1, { open: true, at: turnStart })], s2: [...round(1, { open: true })] }
+  const h = startHost({ goal, log }); t.after(h.close); await h.ready
+  let result = null
+  const p = h.call('follow', { session_id: 's1', timeout_s: 10 }).then((r) => { result = r; return r })
+  await sleep(150)
+  assert.equal(result, null, 'no goal yet while the turn runs is not no_goal')
+  goal.s1 = goalValue('active', { maxGoalRounds: 3 })
+  logged(h, 's1', 'goal/change')
+  await sleep(150)
+  assert.equal(result, null)
+  log.s1.push({ type: 'turn/end', time: Date.now(), data: { turn: 1, reason: { kind: 'completed' } } })
+  goal.s1 = goalValue('complete')
+  logged(h, 's1', 'turn/end')
+  const r = await p
+  assert.deepEqual([r.state, r.ended_because, r.rounds.length], ['goal_ended', 'complete', 1])
+  assert.equal(r.since, new Date(turnStart).toISOString(), 'what the running turn wrote before the follow began counts')
+  // A turn that ends without creating one: no_goal then, also across a cursor from a timed-out call.
+  const quick = await h.call('follow', { session_id: 's2', timeout_s: 0.2 })
+  assert.deepEqual([quick.state, quick.timed_out], ['following', true])
+  const q = h.call('follow', { session_id: 's2', cursor: quick.cursor, timeout_s: 10 })
+  await sleep(100)
+  log.s2.push({ type: 'turn/end', time: Date.now(), data: { turn: 1, reason: { kind: 'completed' } } })
+  logged(h, 's2', 'turn/end')
+  assert.equal((await q).state, 'no_goal')
+})
+
+test('following until turn: a report at the first round end once every_s have passed, with every round since', async (t) => {
+  const goal = { s1: goalValue() }
+  const log = { s1: [] }
+  const h = startHost({ goal, log }); t.after(h.close); await h.ready
+  const t0 = Date.now()
+  const p = h.call('follow', { session_id: 's1', until: 'turn', every_s: 1, timeout_s: 10 })
+  await sleep(100)
+  log.s1.push(...round(1, { round: 1, text: 'one' }), ...round(2, { round: 2, text: 'two' }))
+  logged(h, 's1', 'turn/end')
+  await sleep(100)
+  // Round 3 is still running when the second is up: the report waits for its end.
+  log.s1.push(...round(3, { round: 3, text: 'three', open: true }))
+  logged(h, 's1', 'turn/start')
+  await sleep(1200)
+  log.s1.push({ type: 'turn/end', time: Date.now(), data: { turn: 3, reason: { kind: 'completed' } } })
+  logged(h, 's1', 'turn/end')
+  const first = await p
+  assert.equal(first.state, 'report')
+  assert.ok(Date.now() - t0 >= 1300, 'not before round 3 ended')
+  assert.deepEqual(first.rounds.map((x) => x.final_text), ['one', 'two', 'three'])
+  // Next: one round ends at once and nothing runs after it, so it is reported when the time is up.
+  const t1 = Date.now()
+  const p2 = h.call('follow', { session_id: 's1', until: 'turn', every_s: 1, cursor: first.cursor, timeout_s: 10 })
+  await sleep(100)
+  log.s1.push(...round(4, { round: 4, text: 'four' }))
+  logged(h, 's1', 'turn/end')
+  const second = await p2
+  assert.equal(second.state, 'report')
+  assert.ok(Date.now() - t1 >= 900)
+  assert.deepEqual(second.rounds.map((x) => x.final_text), ['four'], 'nothing repeated')
+  // Switching to goal mode with the same cursor goes on from there.
+  log.s1.push(...round(5, { round: 5, text: 'five' }))
+  goal.s1 = goalValue('complete')
+  const last = await h.call('follow', { session_id: 's1', cursor: second.cursor, timeout_s: 5 })
+  assert.deepEqual(last.rounds.map((x) => x.final_text), ['five'])
+  // Nothing due: the call times out and hands the same cursor back.
+  goal.s1 = goalValue()
+  const idle = await h.call('follow', { session_id: 's1', until: 'turn', every_s: 600, cursor: last.cursor, timeout_s: 1 })
+  assert.deepEqual([idle.state, idle.timed_out, idle.cursor], ['following', true, last.cursor])
+})
+
+test('a goal Harness will not go on with by itself comes back at once; with no way to tell, a goal with no new round does', async (t) => {
+  // Harness's goals service says disarmed (e.g. after a restart, until a person resumes it).
+  const goal = { s1: goalValue(), s2: goalValue() }
+  const h = startHost({ goal, log: {}, goals: { get: (agent) => ({ id: 'goal-1', activation: agent.id === 's1' ? 'disarmed' : 'armed' }) }, agents: { get: (id) => ({ id }) } })
+  t.after(h.close); await h.ready
+  assert.equal((await h.call('follow', { session_id: 's1', timeout_s: 5 })).state, 'needs_resume')
+  const armed = await h.call('follow', { session_id: 's2', timeout_s: 1 })
+  assert.deepEqual([armed.state, armed.timed_out, armed.goal.activation], ['following', true, 'armed'])
+  // A session Harness has not loaded (no live agent, e.g. after a restart) runs nothing.
+  const h4 = startHost({ goal: { s5: goalValue() }, log: {}, goals: { get: () => ({ id: 'goal-1', activation: 'armed' }) }, agents: { get: () => undefined } })
+  t.after(h4.close); await h4.ready
+  assert.equal((await h4.call('follow', { session_id: 's5', timeout_s: 5 })).state, 'needs_resume')
+  // Without the services, the activation event says it.
+  const h2 = startHost({ goal: { s3: goalValue() }, log: {} }); t.after(h2.close); await h2.ready
+  h2.emit('goal/activation-changed', { sessionId: 's3', goal: { id: 'goal-1', revision: 1, activation: 'disarmed' } })
+  assert.equal((await h2.call('follow', { session_id: 's3', timeout_s: 5 })).state, 'needs_resume')
+  // Nothing says: no new round for the quiet time counts as stopped.
+  process.env.DSH_BATON_GOAL_QUIET_MS = '300'
+  const h3 = startHost({ goal: { s4: goalValue() }, log: {} })
+  delete process.env.DSH_BATON_GOAL_QUIET_MS
+  t.after(h3.close); await h3.ready
+  const t0 = Date.now()
+  const stalled = await h3.call('follow', { session_id: 's4', timeout_s: 5 })
+  assert.equal(stalled.state, 'goal_stalled')
+  assert.ok(Date.now() - t0 < 2000)
+})
+
+test('following: Harness asking or waiting for an approval comes back once, and its question is answered by session', async (t) => {
+  const h = startHost({ goal: { s1: goalValue() }, log: { s1: [] } }); t.after(h.close); await h.ready
+  const p = h.call('follow', { session_id: 's1', timeout_s: 5 })
+  await sleep(100)
+  h.emit(...S('s1').status('waiting'))
+  const ui = await p
+  assert.deepEqual([ui.state, ui.needs_input], ['needs_input', 'harness-ui'])
+  const again = await h.call('follow', { session_id: 's1', cursor: ui.cursor, timeout_s: 1 })
+  assert.equal(again.timed_out, true, 'the same wait is not reported twice')
+  h.emit(...S('s1').status('running'))
+  const p2 = h.call('follow', { session_id: 's1', cursor: ui.cursor, timeout_s: 5 })
+  await sleep(100)
+  const reply = h.ask('s1', [{ id: 'db', question: 'Which database?', options: [{ label: 'SQLite' }, { label: 'Postgres' }] }])
+  const q = await p2
+  assert.equal(q.needs_input, 'answer')
+  assert.equal(q.question.questions[0].question, 'Which database?')
+  const a = await h.call('answer', { session_id: 's1', answers: [{ choose: [2] }] })
+  assert.deepEqual([a.submitted, a.session_id], [true, 's1'])
+  assert.deepEqual(await reply, { answers: [{ id: 'db', selected: ['Postgres'] }] })
+  await assert.rejects(h.call('answer', { session_id: 's1', answers: [{ choose: [1] }] }), /no open question/)
+})
+
+test('status by session id: what it is doing, its goal and its last turn\'s reply', async (t) => {
+  const h = startHost({ goal: { s1: goalValue() }, log: { s1: [...round(7, { round: 6, text: 'wired up paging', tools: ['pwsh'] })] }, activity: () => [{ kind: 'turn', items: [] }] })
+  t.after(h.close); await h.ready
+  const st = await h.call('status', { session_id: 's1' })
+  assert.equal(st.busy, true)
+  assert.equal(st.goal.phase, 'active')
+  assert.deepEqual([st.last_turn.turn, st.last_turn.goal_round, st.last_turn.final_text], [7, 6, 'wired up paging'])
+  assert.equal(st.turn_running, false)
+  const plain = await h.call('status', { session_id: 's2' })
+  assert.equal('goal' in plain, false)
 })

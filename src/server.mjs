@@ -14,6 +14,9 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const START_TIMEOUT_MS = Number(process.env.DSH_BATON_START_TIMEOUT_MS) || 15000
+// The client that started this shell. Its children (one more after each hot update) are told
+// it: mcp.mjs judges Codex's wait by when the Codex process started.
+const CLIENT_PID = String(process.ppid)
 
 function send(msg) {
   process.stdout.write(JSON.stringify(msg) + '\n')
@@ -39,7 +42,7 @@ function startChild() {
   const proc = spawn(process.execPath, [path.join(ROOT, 'src', 'mcp.mjs')], {
     stdio: ['pipe', 'pipe', 'inherit'],
     windowsHide: true,
-    env: process.versions.electron ? { ...process.env, ELECTRON_RUN_AS_NODE: '1' } : process.env,
+    env: { ...process.env, DSH_BATON_CLIENT_PID: CLIENT_PID, ...(process.versions.electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}) },
   })
   const child = {
     proc,

@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import * as core from './core.mjs'
 import { stableNodePath } from './setup.mjs'
-import { codexConfigPath, readCodexToolTimeout, codexTimeoutNoteFile, codexWaitSeconds, threadStartedAt } from './register.mjs'
+import { codexConfigPath, readCodexToolTimeout, codexTimeoutNoteFile, codexWaitSeconds, codexConfigReadAt, codexProcessStartedAt } from './register.mjs'
 import { conversationFolder, within } from './folder.mjs'
 import { threadOf, delivered } from './codex-hook.mjs'
 
@@ -45,24 +45,37 @@ function codexToolTimeout() {
     return { value: null }
   }
 }
-// meta is the call's: Codex keeps the tool_timeout_sec a conversation started with, so a
-// conversation from before the value was written keeps 270 s (see noteCodexToolTimeout).
-// Without meta (a tool description), the length a new conversation gets.
+// When the Codex process that runs this conversation started, looked up once from the client
+// pid server.mjs passes. A shell from before 0.6.5 passes none, and then the thread id alone
+// decides.
+let codexStarted
+const codexStartedAt = () => {
+  if (codexStarted === undefined) {
+    const pid = Number(process.env.DSH_BATON_CLIENT_PID)
+    codexStarted = pid > 1 ? codexProcessStartedAt(pid) : null
+  }
+  return codexStarted
+}
+// meta is the call's: Codex keeps the tool_timeout_sec a conversation read when it started or
+// was loaded, so one open since before the value was written keeps 270 s (see
+// noteCodexToolTimeout). Without meta (a tool description), the length a new conversation gets.
 const waitSeconds = (meta) => {
   if (envWait >= 1) return Math.min(envWait, MAX_WAIT_S)
   if (!isCodex()) return 50
-  return codexWaitSeconds(codexToolTimeout(), meta === undefined ? undefined : threadStartedAt(threadOf(meta)))
+  return codexWaitSeconds(codexToolTimeout(), meta === undefined ? undefined : codexConfigReadAt(threadOf(meta), codexStartedAt()))
 }
 const WAIT_CHUNK_S = 10
 // The Codex app runs tools from a script cell that yields every 30 s and wakes the model
-// to resume it; a yield longer than one dsh_wait keeps the whole wait in one turn.
+// to resume it; a yield longer than one dsh_wait keeps the whole wait in one turn. When the
+// user wants Codex to work meanwhile, yield_control() hands it back while the wait goes on.
 const codeModeYield = () => {
   const ms = (waitSeconds() + 20) * 1000
-  return `Required when you call tools from a script cell ("Script running with cell ID …"): the script that calls dsh_wait must start with the line // @exec: {"yield_time_ms": ${ms}}, never a shorter value; if the cell still yields, resume it with wait and yield_time_ms ${ms} (or the largest value wait accepts), never a short value such as 30000 or 55000.`
+  return `Required when you call tools from a script cell ("Script running with cell ID …"): the script that calls dsh_wait must start with the line // @exec: {"yield_time_ms": ${ms}}, never a shorter value; if the cell still yields, resume it with wait and yield_time_ms ${ms} (or the largest value wait accepts), never a short value such as 30000 or 55000. Only when the user asked you to work while the run goes on: in that cell call yield_control() right after starting dsh_wait, do the work, then resume the cell with wait as above to get the result (outside a script cell, do the work once dsh_wait returns).`
 }
 // Not "no calls at all": a model told only that kept waiting on the old request after the
-// user added to it, and sent the change once the old run had finished.
-const NO_POLL = 'While waiting, do not check progress: no dsh_status, dsh_session_activity or dsh_read_session, and do not list or read the target folder. If the user adds to or changes the request while you wait, send it at once with dsh_send mode steer and the same session_id (it joins the running turn), then dsh_wait the new run_id instead of the old one: both end together with one result.'
+// user added to it, and sent the change once the old run had finished. Nor "no reading":
+// that overrode a user who asked Codex to analyse the project while Harness worked.
+const NO_POLL = 'While waiting, do not check how the run is going: no dsh_status, dsh_session_activity or dsh_read_session, and no looking for its output or logs. Work the user asked you to do meanwhile is different and allowed: reading, reviewing or analysing the project, the target folder included, while dsh_wait runs, without editing files the run may change. If the user adds to or changes the request while you wait, send it at once with dsh_send mode steer and the same session_id (it joins the running turn), then dsh_wait the new run_id instead of the old one: both end together with one result.'
 const INSTRUCTIONS = 'Hands tasks to a local DeepSeek Harness and brings the results back: start with dsh_send.'
 const ARCHIVED = 'Sessions not in dsh_list_sessions are archived or gone: do not look for them on disk.'
 // A shell command that blocks until a run ends and prints its reply. Run in the
@@ -72,8 +85,13 @@ const ARCHIVED = 'Sessions not in dsh_list_sessions are archived or gone: do not
 // Harness's own binary (no Node.js installed), the command keeps it in Node mode.
 const quote = (p) => `"${p}"`
 const nodeMode = process.versions.electron ? 'ELECTRON_RUN_AS_NODE=1 ' : ''
-const waitCommand = (runId) =>
-  /^[\w.-]+$/.test(runId ?? '') ? `${nodeMode}${quote(stableNodePath())} ${quote(path.join(core.ROOT, 'src', 'cli.mjs'))} wait ${runId}` : undefined
+const cliCommand = (args) => `${nodeMode}${quote(stableNodePath())} ${quote(path.join(core.ROOT, 'src', 'cli.mjs'))} ${args}`
+const waitCommand = (runId) => (/^[\w.-]+$/.test(runId ?? '') ? cliCommand(`wait ${runId}`) : undefined)
+// The same for following a session's goal: it ends at the next report.
+const followCommand = (sid, until = 'goal', cursor, everyMin) => (/^[\w.-]+$/.test(sid ?? '')
+  ? cliCommand(`follow ${sid} --until ${until}${/^\d+:\d+$/.test(cursor ?? '') ? ` --cursor ${cursor}` : ''}${everyMin ? ` --every ${everyMin}m` : ''}`)
+  : undefined)
+const FOLLOW_COMMAND_HINT = ' Your client wakes you when a background command exits, so run follow_command that way instead of calling dsh_wait with session_id: it ends at the next report, with no polling.'
 
 // Wait in short chunks, reporting progress between them (clients that support it can
 // show it or reset their timer). An unfinished wait returns only the state, not the run's
@@ -97,10 +115,30 @@ async function waitInChunks({ run_id }, progress, signal, meta) {
         ...(st.waiting_on ? { waiting_on: st.waiting_on } : {}),
         hint: st.state === 'waiting'
           ? 'The run is still waiting for a person (see dsh_status for its question). Answer it with dsh_answer if you may, or tell the user; then call dsh_wait again.'
-          : `Still ${st.state}. Call dsh_wait again with the same run_id, with no other calls in between and no progress note.`,
+          : `Still ${st.state}. Call dsh_wait again with the same run_id, with no progress check or progress note in between (work the user asked you to do meanwhile is fine).`,
       }
     }
     progress?.(Math.round((Date.now() - started) / 1000), `run ${run_id} is ${st.state}`)
+  }
+}
+
+// Following a session's goal (dsh_wait with session_id). Codex sees a message the user types
+// only once the tool call returns, so one call waits at most 15 minutes; it then returns
+// timed_out with the same cursor and Codex simply calls again.
+const FOLLOW_MAX_S = 900
+const FOLLOW_CHUNK_S = 30
+async function followInChunks({ session_id, until = 'goal', cursor, every_minutes = 10 }, progress, signal, meta) {
+  const total = Math.min(waitSeconds(meta ?? null), FOLLOW_MAX_S)
+  const started = Date.now()
+  const deadline = started + total * 1000
+  const every_s = Math.max(1, Number(every_minutes) || 10) * 60
+  for (;;) {
+    if (signal?.aborted) return { session_id, cancelled: true }
+    const left = Math.ceil((deadline - Date.now()) / 1000)
+    const st = await core.api.follow({ session_id, until, cursor, every_s, timeout_s: Math.max(1, Math.min(FOLLOW_CHUNK_S, left)) })
+    if (!st.timed_out || Date.now() >= deadline) return core.followResult(st)
+    cursor = st.cursor
+    progress?.(Math.round((Date.now() - started) / 1000), `following ${session_id}`)
   }
 }
 
@@ -156,11 +194,16 @@ const TOOLS = [
     name: 'dsh_send',
     annotations: annotations('Send message', hints(false, false, false)),
     description: 'Hand a task to DeepSeek Harness, or continue a session: returns at once with a run_id and a hint saying how to wait for the reply; follow it. Call it directly, no need to list anything first. A new session starts in the folder this conversation works in, or in cwd or workspace_id (a new cwd is registered first); session_id continues that session. message arrives verbatim as a user message, and Harness does not see this conversation: make it self-contained, in the user\'s language, the full, explicit spec, asking for tests that cover each requirement. For a large task, write a concrete spec (goal, modules and the files each owns, level of detail, acceptance criteria) rather than passing the user\'s words on, and send independent parts to separate sessions in parallel, each owning its own files; review once all are back, then send specific fixes. With checks, a short request for a sub-agent review table is appended. To a busy session, mode followup queues the message and steer adds it to the running turn; left out, the Harness setting decides.',
-    inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session; leave out to use the folder this conversation works in'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: "followup queues after the current turn; steer injects into a running turn. Omit to follow Harness's busy-send setting" }, model: str('Only when the user names a model for this run (e.g. "DeepSeek-V4 Pro", "v4-pro"); leave out otherwise and the session uses its own model, or Harness\'s default model for a new session. Matched against Harness\'s model list ignoring case, spaces, hyphens and a leading DeepSeek; a name that matches no model or several fails the send with the list (provider/model picks one). Sets this session only; Harness\'s default model is left as it was'), reasoning_effort: str('Only when the user names a reasoning effort, e.g. high; one of the efforts dsh_list_models shows for the model'), checks: { type: 'array', items: { type: 'string' }, description: 'The project\'s own test commands, e.g. npm test; never check scripts you write yourself. dsh-baton runs them in the folder when the run ends and returns exit codes and the last output lines as evidence.' } } },
+    inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session; leave out to use the folder this conversation works in'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: "followup queues after the current turn; steer injects into a running turn. Omit to follow Harness's busy-send setting" }, model: str('Only when the user names a model for this run (e.g. "DeepSeek-V4 Pro", "v4-pro"); leave out otherwise and the session uses its own model, or Harness\'s default model for a new session. Matched against Harness\'s model list ignoring case, spaces, hyphens and a leading DeepSeek; a name that matches no model or several fails the send with the list (provider/model picks one). Sets this session only; Harness\'s default model is left as it was'), reasoning_effort: str('Only when the user names a reasoning effort, e.g. high; one of the efforts dsh_list_models shows for the model'), checks: { type: 'array', items: { type: 'string' }, description: 'The project\'s own test commands, e.g. npm test, or python -m pytest (a bare pytest is often not on PATH, on Windows especially); never check scripts you write yourself. dsh-baton runs them in the folder when the run ends and returns exit codes and the last output lines as evidence.' } } },
     run: async (a, { meta } = {}) => {
       // A new session goes to this conversation's folder unless the call names another one;
       // a different folder is allowed but said back, so a wrong guess does not go unnoticed.
       const here = a.session_id ? undefined : conversationFolder(meta, isCodex())
+      // Codex starts the server in the home folder (register.mjs), so its conversation folder
+      // comes from the thread's rollout only; when that is not found, ask rather than guess.
+      if (!here && !a.session_id && !a.cwd && !a.workspace_id && isCodex()) {
+        throw new Error('Could not tell which folder this Codex conversation works in, so nothing was sent. Call dsh_send again with cwd set to the project folder (or workspace_id from dsh_list_workspaces).')
+      }
       const args = here && !a.cwd && !a.workspace_id ? { ...a, cwd: here } : a
       const folder = here && a.cwd && !within(a.cwd, here)
         ? { folder_note: `This conversation works in ${here}; the new session was started in ${a.cwd} as asked. If that was not intended, cancel it and send again without cwd.` }
@@ -181,20 +224,35 @@ const TOOLS = [
   {
     name: 'dsh_status',
     annotations: annotations('Run status'),
-    description: 'Look once at a run without waiting: state (queued/running/waiting/completed/failed/cancelled/interrupted), recent events, final reply, waiting_on (sub-agents or jobs still working) and human_interjections. Never a way to wait: use dsh_wait.',
-    inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send'), tail: int('How many recent events', 5) } },
+    description: 'Look once at a run or a session without waiting. A run (run_id): state (queued/running/waiting/completed/failed/cancelled/interrupted), recent events, final reply, waiting_on (sub-agents or jobs still working) and human_interjections. A session (session_id): busy, activity, its Harness goal (phase, rounds, whether Harness goes on with it), needs_input, and its last turn\'s reply. Never a way to wait: use dsh_wait.',
+    inputSchema: { type: 'object', properties: { run_id: str('Run id from dsh_send'), session_id: str('Session id, when you have no run_id (for example to look at a session whose goal you follow)'), tail: int('How many recent events of a run', 5) } },
     run: async (a) => clip(await core.api.status({ tail: 5, ...a })),
   },
   {
     name: 'dsh_wait',
     annotations: annotations('Wait for run'),
-    description: () => `Wait for a run sent with dsh_send to end and return its state and final reply.${!isCodex() ? ' Prefer the background wait_command from dsh_send if your client wakes you when a background command exits: it costs no turns.' : ''} It also returns at once when the run stops to ask a person: needs_input answer (question and relay; reply with dsh_answer) or harness-ui (an approval only a person can give in Harness). Each call waits up to ${waitSeconds()} s${isCodex() && waitSeconds() > 270 ? ' (270 s in a conversation that was already open when dsh-baton set Codex\'s tool timeout)' : ''}; if it returns timed_out: true, call dsh_wait again with the same run_id, without a progress note.${isCodex() ? ` ${NO_POLL} ${codeModeYield()}` : ''}`,
-    inputSchema: { type: 'object', required: ['run_id'], properties: { run_id: str('Run id from dsh_send') } },
+    description: () => `Wait for a run sent with dsh_send to end and return its state and final reply.${!isCodex() ? ' Prefer the background wait_command from dsh_send if your client wakes you when a background command exits: it costs no turns.' : ''} It also returns at once when the run stops to ask a person: needs_input answer (question and relay; reply with dsh_answer) or harness-ui (an approval only a person can give in Harness). Each call waits up to ${waitSeconds()} s${isCodex() && waitSeconds() > 270 ? ' (270 s in a conversation that was already open when dsh-baton set Codex\'s tool timeout)' : ''}; if it returns timed_out: true, call dsh_wait again with the same run_id, without a progress note. With session_id instead of run_id it follows that session's Harness goal without sending anything: until "goal" (default) returns once when the goal stops, until "turn" at the end of a round once every_minutes have passed since the last report; it also returns when Harness needs a person or will not go on by itself. Pass back the cursor each result gives.${isCodex() ? ` ${NO_POLL} ${codeModeYield()}` : ''}`,
+    inputSchema: {
+      type: 'object', properties: {
+        run_id: str('Run id from dsh_send'),
+        session_id: str('Follow this session\'s Harness goal instead of waiting for a run (no message is sent)'),
+        until: { type: 'string', enum: ['goal', 'turn'], description: 'With session_id: goal (default) reports once when the goal stops; turn reports at the end of a round once every_minutes have passed since the last report, with every round since then' },
+        cursor: str('With session_id: the cursor from the previous result, so nothing is reported twice or missed (also when switching until)'),
+        every_minutes: int('With until turn: least minutes between reports', 10),
+      },
+    },
     run: async (a, { progress, signal, meta }) => {
+      if (!a.run_id && a.session_id) {
+        const st = await followInChunks(a, progress, signal, meta)
+        if (isCodex() || st.cancelled || !['report', 'following', 'needs_input'].includes(st.state)) return st
+        return { ...st, follow_command: followCommand(a.session_id, a.until, st.cursor, a.until === 'turn' ? (a.every_minutes ?? 10) : undefined), hint: `${st.hint}${FOLLOW_COMMAND_HINT}` }
+      }
+      if (!a.run_id) throw new Error('run_id is required (or session_id, to follow a session\'s goal)')
       const result = await waitInChunks(a, progress, signal, meta)
       // Got here, the result must not come again through the Codex Stop hook (conversations
       // from before 0.6.4 still run it).
       if (!result.timed_out && !result.cancelled) delivered(a.run_id, result)
+      if (result.goal && !isCodex() && result.goal.phase === 'active') return { ...result, follow_command: followCommand(result.session_id), hint: `${result.hint}${FOLLOW_COMMAND_HINT}` }
       return result
     },
   },
@@ -203,8 +261,9 @@ const TOOLS = [
     annotations: annotations('Answer question', hints(false, false, false)),
     description: `Answer the questions a waiting run asked (needs_input: answer in dsh_wait or dsh_status). ${core.ASKED} Per question: option numbers or labels in choose, text for a free answer, or skip. The answer reaches Harness once every question has one (submitted: true; remaining lists the rest); then wait for the run again. If the user already answered in Harness, it reports that there is no open question.`,
     inputSchema: {
-      type: 'object', required: ['run_id', 'answers'], properties: {
+      type: 'object', required: ['answers'], properties: {
         run_id: str('Run id that is waiting (needs_input: answer)'),
+        session_id: str('Instead of run_id: the session a follow wait (dsh_wait with session_id) reported the question for'),
         answers: {
           type: 'array', description: 'One entry per question answered now', items: {
             type: 'object', properties: {
@@ -220,6 +279,7 @@ const TOOLS = [
     },
     run: async (a) => {
       const st = await core.api.answer(a)
+      if (!a.run_id) return { ...st, hint: `${st.reason ? 'Tell the user what you chose and this reason. ' : ''}Then call dsh_wait again with this session_id, the same until and the last cursor.` }
       return {
         ...st,
         hint: st.reason

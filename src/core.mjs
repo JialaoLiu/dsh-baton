@@ -554,11 +554,43 @@ const ENV_HINT = ' A failed check whose output says a command or module was not 
 // Runs that worked in the same folder at the same time put their changes in each other's
 // evidence: a file this run did not make may be another's, so it is not to be removed.
 const SHARED_HINT = (runs) => ` Other runs (${runs.join(', ')}) worked in this folder at the same time, so evidence.changes may include their files: never delete or revert a file because this run was not asked for it.`
+// A folder too big to look at whole: a file missing from evidence.changes proves nothing.
+const TRUNCATED_HINT = ' The folder has more files than dsh-baton looks at, so evidence.changes may miss some: do not take a file missing from it as not written.'
 export function endedHint(st) {
   const checks = st?.evidence?.checks
-  const shared = st?.evidence?.same_folder_runs?.length ? SHARED_HINT(st.evidence.same_folder_runs) : ''
-  if (!checks?.length) return NO_CHECKS_HINT + shared
-  return ENDED_HINT + (checks.some((c) => !c.passed && MISSING_TOOL.test(c.output_tail ?? '')) ? ENV_HINT : '') + shared
+  const shared = (st?.evidence?.same_folder_runs?.length ? SHARED_HINT(st.evidence.same_folder_runs) : '') + (st?.evidence?.changes?.truncated ? TRUNCATED_HINT : '')
+  const hint = !checks?.length ? NO_CHECKS_HINT + shared : ENDED_HINT + (checks.some((c) => !c.passed && MISSING_TOOL.test(c.output_tail ?? '')) ? ENV_HINT : '') + shared
+  return st?.goal ? `${goalHint(st.goal, st.session_id)} ${hint}` : hint
+}
+
+// A Harness goal starts the session's next round by itself as soon as a turn ends, so a run
+// that completed there is one stage of the work, not its end.
+const FOLLOW_HOW = (sid) => `If the user asked you to keep following it, send nothing: call dsh_wait with session_id ${sid} (until "goal", the default, reports once when the goal stops; until "turn" reports at most every 10 minutes, at the end of a round, with every round since the last report).`
+export function goalHint(goal, sid) {
+  if (goal.phase === 'active' && goal.activation !== 'disarmed') {
+    return `This session has an active Harness goal (${goal.rounds_started} goal round(s) started${goal.max_rounds ? `, at most ${goal.max_rounds}` : ''}): Harness goes on with the next round by itself after this reply, so the work is not finished. Report this stage to the user as one stage. ${FOLLOW_HOW(sid)}`
+  }
+  if (goal.phase === 'active') return 'This session has an active Harness goal, but Harness will not go on with it by itself (for example after a Harness restart): tell the user to press Continue in Harness if they want it to go on.'
+  return `The session's Harness goal is ${goal.phase}${goal.blocked_reason ? ` (${goal.blocked_reason.code}: ${goal.blocked_reason.message})` : ''}: it does not go on until the user deals with it in Harness.`
+}
+
+// What a follow wait (dsh_wait with session_id) returns, with what to do next.
+const AGAIN = 'call dsh_wait again with the same session_id, until and this cursor'
+const QUIET = 'While waiting, write no progress sentences.'
+export function followResult(st) {
+  const report = 'Report to the user briefly, in their language: what the rounds did (final_text, tools), the files changed (changed_files) and how far the goal is (goal.rounds_started of goal.max_rounds).'
+  switch (st.state) {
+    case 'report': return { ...st, hint: `${report} Then ${AGAIN}. ${QUIET}` }
+    case 'following': return { ...st, hint: `No report is due yet: ${AGAIN}, with no progress note in between. ${QUIET}` }
+    case 'goal_ended': return { ...st, hint: `The goal stopped (${st.ended_because}${st.goal?.blocked_reason ? `: ${st.goal.blocked_reason.message}` : ''}), so following is over. ${report}${st.ended_because === 'blocked' || st.ended_because === 'paused' ? ' It needs the user before it goes on: say so.' : ''}` }
+    case 'needs_input': return st.question
+      ? { ...st, relay: relayText(st.question), hint: `Harness stopped to ask the user ${st.question.count} question(s). Unless the user let you decide, show the user relay, written in the user's language, with its first line filled in with your own pick and reason, then ask which they want. ${ASKED} Answer with dsh_answer and session_id ${st.session_id} (no run_id), then ${AGAIN}.` }
+      : { ...st, hint: `Harness waits for something only a person can do in its window (an approval, for example). Tell the user, then ${AGAIN}.` }
+    case 'needs_resume': return { ...st, hint: 'The goal is still active, but Harness will not go on with it by itself (for example after a Harness restart). Tell the user to press Continue in Harness, and stop following until they have.' }
+    case 'goal_stalled': return { ...st, hint: 'The goal is active, yet no new round has started for 5 minutes: Harness may have stopped going on with it (for example after a restart). Tell the user; they can press Continue in Harness. Stop following until they have.' }
+    case 'no_goal': return { ...st, hint: 'This session has no Harness goal, so there is nothing to follow. To get a reply from it, send a message with dsh_send and wait for that run.' }
+    default: return st
+  }
 }
 
 // A run that stopped because the DeepSeek balance ran out: sending again fails the same way.
@@ -667,6 +699,12 @@ const withEvidence = (st) => {
   return ev ? { ...st, evidence: ev } : st
 }
 
+// An older plugin answers a method it does not have with "Unknown method": say to update it.
+const tooOld = (method, what) => (error) => {
+  if (!new RegExp(`Unknown method: ${method}|Unknown run: undefined`).test(error?.message)) throw error
+  throw new Error(`The Harness plugin dsh-baton-host ${hostVersion ?? ''} is too old to ${what}; this MCP server is ${VERSION}. Update the plugin in Harness: Plugins → dsh-baton-host → Uninstall, then Add plugin → dsh-baton-host@${VERSION}.`.replace('  ', ' '))
+}
+
 const tag = (backend, value) => (Array.isArray(value) ? value.map((v) => ({ ...v, backend })) : { ...value, backend })
 
 export const api = {
@@ -715,8 +753,23 @@ export const api = {
     evidence.prepare(config.batonHome, { run_id: st.run_id, session_id: st.session_id, cwd: await runFolder(a, st), checks })
     return st
   },
-  async status({ run_id, tail = 20 }) {
+  async status({ run_id, session_id, tail = 20 }) {
+    if (!run_id && session_id) {
+      if (!(await useHost())) throw new Error('A session\'s status needs the dsh-baton-host plugin running inside DeepSeek Harness.')
+      return shaped(await hostCall('status', { session_id }).catch(tooOld('status', 'look at a session by its id')))
+    }
+    if (!run_id) throw new Error('run_id or session_id is required')
     return withEvidence(shaped(isHostRun(run_id) ? tag('host', await hostCall('status', { run_id, tail })) : tag('headless', runStatus(run_id, { tail }))))
+  },
+  // Wait on a session's Harness goal without sending anything (host follow()); a report that
+  // has rounds in it also lists the files changed in the session's folder since the last one.
+  async follow({ session_id, until = 'goal', cursor, every_s = 600, timeout_s = 300 }) {
+    if (!session_id) throw new Error('session_id is required')
+    if (!(await useHost())) throw new Error('Following a session needs the dsh-baton-host plugin running inside DeepSeek Harness.')
+    const st = shaped(await hostCall('follow', { session_id, until, cursor, every_s, timeout_s }, { timeoutMs: (timeout_s + 15) * 1000 }).catch(tooOld('follow', 'follow a goal')))
+    if (st.timed_out || st.state === 'no_goal' || !st.cwd) return st
+    const changed = evidence.changedSince(st.cwd, Date.parse(st.since) || 0)
+    return changed ? { ...st, changed_files: changed } : st
   },
   async wait({ run_id, timeout_s = 300 }) {
     if (isHostRun(run_id)) return withEvidence(shaped(tag('host', await hostCall('wait', { run_id, timeout_s }, { timeoutMs: (timeout_s + 15) * 1000 }))))
@@ -754,7 +807,7 @@ export const api = {
     try {
       const result = shaped(await hostCall('answer', a))
       if (!(typeof reason === 'string' && reason.trim())) return result
-      if (result.submitted) rememberReason(a.run_id, result.answers, reason.trim())
+      if (result.submitted && a.run_id) rememberReason(a.run_id, result.answers, reason.trim())
       return { ...result, reason: reason.trim() }
     } catch (error) {
       if (!/Unknown method: answer/.test(error?.message)) throw error

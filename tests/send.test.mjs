@@ -78,9 +78,16 @@ test('Codex: no cwd means the thread cwd from its rollout, not the server folder
   const meta = { 'x-codex-turn-metadata': { thread_id: thread } }
   const { host } = await sendFrom({ clientName: 'codex-mcp-client', cwd: codexHome, args: { message: 'hi' }, meta, env: { CODEX_HOME: codexHome } })
   assert.equal(host.cwd, '/projects/demo')
-  // Unknown thread, server started inside CODEX_HOME: no folder is guessed.
+  // Unknown thread, server started inside CODEX_HOME: no folder is guessed, and Codex is told
+  // to name one instead of getting the host's bare "needs cwd".
   const none = await sendFrom({ clientName: 'codex-mcp-client', cwd: codexHome, args: { message: 'hi' }, meta: { 'x-codex-turn-metadata': { thread_id: 'nope' } }, env: { CODEX_HOME: codexHome } })
-  assert.equal(none.host.cwd, undefined)
+  assert.equal(none.host, undefined, 'nothing sent')
+  assert.match(none.reply.error, /Could not tell which folder this Codex conversation works in, so nothing was sent\. Call dsh_send again with cwd/)
+  // As 0.6.5 registers it: started in the home folder, which is never taken for a project.
+  const home = await sendFrom({ clientName: 'codex-mcp-client', cwd: os.homedir(), args: { message: 'hi' }, meta: { 'x-codex-turn-metadata': { thread_id: 'nope' } }, env: { CODEX_HOME: codexHome } })
+  assert.equal(home.host, undefined)
+  const named = await sendFrom({ clientName: 'codex-mcp-client', cwd: os.homedir(), args: { message: 'hi', cwd: '/projects/x' }, meta: { 'x-codex-turn-metadata': { thread_id: 'nope' } }, env: { CODEX_HOME: codexHome } })
+  assert.equal(named.host.cwd, '/projects/x')
   rm(codexHome)
 })
 

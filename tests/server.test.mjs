@@ -185,7 +185,12 @@ test('Claude Code gets a background wait_command; Codex, which cannot be woken b
   assert.match(codex.sent.hint, /Call dsh_wait/)
   assert.match(codex.sent.hint, /dsh_session_activity/)
   assert.match(codex.sent.hint, /must start with the line \/\/ @exec: \{"yield_time_ms": 290000\}/)
-  assert.match(codex.sent.hint, /do not list or read the target folder/)
+  assert.match(codex.sent.hint, /do not check how the run is going: no dsh_status, dsh_session_activity or dsh_read_session/)
+  // Work the user asked for meanwhile is not forbidden with the polling (a user asked Codex
+  // to analyse while it waited, and the old wording kept it from doing so).
+  assert.match(codex.sent.hint, /Work the user asked you to do meanwhile is different and allowed: reading, reviewing or analysing the project, the target folder included, while dsh_wait runs, without editing files the run may change/)
+  assert.doesNotMatch(codex.sent.hint, /do not (?:list|read|look in) the target folder/)
+  assert.match(codex.sent.hint, /call yield_control\(\) right after starting dsh_wait/)
   assert.equal(codex.instructions, claude.instructions, 'one short sentence for every client; the rules are in the tools')
 })
 
@@ -214,4 +219,102 @@ test('dsh_wait length is chosen per client, and DSH_BATON_WAIT_S overrides it', 
   assert.match(await run({ DSH_BATON_WAIT_S: '1740' }, 'codex-mcp-client'), /up to 1740 s/)
   assert.match(await run({ DSH_BATON_WAIT_S: 'nope' }, 'codex-mcp-client'), /up to 270 s/)
   fs.rmSync(codexHome, { recursive: true, force: true })
+})
+
+// One tool call as the given client against a fake host that answers each method from answers.
+async function callAs(clientName, name, args, answers, env = {}) {
+  const net = await import('node:net')
+  const { socketEndpoint } = await import('../host/lib/socket.js')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-g-'))
+  const sock = path.join(dir, 'h.sock')
+  const seen = []
+  const server = net.createServer((c) => c.on('data', (d) => {
+    const req = JSON.parse(String(d).split('\n')[0])
+    seen.push(req)
+    const result = typeof answers[req.method] === 'function' ? answers[req.method](req.params) : answers[req.method] ?? { name: 'dsh-baton-host', version: '0.0.0' }
+    c.end(JSON.stringify({ id: req.id, result }) + '\n')
+  }))
+  await new Promise((r) => server.listen(socketEndpoint(sock), r))
+  const { DSH_BATON_SENDER, ...base } = process.env
+  const child = spawn(process.execPath, [SERVER], { env: { ...base, CODEX_HOME: dir, DSH_BATON_BACKEND: 'host', DSH_BATON_SOCKET: sock, ...env } })
+  let out = ''
+  child.stdout.on('data', (d) => { out += d })
+  for (const m of [
+    { id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: clientName, version: '1' } } },
+    { id: 2, method: 'tools/call', params: { name, arguments: args } },
+  ]) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n')
+  await new Promise((resolve) => { const tick = setInterval(() => { if (out.includes('"id":2')) { clearInterval(tick); resolve() } }, 50) })
+  child.stdin.end(); server.close(); fs.rmSync(dir, { recursive: true, force: true })
+  const reply = out.split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((m) => m.id === 2).result
+  return { result: reply.isError ? reply.content[0].text : JSON.parse(reply.content[0].text), seen, isError: reply.isError }
+}
+
+const GOAL = { id: 'goal-1', phase: 'active', objective: 'finish', rounds_started: 25, max_rounds: 256, activation: 'armed' }
+
+test('a run that completed in a session with an active goal says the goal goes on and how to follow it', async () => {
+  const done = { wait: { run_id: 'hrun-x', session_id: 's1', state: 'completed', final_text: 'stage done', goal: GOAL } }
+  const codex = await callAs('codex-mcp-client', 'dsh_wait', { run_id: 'hrun-x' }, done)
+  assert.match(codex.result.hint, /active Harness goal \(25 goal round\(s\) started, at most 256\)/)
+  assert.match(codex.result.hint, /send nothing: call dsh_wait with session_id s1/)
+  assert.equal(codex.result.follow_command, undefined)
+  const claude = await callAs('claude-code', 'dsh_wait', { run_id: 'hrun-x' }, done)
+  assert.match(claude.result.follow_command, /cli\.mjs" follow s1 --until goal$/)
+  assert.match(claude.result.hint, /run follow_command that way/)
+  // Disarmed: no following, the user is to press Continue.
+  const off = await callAs('codex-mcp-client', 'dsh_wait', { run_id: 'hrun-x' }, { wait: { ...done.wait, goal: { ...GOAL, activation: 'disarmed' } } })
+  assert.match(off.result.hint, /will not go on with it by itself/)
+})
+
+test('dsh_wait with session_id follows the goal: reports carry the rounds and the files changed, and say what to do next', async () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-gw-'))
+  const since = new Date(Date.now() - 1000).toISOString()
+  fs.writeFileSync(path.join(cwd, 'paging.js'), 'x\n')
+  const report = { session_id: 's1', state: 'report', until: 'turn', goal: GOAL, cwd, since, rounds: [{ turn: 20, goal_round: 19, final_text: 'paging works', tools: { pwsh: 3 } }], cursor: '20:123' }
+  const codex = await callAs('codex-mcp-client', 'dsh_wait', { session_id: 's1', until: 'turn', every_minutes: 10 }, { follow: report })
+  const asked = codex.seen.find((r) => r.method === 'follow').params
+  assert.deepEqual([asked.session_id, asked.until, asked.every_s], ['s1', 'turn', 600])
+  assert.equal(codex.result.changed_files.count, 1)
+  assert.deepEqual(codex.result.changed_files.files, ['paging.js'])
+  assert.match(codex.result.hint, /Report to the user briefly/)
+  assert.match(codex.result.hint, /call dsh_wait again with the same session_id, until and this cursor/)
+  assert.match(codex.result.hint, /write no progress sentences/)
+  assert.equal(codex.result.follow_command, undefined)
+  const claude = await callAs('claude-code', 'dsh_wait', { session_id: 's1', until: 'turn' }, { follow: report })
+  assert.match(claude.result.follow_command, /follow s1 --until turn --cursor 20:123 --every 10m$/)
+  const ended = await callAs('codex-mcp-client', 'dsh_wait', { session_id: 's1' }, { follow: { ...report, state: 'goal_ended', ended_because: 'blocked', goal: { ...GOAL, phase: 'blocked', blocked_reason: { code: 'k', message: 'No API key' } } } })
+  assert.match(ended.result.hint, /The goal stopped \(blocked: No API key\), so following is over/)
+  assert.match(ended.result.hint, /needs the user/)
+  // Nothing due within one call: Codex calls again with the same cursor.
+  const quiet = await callAs('codex-mcp-client', 'dsh_wait', { session_id: 's1' }, { follow: { ...report, state: 'following', timed_out: true, rounds: [] } }, { DSH_BATON_WAIT_S: '1' })
+  assert.equal(quiet.result.timed_out, true)
+  assert.match(quiet.result.hint, /No report is due yet/)
+  // Neither run_id nor session_id.
+  const neither = await callAs('codex-mcp-client', 'dsh_wait', {}, {})
+  assert.equal(neither.isError, true)
+  assert.match(neither.result, /run_id is required \(or session_id/)
+  fs.rmSync(cwd, { recursive: true, force: true })
+})
+
+test('dsh_status takes a session id; an older plugin that only knows runs is named as too old', async () => {
+  const st = await callAs('codex-mcp-client', 'dsh_status', { session_id: 's1' }, { status: { session_id: 's1', busy: true, goal: GOAL } })
+  assert.equal(st.result.goal.rounds_started, 25)
+  assert.deepEqual(st.seen.find((r) => r.method === 'status').params, { session_id: 's1' })
+  const net = await import('node:net')
+  const { socketEndpoint } = await import('../host/lib/socket.js')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-o-'))
+  const sock = path.join(dir, 'h.sock')
+  const server = net.createServer((c) => c.on('data', (d) => {
+    const req = JSON.parse(String(d).split('\n')[0])
+    c.end(JSON.stringify(req.method === 'status' ? { id: req.id, error: 'Unknown run: undefined (only the latest 100 runs are kept)' } : { id: req.id, result: { name: 'dsh-baton-host', version: '0.6.4' } }) + '\n')
+  }))
+  await new Promise((r) => server.listen(socketEndpoint(sock), r))
+  const child = spawn(process.execPath, [SERVER], { env: { ...process.env, CODEX_HOME: dir, DSH_BATON_BACKEND: 'host', DSH_BATON_SOCKET: sock } })
+  let out = ''
+  child.stdout.on('data', (d) => { out += d })
+  child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'dsh_status', arguments: { session_id: 's1' } } }) + '\n')
+  await new Promise((resolve) => { const tick = setInterval(() => { if (out.includes('"id":1')) { clearInterval(tick); resolve() } }, 50) })
+  child.stdin.end(); server.close(); fs.rmSync(dir, { recursive: true, force: true })
+  const reply = out.split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((m) => m.id === 1).result
+  assert.equal(reply.isError, true)
+  assert.match(reply.content[0].text, /too old to look at a session by its id/)
 })

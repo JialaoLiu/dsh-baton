@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { editClaudeConfig, editCodexConfig } from '../src/setup.mjs'
-import { readCodexToolTimeout, addCodexToolTimeout } from '../src/register.mjs'
+import { readCodexToolTimeout, addCodexToolTimeout, addCodexCwd } from '../src/register.mjs'
 
 const entry = { command: 'C:\\Program Files\\nodejs\\node.exe', args: ['C:\\dev\\dsh-baton\\src\\server.mjs'] }
 
@@ -23,18 +23,18 @@ command = "x"
 [desktop]
 localeOverride = "zh-CN"
 `
-  const after = editCodexConfig(before, entry)
+  const after = editCodexConfig(before, entry, 'C:\\Users\\o')
   assert.doesNotMatch(after, /old|DSH_BATON_WAIT_S/)
   assert.match(after, /\[mcp_servers\.other\]\ncommand = "x"/)
   assert.match(after, /\[desktop\]\nlocaleOverride = "zh-CN"/)
-  assert.match(after, /\[mcp_servers\.dsh-baton\]\ncommand = 'C:\\Program Files\\nodejs\\node\.exe'\nargs = \['C:\\dev\\dsh-baton\\src\\server\.mjs'\]\ntool_timeout_sec = 1800\n$/, 'a tool_timeout_sec the user set is kept')
+  assert.match(after, /\[mcp_servers\.dsh-baton\]\ncommand = 'C:\\Program Files\\nodejs\\node\.exe'\nargs = \['C:\\dev\\dsh-baton\\src\\server\.mjs'\]\ncwd = 'C:\\Users\\o'\ntool_timeout_sec = 1800\n$/, 'a tool_timeout_sec the user set is kept')
   assert.match(editCodexConfig('model = "x"\n', entry), /\ntool_timeout_sec = 3600\n$/, 'else an hour')
-  assert.equal(editCodexConfig(after, entry), after, 'running setup twice changes nothing')
+  assert.equal(editCodexConfig(after, entry, 'C:\\Users\\o'), after, 'running setup twice changes nothing')
   assert.equal(editCodexConfig(after, null).includes('dsh-baton'), false)
 })
 
 test('Codex: an empty or missing config gets just the table; quotes fall back to basic strings', () => {
-  assert.equal(editCodexConfig('', { command: '/n', args: ['/s'] }), "[mcp_servers.dsh-baton]\ncommand = '/n'\nargs = ['/s']\ntool_timeout_sec = 3600\n")
+  assert.equal(editCodexConfig('', { command: '/n', args: ['/s'] }, '/home/o'), "[mcp_servers.dsh-baton]\ncommand = '/n'\nargs = ['/s']\ncwd = '/home/o'\ntool_timeout_sec = 3600\n")
   assert.match(editCodexConfig('', { command: "/it's/node", args: [] }), /command = "\/it's\/node"/)
 })
 
@@ -49,6 +49,27 @@ test('Codex tool timeout: read from our table only; added to an older table, a v
   assert.equal(addCodexToolTimeout(own), own)
   assert.equal(readCodexToolTimeout(own), 900)
   assert.equal(addCodexToolTimeout('model = "x"\n'), 'model = "x"\n', 'no dsh-baton table: unchanged')
+})
+
+test('Codex cwd: the server starts in the home folder, not the conversation\'s (gone when its drive is out)', () => {
+  assert.match(editCodexConfig('', { command: 'npx', args: ['-y', 'dsh-baton-mcp'] }, '/home/o'), /\ncwd = '\/home\/o'\n/, 'npx too: it fails the same way')
+  assert.match(editCodexConfig('', entry, "C:\\Users\\o'neil"), /\ncwd = "C:\\\\Users\\\\o'neil"\n/, 'a quote in the path: a basic string')
+  // A table written before 0.6.5 gets it right under its header; a cwd already there (the user's own) is kept.
+  const old = `[mcp_servers.dsh-baton]\ncommand = '/n'\nargs = ['/a/src/server.mjs']\ntool_timeout_sec = 3600\n\n[mcp_servers.dsh-baton.env]\nX = '1'\n`
+  const added = addCodexCwd(old, '/home/o')
+  assert.equal(added, old.replace('[mcp_servers.dsh-baton]\n', "[mcp_servers.dsh-baton]\ncwd = '/home/o'\n"))
+  assert.equal(addCodexCwd(added, '/home/o'), added, 'adding twice changes nothing')
+  const own = old.replace('tool_timeout_sec', "cwd = '/mine'\ntool_timeout_sec")
+  assert.equal(addCodexCwd(own, '/home/o'), own)
+  assert.equal(addCodexCwd('model = "x"\n', '/home/o'), 'model = "x"\n', 'no dsh-baton table: unchanged')
+  // args over several lines, or none at all (a bare command): still valid TOML, cwd still added.
+  const multi = `[mcp_servers.dsh-baton]\ncommand = "npx"\nargs = [\n  "-y",\n  "dsh-baton-mcp"\n]\n`
+  assert.equal(addCodexCwd(multi, '/home/o'), multi.replace('[mcp_servers.dsh-baton]\n', "[mcp_servers.dsh-baton]\ncwd = '/home/o'\n"))
+  const bare = `[mcp_servers.dsh-baton]\ncommand = 'dsh-baton-mcp'\n\n[other]\nx = 1\n`
+  assert.equal(addCodexCwd(bare, '/home/o'), bare.replace('[mcp_servers.dsh-baton]\n', "[mcp_servers.dsh-baton]\ncwd = '/home/o'\n"))
+  // setup rewrites the whole table: a cwd the user set survives that too.
+  assert.match(editCodexConfig(own, entry, '/home/o'), /\ncwd = '\/mine'\ntool_timeout_sec = 3600\n/)
+  assert.doesNotMatch(editCodexConfig(own, entry, '/home/o'), /home\/o/)
 })
 
 test('Claude Code: sets and removes the user-scope entry, keeps other keys', () => {

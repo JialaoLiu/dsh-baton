@@ -2,8 +2,8 @@
 // instead of in a folder the model guessed (an old workspace from dsh_list_workspaces, or
 // ~/.codex). Codex sends its thread id with every tool call; that thread's rollout file starts
 // with a session_meta line that records the thread's cwd. The MCP server's own folder is not
-// enough there: the Codex app starts it in one folder for all of its projects. Other clients
-// (Claude Code) start the server in the project folder.
+// enough there: dsh-baton registers it to start in the home folder (register.mjs), which is
+// never taken for a project. Other clients (Claude Code) start the server in the project folder.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -45,7 +45,7 @@ function serverCwd() {
   const home = os.homedir()
   const real = (p) => { try { return fs.realpathSync(p) } catch { return p } }
   const inside = (dir) => { const r = path.relative(real(dir), real(cwd)); return r === '' || (!r.startsWith('..') && !path.isAbsolute(r)) }
-  if (cwd === home || cwd === path.parse(cwd).root) return undefined
+  if (norm(real(cwd)) === norm(real(home)) || cwd === path.parse(cwd).root) return undefined
   if (inside(codexHome()) || inside(path.join(home, '.claude'))) return undefined
   return cwd
 }

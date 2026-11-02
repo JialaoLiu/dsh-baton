@@ -56,6 +56,24 @@ function start(root, env = {}) {
 const texts = (reply) => reply.result.content.map((c) => c.text)
 const names = (reply) => reply.result.tools.map((t) => t.name)
 
+test('a server started after an update still knows which client started the shell', async () => {
+  const { dir, root } = app()
+  const s = start(root)
+  try {
+    await s.call('initialize', { protocolVersion: '2025-06-18', clientInfo: { name: 'codex-mcp-client' } })
+    const file = path.join(root, 'src', 'mcp.mjs')
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('const TOOLS = [', "const TOOLS = [\n  { name: 'dsh_probe', description: 'probe', inputSchema: { type: 'object', properties: {} }, run: () => ({ client: process.env.DSH_BATON_CLIENT_PID ?? null, pid: process.pid }) },"))
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ ...pkg, version: '9.9.9' }, null, 2))
+    const probe = JSON.parse(texts(await s.tool('dsh_probe'))[0])
+    assert.equal(probe.client, String(process.pid), 'the shell\'s parent (this test), not the new child\'s')
+    assert.notEqual(probe.pid, s.proc.pid)
+  } finally {
+    await s.stop()
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('a newer install is used from the next call on, with list_changed and a note', async () => {
   const { dir, root } = app()
   const s = start(root)

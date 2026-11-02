@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import * as evidence from '../src/evidence.mjs'
 
 test('changes since dsh_send and check results are reported, once', () => {
@@ -83,5 +84,73 @@ test('runs in the same folder at the same time are named in each other\'s eviden
     assert.deepEqual(evidence.collect(home, 'hrun-e').same_folder_runs, ['hrun-long'])
   } finally {
     for (const d of [home, cwd, other]) fs.rmSync(d, { recursive: true, force: true })
+  }
+})
+
+test('a folder with thousands of reference files still shows the files the run changed', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-ev-home-'))
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-ev-cwd-'))
+  try {
+    // Read-only material that sorts before the work folder (a 3000-file cap once filled up on it).
+    const ref = path.join(cwd, 'a-handoff')
+    fs.mkdirSync(ref)
+    for (let i = 0; i < 3200; i++) fs.writeFileSync(path.join(ref, `f${i}.txt`), `${i}\n`)
+    fs.mkdirSync(path.join(cwd, 'work'))
+    fs.writeFileSync(path.join(cwd, 'work', 'app.js'), 'a\nb\n')
+    fs.writeFileSync(path.join(cwd, 'work', 'same.js'), 'x\n')
+    evidence.prepare(home, { run_id: 'hrun-big', cwd })
+    fs.writeFileSync(path.join(cwd, 'work', 'app.js'), 'a\nb\nc\n')
+    fs.writeFileSync(path.join(cwd, 'work', 'new.js'), 'n\n')
+    // Rewritten with the same content: not a change.
+    const later = new Date(Date.now() + 5000)
+    fs.writeFileSync(path.join(cwd, 'work', 'same.js'), 'x\n')
+    fs.utimesSync(path.join(cwd, 'work', 'same.js'), later, later)
+    const ev = evidence.collect(home, 'hrun-big')
+    assert.deepEqual(ev.changes.modified, [{ path: 'work/app.js', lines_before: 2, lines_after: 3 }])
+    assert.deepEqual(ev.changes.created, [{ path: 'work/new.js', lines: 1 }])
+    assert.equal(ev.changes.truncated, undefined)
+  } finally {
+    for (const d of [home, cwd]) fs.rmSync(d, { recursive: true, force: true })
+  }
+})
+
+test('a record written before 0.6.5 (hashes only) is still compared by content', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-ev-home-'))
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-ev-cwd-'))
+  try {
+    fs.writeFileSync(path.join(cwd, 'kept.txt'), 'k\n')
+    fs.writeFileSync(path.join(cwd, 'edited.txt'), 'e\n')
+    fs.mkdirSync(path.join(home, 'evidence'))
+    const sha = (t) => crypto.createHash('sha1').update(t).digest('hex')
+    fs.writeFileSync(path.join(home, 'evidence', 'hrun-old.json'), JSON.stringify({ cwd, checks: [], at: Date.now(), before: { files: { 'kept.txt': { hash: sha('k\n'), lines: 1 }, 'edited.txt': { hash: sha('old\n'), lines: 1 } }, truncated: false } }))
+    const ev = evidence.collect(home, 'hrun-old')
+    assert.deepEqual(ev.changes.modified, [{ path: 'edited.txt', lines_before: 1, lines_after: 1 }])
+    assert.deepEqual(ev.changes.created, [])
+  } finally {
+    for (const d of [home, cwd]) fs.rmSync(d, { recursive: true, force: true })
+  }
+})
+
+test('files changed since a time, for a follow report: counted per folder, progress notes first', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-ev-cwd-'))
+  try {
+    fs.mkdirSync(path.join(cwd, 'src'))
+    fs.mkdirSync(path.join(cwd, 'docs'))
+    fs.writeFileSync(path.join(cwd, 'old.txt'), 'o\n')
+    const old = new Date(Date.now() - 60_000)
+    fs.utimesSync(path.join(cwd, 'old.txt'), old, old)
+    const since = Date.now() - 1000
+    for (const n of ['a.js', 'b.js', 'c.js']) fs.writeFileSync(path.join(cwd, 'src', n), 'x\n')
+    fs.writeFileSync(path.join(cwd, 'docs', 'MASTER-CHECKLIST.md'), '- [x] paging\n')
+    fs.mkdirSync(path.join(cwd, 'node_modules'))
+    fs.writeFileSync(path.join(cwd, 'node_modules', 'dep.js'), 'x\n')
+    const c = evidence.changedSince(cwd, since)
+    assert.equal(c.count, 4)
+    assert.deepEqual(c.folders, [{ folder: 'src', count: 3 }, { folder: 'docs', count: 1 }])
+    assert.equal(c.files[0], 'docs/MASTER-CHECKLIST.md')
+    assert.equal(c.files.length, 4)
+    assert.equal(evidence.changedSince(path.join(cwd, 'gone'), since), null)
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true })
   }
 })
