@@ -83,7 +83,8 @@ test('a cancelled dsh_wait stops asking the plugin and sends no reply; other cal
   try {
     await s.reply(1)
     s.send({ id: 3, method: 'tools/call', params: { name: 'dsh_wait', arguments: { run_id: 'hrun-1' } } })
-    for (const end = Date.now() + 5000; waits < 2 && Date.now() < end;) await new Promise((r) => setTimeout(r, 50))
+    // On Windows the first wait first looks up the Codex process in PowerShell, which a cold runner can take seconds over.
+    for (const end = Date.now() + 30000; waits < 2 && Date.now() < end;) await new Promise((r) => setTimeout(r, 50))
     assert.ok(waits >= 2, 'the wait is asking the plugin')
     s.send({ method: 'notifications/cancelled', params: { requestId: 3, reason: 'user stopped' } })
     await new Promise((r) => setTimeout(r, 1500))
@@ -94,7 +95,8 @@ test('a cancelled dsh_wait stops asking the plugin and sends no reply; other cal
     assert.ok(await s.reply(4), 'the server still answers')
     assert.equal(s.replies.has(3), false, 'no reply to the cancelled call')
   } finally {
-    await s.stop()
+    // A failed assertion leaves the wait running, and the server would hold on until it ends.
+    await s.kill()
     server.close()
     rm(dir)
   }
