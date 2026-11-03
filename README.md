@@ -59,10 +59,6 @@ That is all. To hand a task over, end the request with "hand it to DeepSeek Harn
 
 ## See it run
 
-*Claude Code and Codex each hand DeepSeek Harness a task, and its subagents build this rainy-night street in 1 h 41 min. 40 s, sound on.*
-
-https://github.com/user-attachments/assets/72e2fdff-275e-48bc-8e5a-39ffb025a0a8
-
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/flow-dark.gif"><img src="./assets/readme/en/flow.gif" width="100%" alt="Typical flow: create a workspace, send the task, wait without polling (Claude Code is woken once, Codex waits up to 59 minutes in one dsh_wait call), follow up in the same session"></picture>
 </p>

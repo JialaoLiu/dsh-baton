@@ -59,10 +59,6 @@ dsh-baton 是一个 MCP 服务器加一个 Harness 小插件。主 Agent 用一�
 
 ## 看它跑
 
-*Claude Code 和 Codex 各派一个任务给 DeepSeek Harness，它的子代理用 1 小时 41 分搭出了这条雨夜街道。40 秒，建议开声音。*
-
-https://github.com/user-attachments/assets/ed931637-acb3-4c16-8c52-72298ea90485
-
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/zh/flow-dark.gif"><img src="./assets/readme/zh/flow.gif" width="100%" alt="典型流程：新建工作区、派发任务、不轮询地等待（Claude Code 结束时被唤醒一次，Codex 一次 dsh_wait 最多等 59 分钟）、在同一个对话里续接追问"></picture>
 </p>
