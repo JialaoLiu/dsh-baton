@@ -523,7 +523,7 @@ export function apply(ctx) {
     const ids = new Set(pending.map((m) => m?.source?.rpcId))
     const gone = waiting.filter((r) => !ids.has(r.requestId))
     if (!gone.length) return []
-    const log = await controller.inspect(sessionId, signal()).catch(() => null)
+    const log = await sessionLog(sessionId).catch(() => null)
     if (!Array.isArray(log?.events)) return []
     const delivered = new Set(log.events.filter((e) => e.type === 'user/message').map((e) => e.data?.source?.rpcId))
     return gone.filter((r) => !delivered.has(r.requestId) && !r.sawPrompt)
@@ -739,8 +739,32 @@ export function apply(ctx) {
     return out
   }
 
+  // A session's whole event log and its folder. Harness up to 0.2.1 has sessionController.inspect;
+  // 0.2.2 replaced it with paged history (events): the newest page first, beforeSeq walks back,
+  // throughSeq pins every page to the same cut. The folder then comes from the session list.
+  async function sessionLog(sessionId) {
+    if (typeof controller.inspect === 'function') return controller.inspect(sessionId, signal())
+    if (typeof controller.events !== 'function') throw new Error('This DeepSeek Harness version cannot read a session log.')
+    const address = { kind: 'session', sessionId }
+    const pages = []
+    let throughSeq
+    let beforeSeq
+    for (;;) {
+      const page = await controller.events({ address, maxMessages: 500, ...(throughSeq === undefined ? {} : { throughSeq }), ...(beforeSeq === undefined ? {} : { beforeSeq }) }, signal())
+      throughSeq ??= page.cursor
+      const events = (page.records ?? []).filter((r) => r?.type === 'event' && r.event).map((r) => r.event)
+      pages.unshift(events)
+      if (!page.hasMore || !events.length || events[0].seq === beforeSeq) break
+      beforeSeq = events[0].seq
+    }
+    const seen = new Set()
+    const events = pages.flat().filter((e) => (seen.has(e.seq) ? false : (seen.add(e.seq), true)))
+    const { items } = await controller.list({}, signal())
+    return { meta: { cwd: items.find((it) => it.sessionId === sessionId)?.cwd ?? null }, events }
+  }
+
   async function readSession({ session_id, last = 10 }) {
-    const { meta, events } = await controller.inspect(session_id, signal())
+    const { meta, events } = await sessionLog(session_id)
     const messages = []
     let title = null
     for (const e of events) {
@@ -900,7 +924,7 @@ export function apply(ctx) {
       // the events so far, to tell whether one came during the read.
       followedUntil.set(session_id, Date.now() + 60_000)
       const gen = eventGen.get(session_id) ?? 0
-      const [goal, log] = await Promise.all([goalOf(session_id), controller.inspect(session_id, signal())])
+      const [goal, log] = await Promise.all([goalOf(session_id), sessionLog(session_id)])
       const { ended, running, runningSince } = turnsOf(log?.events)
       // A first call counts from the start of the round under way, so what it already wrote is
       // reported; one that comes after the goal stopped, from the start of the last round.
@@ -989,7 +1013,7 @@ export function apply(ctx) {
   // A session at a glance, for a client that holds only its id: what it is doing, its goal
   // and the reply of its last turn.
   async function sessionStatus({ session_id }) {
-    const [act, goal, log] = await Promise.all([activity({ session_id }), goalOf(session_id), controller.inspect(session_id, signal()).catch(() => null)])
+    const [act, goal, log] = await Promise.all([activity({ session_id }), goalOf(session_id), sessionLog(session_id).catch(() => null)])
     const { ended, running } = turnsOf(log?.events)
     const question = questions.get(session_id)
     return {

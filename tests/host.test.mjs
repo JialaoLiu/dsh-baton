@@ -59,8 +59,22 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
       stopSessionActivity: async (sessionId) => { calls.stop.push(sessionId); if (queue) pending(sessionId)['next-turn'] = [] },
     },
     sessionController: {
-      list: async () => ({ items: sessions }),
-      inspect: async (id) => ({ meta: { cwd: '/w' }, events: log?.[id] ?? [] }),
+      // DSHB_TEST_PAGED=1 stands in for Harness 0.2.2: no inspect, only paged history (two events
+      // a page, so every log is read back across several pages) and the folder in the list.
+      ...(process.env.DSHB_TEST_PAGED === '1' ? {
+        // Harness lists every visible session; here that is the given rows plus the logged ones.
+        list: async () => ({ items: [...sessions.map((s) => ({ cwd: '/w', ...s })), ...Object.keys(log ?? {}).filter((id) => !sessions.some((s) => s.sessionId === id)).map((sessionId) => ({ sessionId, cwd: '/w' }))] }),
+        events: async ({ address, throughSeq, beforeSeq }) => {
+          const all = (log?.[address.sessionId] ?? []).map((e, i) => ({ seq: i, ...e }))
+          const cut = throughSeq ?? all.length - 1
+          const upto = all.filter((e) => e.seq <= cut && (beforeSeq === undefined || e.seq < beforeSeq))
+          const page = upto.slice(-2)
+          return { cursor: cut, records: page.map((event) => ({ type: 'event', event })), hasMore: upto.length > page.length }
+        },
+      } : {
+        list: async () => ({ items: sessions }),
+        inspect: async (id) => ({ meta: { cwd: '/w' }, events: log?.[id] ?? [] }),
+      }),
       create: async (r) => { calls.create.push(r); return { sessionId: `new-${calls.create.length}` } },
       prompt: async (r) => {
         calls.prompt.push(r)
