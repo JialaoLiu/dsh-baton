@@ -152,11 +152,12 @@ window.__ModuleLoader__.load({
       }
     }
 
-    function senderOf(node) {
-      const rpcId = node?.data?.source?.rpcId
+    function senderFrom(source) {
+      const rpcId = source?.rpcId
       const m = typeof rpcId === 'string' ? RPC_RE.exec(rpcId) : null
       return m ? m[1] : null
     }
+    const senderOf = (node) => senderFrom(node?.data?.source)
     const nameOf = (sender) => NAMES[sender] ?? sender.charAt(0).toUpperCase() + sender.slice(1)
 
     // Sender marks, drawn in the label's text colour like ChatGPT's own "sent from another chat" line.
@@ -198,13 +199,27 @@ window.__ModuleLoader__.load({
       function DshBatonUserMessage(props) {
         const Inner = shipped(ctx, key, DshBatonUserMessage)
         if (!Inner) return null
+        // Harness 0.2.2 hands each renderer the chain renderer of its own registration; a wrapper
+        // has none to pass on, so the shipped renderer gets one that draws nothing.
+        const inner = h(Inner, props.renderSlotChain ? props : { ...props, renderSlotChain: () => null })
         const sender = senderOf(props.node)
-        if (!sender) return h(Inner, props)
+        if (!sender) return inner
         return h('div', { style: { display: 'flex', flexDirection: 'column' } },
           h(Label, { sender, text: t('sentFrom', { name: nameOf(sender) }) }),
-          h(Inner, props))
+          inner)
       }
       return DshBatonUserMessage
+    }
+
+    // Harness 0.2.2 and later: the chat declares a seat above each user message (BEFORE) and
+    // hands it the message's source, so the label sits there and the user renderer is left alone.
+    // Steering messages do not get that seat, so they keep the wrapper.
+    const BEFORE = 'conversation.chat.user.before'
+    const seatsBefore = (e) => e?.options?.key === 'user' && !!(e.children?.[BEFORE] ?? e.options?.children?.[BEFORE])
+    function beforeLabel(t) {
+      return function DshBatonSender({ matched }) {
+        return h(Label, { sender: matched, text: t('sentFrom', { name: nameOf(matched) }) })
+      }
     }
 
     module.exports.name = 'dsh-baton-host'
@@ -213,9 +228,15 @@ window.__ModuleLoader__.load({
       ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-baton: dictionaries')
       const t = ctx.locale.bind(NS)
       ctx.slots.inject(SLOT, function* () {
+        const seated = ctx.slots.entries(SLOT).some(seatsBefore)
         // locale 'chat': the shipped renderer reads its strings through the `t` it is handed.
-        for (const key of KEYS) yield ctx.slots.register({ name: SLOT, key, priority: PRIORITY, locale: 'chat' }, wrapperFor(ctx, key, t))
+        for (const key of KEYS) {
+          if (key === 'user' && seated) continue
+          yield ctx.slots.register({ name: SLOT, key, priority: PRIORITY, locale: 'chat' }, wrapperFor(ctx, key, t))
+        }
       })
+      // Runs only in a Harness that declares the seat; older ones never declare it.
+      ctx.slots.inject(BEFORE, () => ctx.slots.register({ name: BEFORE, select: ({ source }) => senderFrom(source) }, beforeLabel(t)))
       ctx.slots.inject('plugins.bundle.activation', () => ctx.slots.register({ name: 'plugins.bundle.activation', key: PACKAGE, locale: NS }, wrapActivation(t)))
       ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({ name: 'plugins.bundle.config', key: PACKAGE, locale: NS }, wrapDetails(t)))
     }
