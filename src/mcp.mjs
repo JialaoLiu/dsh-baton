@@ -97,12 +97,18 @@ const followCommand = (sid, until = 'goal', cursor, everyMin) => (/^[\w.-]+$/.te
 // A run in a session with a Harness goal is waited for until the goal stops.
 const GOAL_WAIT_HINT = (how) => `In a session with a Harness goal (a message starting with /goal sets one) the wait goes on until the goal stops; add ${how} only when the user asked for progress reports.`
 const FOLLOW_COMMAND_HINT = ' Your client wakes you when a background command exits, so run follow_command that way instead of calling dsh_wait with session_id: it ends at the next report, with no polling.'
+// Several runs in parallel: one dsh_wait for all of them, so whichever ends first is dealt with
+// first. Waiting on one run at a time left a run that ended meanwhile unseen until the other
+// wait returned (measured 2026-11-08: a result read 3 minutes late, its rework sent late).
+const PARALLEL_HINT = 'If you are sending several parts in parallel, send them all first, then wait for them together: one dsh_wait with run_ids set to all their run_ids, never one run after another.'
 
 // Wait in short chunks, reporting progress between them (clients that support it can
 // show it or reset their timer). An unfinished wait returns only the state, not the run's
 // recent events, so the client has nothing to summarise and simply waits again.
 // A call the client cancelled (the user stopped the turn) stops at the next chunk.
 async function waitInChunks({ run_id }, progress, signal, meta) {
+  // An answer a multi-run wait got after it had returned (a question is reported only once).
+  if (late.has(run_id)) return core.waitResult(takeLate(run_id))
   if (isCodex()) await lookUpCodexStart()
   const total = waitSeconds(meta ?? null)
   const started = Date.now()
@@ -125,6 +131,81 @@ async function waitInChunks({ run_id }, progress, signal, meta) {
       }
     }
     progress?.(Math.round((Date.now() - started) / 1000), `run ${run_id} is ${st.state}`)
+  }
+}
+
+// Several runs (dsh_wait run_ids): returns as soon as any of them ends or stops to ask a person,
+// with every one that has by then and the ones still running. Each round asks about all of them
+// together for a short chunk, so an ending is seen within MULTI_CHUNK_S. Every answer is kept:
+// a wait that sees a question marks it as seen, so dropping one would lose the question.
+const MULTI_CHUNK_S = 5
+// Runs that end within this of the first come back with it.
+const TOGETHER_MS = 200
+const isDone = (st) => !!st.needs_input || !st.timed_out
+// A chunk's wait for another run can answer after the multi-run wait has returned. The host
+// reports a question only once, so such an answer is kept here and given to the next wait.
+const late = new Map()
+const takeLate = (run_id) => { const st = late.get(run_id); late.delete(run_id); return st }
+async function waitAnyInChunks(run_ids, progress, signal, meta) {
+  if (isCodex()) await lookUpCodexStart()
+  const total = waitSeconds(meta ?? null)
+  const started = Date.now()
+  const deadline = started + total * 1000
+  for (;;) {
+    if (signal?.aborted) return { run_ids, cancelled: true }
+    const left = Math.ceil((deadline - Date.now()) / 1000)
+    const t0 = Date.now()
+    const timeout_s = Math.max(1, Math.min(MULTI_CHUNK_S, left))
+    const answers = new Map()
+    const asks = run_ids.map((run_id) => (late.has(run_id)
+      ? Promise.resolve(takeLate(run_id))
+      : core.api.wait({ run_id, timeout_s }).then((st) => ({ run_id, ...st }), (error) => ({ run_id, state: 'unknown', error: error?.message ?? String(error) })))
+      .then((st) => { answers.set(run_id, st); return st }))
+    // On until one is done or every one has answered, then a moment for any ending with it.
+    await new Promise((resolve) => {
+      let n = 0
+      for (const ask of asks) ask.then((st) => { n += 1; if (isDone(st) || n === asks.length) resolve() })
+    })
+    if (answers.size < asks.length) await new Promise((r) => setTimeout(r, TOGETHER_MS))
+    const done = [...answers.values()].filter(isDone)
+    if (done.length) {
+      run_ids.forEach((run_id, i) => {
+        if (!answers.has(run_id)) asks[i].then((st) => { if (isDone(st)) late.set(run_id, st) })
+      })
+      const running = run_ids.filter((run_id) => !done.some((st) => st.run_id === run_id)).map((run_id) => {
+        const st = answers.get(run_id) ?? { run_id, state: 'running' }
+        return { run_id, state: st.state, ...(st.session_id ? { session_id: st.session_id } : {}) }
+      })
+      return { done, running }
+    }
+    const running = [...answers.values()].map((st) => ({ run_id: st.run_id, state: st.state, ...(st.session_id ? { session_id: st.session_id } : {}) }))
+    if (Date.now() - t0 < 500) await new Promise((r) => setTimeout(r, 500))
+    if (Date.now() >= deadline) {
+      const asking = running.filter((r) => r.state === 'waiting').map((r) => r.run_id)
+      return {
+        run_ids, timed_out: true, still_running: running,
+        hint: `None of these runs has ended yet. Call dsh_wait again with the same run_ids, with no progress check or progress note in between (work the user asked you to do meanwhile is fine).${asking.length ? ` ${asking.join(', ')} still wait${asking.length === 1 ? 's' : ''} for a person (see dsh_status for the question): answer with dsh_answer if you may, or tell the user.` : ''}`,
+      }
+    }
+    progress?.(Math.round((Date.now() - started) / 1000), `${running.length} runs still going`)
+  }
+}
+// The result of a multi-run wait: each ended run as dsh_wait returns it for one run, then what next.
+function anyResult({ done, running }) {
+  const ended = done.map((st) => {
+    const res = st.state === 'unknown' ? { ...st, hint: 'This run_id is not known here (only the latest 100 runs are kept); leave it out of the next dsh_wait.' } : core.waitResult(st)
+    if (res.state !== 'unknown') delivered(st.run_id, res)
+    return core.goalGoesOn(res)
+      ? { ...res, hint: `${res.hint} Its Harness goal goes on after this round: once the other runs are dealt with, follow it on its own with dsh_wait session_id ${res.session_id}.` }
+      : res
+  })
+  const ids = running.map((r) => r.run_id)
+  const next = ids.length
+    ? `Then call dsh_wait again with run_ids: the ones still running (${ids.join(', ')}) plus the run_id of every fix you sent, so whichever ends next comes back first. Do not wait for one run on its own while others are going.`
+    : 'None of these runs is still going.'
+  return {
+    ended, still_running: running,
+    hint: `${ended.length} of the runs ${ended.length === 1 ? 'has' : 'have'} ended or stopped to ask (ended; each has its own hint). Deal with ${ended.length === 1 ? 'it' : 'them'} now: review against what you asked, and send any fixes with dsh_send to the same session_id right away, or answer a question. ${next}`,
   }
 }
 
@@ -197,7 +278,7 @@ const TOOLS = [
   {
     name: 'dsh_send',
     annotations: annotations('Send message', hints(false, false, false)),
-    description: 'Hand a task to DeepSeek Harness, or continue a session: returns at once with a run_id and a hint saying how to wait for the reply; follow it. Call it directly, no need to list anything first. A new session starts in the folder this conversation works in, or in cwd or workspace_id (a new cwd is registered first); session_id continues that session. message arrives verbatim as a user message, and Harness does not see this conversation: make it self-contained, in the user\'s language, the full, explicit spec, asking for tests that cover each requirement. Keep a leading /goal (it sets a Harness goal) and the user\'s goal text as written. For a large task, write a concrete spec (goal, modules and the files each owns, level of detail, acceptance criteria) rather than passing the user\'s words on, and send independent parts to separate sessions in parallel, each owning its own files; review once all are back, then send specific fixes. With checks, a short request for a sub-agent review table is appended. To a busy session, mode followup queues the message and steer adds it to the running turn; left out, the Harness setting decides.',
+    description: 'Hand a task to DeepSeek Harness, or continue a session: returns at once with a run_id and a hint saying how to wait for the reply; follow it. Call it directly, no need to list anything first. A new session starts in the folder this conversation works in, or in cwd or workspace_id (a new cwd is registered first); session_id continues that session. message arrives verbatim as a user message, and Harness does not see this conversation: make it self-contained, in the user\'s language, the full, explicit spec, asking for tests that cover each requirement. Keep a leading /goal (it sets a Harness goal) and the user\'s goal text as written. For a large task, write a concrete spec (goal, modules and the files each owns, level of detail, acceptance criteria) rather than passing the user\'s words on, and send independent parts to separate sessions in parallel, each owning its own files; wait for them together (dsh_wait run_ids), review each as it returns and send its fixes at once. With checks, a short request for a sub-agent review table is appended. To a busy session, mode followup queues the message and steer adds it to the running turn; left out, the Harness setting decides.',
     inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session; leave out to use the folder this conversation works in'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: "followup queues after the current turn; steer injects into a running turn. Omit to follow Harness's busy-send setting" }, model: str('Only when the user names a model for this run (e.g. "DeepSeek-V4 Pro", "v4-pro"); leave out otherwise and the session uses its own model, or Harness\'s default model for a new session. Matched against Harness\'s model list ignoring case, spaces, hyphens and a leading DeepSeek; a name that matches no model or several fails the send with the list (provider/model picks one). Sets this session only; Harness\'s default model is left as it was'), reasoning_effort: str('Only when the user names a reasoning effort, e.g. high; one of the efforts dsh_list_models shows for the model'), checks: { type: 'array', items: { type: 'string' }, description: 'The project\'s own test commands, e.g. npm test, or python -m pytest (a bare pytest is often not on PATH, on Windows especially); never check scripts you write yourself. dsh-baton runs them in the folder when the run ends and returns exit codes and the last output lines as evidence.' } } },
     run: async (a, { meta } = {}) => {
       // A new session goes to this conversation's folder unless the call names another one;
@@ -216,36 +297,43 @@ const TOOLS = [
       // Codex has no wake-on-exit for shell commands: offered wait_command, it runs it in a
       // terminal and polls that, so it gets dsh_wait only.
       if (isCodex()) {
-        return { ...st, hint: `Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${GOAL_WAIT_HINT('until turn and every_minutes')} ${NO_POLL} ${codeModeYield()}` }
+        return { ...st, hint: `Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${PARALLEL_HINT} ${GOAL_WAIT_HINT('until turn and every_minutes')} ${NO_POLL} ${codeModeYield()}` }
       }
       return {
         ...st,
         wait_command: waitCommand(st.run_id),
-        hint: `Run started. If you can run a shell command in the background and are woken when it exits (Claude Code: Bash with run_in_background), run wait_command that way: it ends when the run ends, or stops to ask the user something, and prints the reply or the questions, with no polling. Otherwise call dsh_wait with this run_id. ${GOAL_WAIT_HINT('--until turn --every 10m on wait_command')}`,
+        hint: `Run started. If you can run a shell command in the background and are woken when it exits (Claude Code: Bash with run_in_background), run wait_command that way: it ends when the run ends, or stops to ask the user something, and prints the reply or the questions, with no polling (several runs: one background wait_command each, so whichever ends first wakes you). Otherwise call dsh_wait with this run_id (several runs: one dsh_wait with run_ids). ${GOAL_WAIT_HINT('--until turn --every 10m on wait_command')}`,
       }
     },
   },
   {
     name: 'dsh_status',
     annotations: annotations('Run status'),
-    description: 'Look once at a run or a session without waiting. A run (run_id): state (queued/running/waiting/completed/failed/cancelled/interrupted), recent events, final reply, waiting_on (sub-agents or jobs still working) and human_interjections. A session (session_id): busy, activity, its Harness goal (phase, rounds, whether Harness goes on with it), needs_input, and its last turn\'s reply. Never a way to wait: use dsh_wait.',
+    description: 'Look once at a run or a session without waiting. A run (run_id): state, recent events, final reply, waiting_on (sub-agents or jobs still working) and human_interjections. A session (session_id): busy, activity, its Harness goal (phase, rounds, whether Harness goes on with it), needs_input, and its last turn\'s reply. Never a way to wait: use dsh_wait.',
     inputSchema: { type: 'object', properties: { run_id: str('Run id from dsh_send'), session_id: str('Session id, when you have no run_id (for example to look at a session whose goal you follow)'), tail: int('How many recent events of a run', 5) } },
     run: async (a) => clip(await core.api.status({ tail: 5, ...a })),
   },
   {
     name: 'dsh_wait',
     annotations: annotations('Wait for run'),
-    description: () => `Wait for a run sent with dsh_send to end and return its state and final reply.${!isCodex() ? ' Prefer the background wait_command from dsh_send if your client wakes you when a background command exits: it costs no turns.' : ''} It also returns at once when the run stops to ask a person: needs_input answer (question and relay; reply with dsh_answer) or harness-ui (an approval only a person can give in Harness). Each call waits up to ${waitSeconds()} s${isCodex() && waitSeconds() > 270 ? ' (270 s in a conversation that was already open when dsh-baton set Codex\'s tool timeout)' : ''}; if it returns timed_out: true, call dsh_wait again with the same run_id, without a progress note. A run in a session with a Harness goal is followed on until the goal stops, with every round since the run began. With session_id instead of run_id it follows that session's Harness goal without sending anything: until "goal" (default) returns once when the goal stops, until "turn" at the end of a round once every_minutes have passed since the last report; it also returns when Harness needs a person or will not go on by itself. Pass back the cursor each result gives.${isCodex() ? ` ${NO_POLL} ${codeModeYield()}` : ''}`,
+    description: () => `Wait for a run sent with dsh_send to end and return its state and final reply.${!isCodex() ? ' Prefer the background wait_command from dsh_send if your client wakes you when a background command exits: it costs no turns.' : ''} It also returns at once when the run stops to ask a person: needs_input answer (reply with dsh_answer) or harness-ui (an approval in the Harness window). Each call waits up to ${waitSeconds()} s${isCodex() && waitSeconds() > 270 ? ' (270 s in a conversation that was already open when dsh-baton set Codex\'s tool timeout)' : ''}; if it returns timed_out: true, call dsh_wait again with the same run_id, without a progress note. Parallel runs: all ids in run_ids, never one by one; returns once any ends or asks (ended; the rest in still_running); then wait again with the rest plus your fixes. A run in a session with a Harness goal is followed on until the goal stops, with every round since the run began. With session_id instead of run_id it follows that session's Harness goal (see until) without sending anything; it also returns when Harness needs a person or will not go on by itself. Pass back the cursor each result gives.${isCodex() ? ` ${NO_POLL} ${codeModeYield()}` : ''}`,
     inputSchema: {
       type: 'object', properties: {
         run_id: str('Run id from dsh_send'),
+        run_ids: { type: 'array', items: { type: 'string' }, description: 'Several run ids, to wait for whichever ends first' },
         session_id: str('Follow this session\'s Harness goal instead of waiting for a run (no message is sent)'),
         until: { type: 'string', enum: ['goal', 'turn'], description: 'Harness goal: goal (default) reports once when it stops; turn (only if the user asked for progress reports) at a round end once every_minutes passed since the last report, with every round since' },
-        cursor: str('The cursor from the previous result, so nothing is reported twice or missed (also when switching until)'),
+        cursor: str('The cursor from the previous result (nothing is reported twice or missed)'),
         every_minutes: int('With until turn: least minutes between reports', 10),
       },
     },
     run: async (a, { progress, signal, meta }) => {
+      const ids = [...new Set([...(Array.isArray(a.run_ids) ? a.run_ids : []), ...(a.run_id ? [a.run_id] : [])].filter((id) => typeof id === 'string' && id))]
+      if (ids.length > 1) {
+        const r = await waitAnyInChunks(ids, progress, signal, meta)
+        return r.cancelled || r.timed_out ? r : anyResult(r)
+      }
+      if (ids.length === 1) a = { ...a, run_id: ids[0] }
       if (!a.run_id && a.session_id) {
         const st = await followInChunks(a, progress, signal, meta)
         if (isCodex() || st.cancelled || !['report', 'following', 'needs_input'].includes(st.state)) return st
