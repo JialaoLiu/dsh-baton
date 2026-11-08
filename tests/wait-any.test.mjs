@@ -46,17 +46,17 @@ async function fakeHost(runs) {
     }, Math.max(0, Math.min(left, timeout)))
   }) })
   await new Promise((r) => server.listen(socketEndpoint(sock), r))
-  return { sock, calls, close: () => { for (const c of conns) c.destroy(); server.close(); fs.rmSync(dir, { recursive: true, force: true }) } }
+  return { sock, calls, firstRequestAt: () => t0, close: () => { for (const c of conns) c.destroy(); server.close(); fs.rmSync(dir, { recursive: true, force: true }) } }
 }
 
 async function call(host, args, env = {}) {
   const child = spawn(process.execPath, [SERVER], { env: { ...process.env, CODEX_HOME: path.dirname(host.sock), DSH_BATON_BACKEND: 'host', DSH_BATON_SOCKET: host.sock, ...env } })
   let out = ''
   child.stdout.on('data', (d) => { out += d })
-  const t0 = Date.now()
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'dsh_wait', arguments: args } }) + '\n')
   await new Promise((resolve) => { const tick = setInterval(() => { if (out.includes('"id":1')) { clearInterval(tick); resolve() } }, 20) })
-  const ms = Date.now() - t0
+  // Counted from the wait's first question to the host: a cold runner can take seconds to start the server.
+  const ms = Date.now() - host.firstRequestAt()
   child.kill()
   const msg = out.split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((m) => m.id === 1)
   return { ms, result: JSON.parse(msg.result.content[0].text) }
@@ -142,7 +142,8 @@ test('Codex is told to wait for parallel runs together', async () => {
     { id: 2, method: 'tools/call', params: { name: 'dsh_send', arguments: { session_id: 's1', message: 'hi' } } },
     { id: 3, method: 'tools/list' },
   ]) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n')
-  await new Promise((resolve) => { const tick = setInterval(() => { if (out.includes('"id":3')) { clearInterval(tick); resolve() } }, 20) })
+  // tools/list can answer before dsh_send, which waits on the host: wait for both replies.
+  await new Promise((resolve) => { const tick = setInterval(() => { if (out.includes('"id":2') && out.includes('"id":3')) { clearInterval(tick); resolve() } }, 20) })
   child.stdin.end(); server.close(); fs.rmSync(dir, { recursive: true, force: true })
   const lines = out.split('\n').filter(Boolean).map((l) => JSON.parse(l))
   const sent = JSON.parse(lines.find((m) => m.id === 2).result.content[0].text)
