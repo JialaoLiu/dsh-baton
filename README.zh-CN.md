@@ -53,7 +53,7 @@ dsh-baton 是一个 MCP 服务器加一个 Harness 小插件。主 Agent 用一�
 
 就这些。要转交任务，在需求最后加一句“交给 DeepSeek Harness 去做”。更新、卸载、Windows，以及插件没能注册时怎么手动注册，在[后面](#安装细节)。
 
-**0.6.4 新变化**：Codex 一次 `dsh_wait` 最多等 59 分钟，一小时以内跑完的任务等待只花一次模型请求，结果作为普通回复回到对话里。在 Harness 里更新插件，新开的 Codex 对话就用上了，不用重启。
+**刚发版就安装？** 新版本发布后大约一天内，Harness 会装上一个版本，安装弹窗里会说明。打开插件详情页点 **更新到 x.y.z**，或者添加插件时带上版本号，比如 `dsh-baton-host@0.6.8`。
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/zh/divider-dark.svg"><img src="./assets/readme/zh/divider.svg" width="100%" alt=""></picture></p>
 
@@ -284,7 +284,7 @@ Harness 插件连不上时：
 
 **`npx -y dsh-baton-mcp setup`** 在终端里做同样的注册：用于插件没能注册的情况，或者从 MCP 目录过来的用户。插件已经注册过时它什么都不改；插件没装的话，它会提示去添加。
 
-**更新**。Harness 只给官方插件提供"更新"按钮，所以要：插件 → dsh-baton-host → **卸载**，再**添加插件** → `dsh-baton-host`。新版本刚发布的一段时间里，Harness 会装上一个版本（pnpm 的 `minimumReleaseAge` 会暂缓刚发布的版本，安装弹窗里会说明）；想马上用新版，输入带版本号的名字：`dsh-baton-host@0.6.4`。预发布版必须写确切版本号添加，比如 `dsh-baton-host@0.6.0-next.0`：Harness 会把 `@next` 解析成一个坏掉的占位包。只输入 `dsh-baton-host` 装的是最新正式版。重新启用后，插件会把 MCP 服务器也更新到同一版本，新开的对话就会用上。万一两边版本对不上，第一次发现不一致的工具调用会提示，并写明哪一边旧、另一边的确切版本号。
+**更新**。Harness 0.2.2 及以上：插件 → dsh-baton-host → 版本一栏里的 **更新到 x.y.z**；如果还显示已是最新版本，先点 **重新检查**。Harness 0.2.1 没有这个插件的更新按钮：**卸载**，再**添加插件** → `dsh-baton-host`。新版本发布后大约一天内，Harness 会装上一个版本（pnpm 的 `minimumReleaseAge` 会暂缓刚发布的版本，安装弹窗里会说明）；想马上用新版，输入带版本号的名字：`dsh-baton-host@0.6.8`。预发布版必须写确切版本号添加，比如 `dsh-baton-host@0.6.0-next.0`：Harness 会把 `@next` 解析成一个坏掉的占位包。只输入 `dsh-baton-host` 装的是最新正式版。重新启用后，插件会把 MCP 服务器也更新到同一版本，新开的对话就会用上。万一两边版本对不上，第一次发现不一致的工具调用会提示，并写明哪一边旧、另一边的确切版本号。
 
 **卸载**。Harness → 插件 → dsh-baton-host → **卸载**，再运行 `npx -y dsh-baton-mcp setup --remove`。插件分不清"被卸载"和"Harness 退出"，所以 MCP 注册交给这条命令删，它也会删掉 `~/.dsh-baton/app`；运行记录留在 `~/.dsh-baton`，不需要的话自己删掉。
 

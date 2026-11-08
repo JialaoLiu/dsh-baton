@@ -53,7 +53,7 @@ Switched on, the plugin registers dsh-baton for Claude Code and Codex, for every
 
 That is all. To hand a task over, end the request with "hand it to DeepSeek Harness". Updating, removing, Windows, and registering by hand when the plugin could not, are [further down](#install-details).
 
-**New in 0.6.4:** Codex waits in one `dsh_wait` call of up to 59 minutes, so a run that ends within the hour costs one model request to wait for, and the result arrives as an ordinary reply in the chat. Update the plugin in Harness and new Codex conversations have it, with no restart.
+**Installed on the day of a release?** For about a day after a release, Harness installs the previous version, and its install dialog says so. Open the plugin's page and press **Update to x.y.z** (更新到), or add the plugin with its version, such as `dsh-baton-host@0.6.8`.
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/divider-dark.svg"><img src="./assets/readme/en/divider.svg" width="100%" alt=""></picture></p>
 
@@ -284,7 +284,7 @@ When you update or remove the plugin, come from dsh-bridge, run from source, or 
 
 **`npx -y dsh-baton-mcp setup`** does the same registration from a terminal: for a plugin that could not register, or when you come from an MCP directory. With the plugin already registered it changes nothing, then points you to the plugin if it is missing.
 
-**Updating.** Harness has an update button only for its official plugins, so: Plugins → dsh-baton-host → **Uninstall**, then **Add plugin** → `dsh-baton-host`. For a while after a release, Harness installs the previous version instead (pnpm's `minimumReleaseAge` holds back versions published very recently, and the install dialog says so); to get the new one at once, type the version: `dsh-baton-host@0.6.4`. A pre-release must always be added by its exact version, such as `dsh-baton-host@0.6.0-next.0`: Harness resolves `@next` to a broken placeholder. Plain `dsh-baton-host` gets the latest release. Switched on again, the plugin brings the MCP server to the same version; new conversations use it. If the two are ever out of step, the first tool call that notices it says so, naming the older side and the newer side's exact version to install.
+**Updating.** On Harness 0.2.2 and later: Plugins → dsh-baton-host → **Update to x.y.z** (更新到) under Version; if it still says up to date, press **Check again** (重新检查) first. Harness 0.2.1 has no update button for this plugin: **Uninstall**, then **Add plugin** → `dsh-baton-host`. For about a day after a release, Harness installs the previous version instead (pnpm's `minimumReleaseAge` holds back versions published very recently, and the install dialog says so); to get the new one at once, type the version: `dsh-baton-host@0.6.8`. A pre-release must always be added by its exact version, such as `dsh-baton-host@0.6.0-next.0`: Harness resolves `@next` to a broken placeholder. Plain `dsh-baton-host` gets the latest release. Switched on again, the plugin brings the MCP server to the same version; new conversations use it. If the two are ever out of step, the first tool call that notices it says so, naming the older side and the newer side's exact version to install.
 
 **Removing.** Harness → Plugins → dsh-baton-host → **Uninstall**, then `npx -y dsh-baton-mcp setup --remove`. The plugin cannot tell an uninstall from Harness quitting, so it leaves the MCP entries to that command, which also deletes `~/.dsh-baton/app`; run records stay in `~/.dsh-baton` until you delete it.
 
