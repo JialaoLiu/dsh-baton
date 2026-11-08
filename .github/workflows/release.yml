@@ -22,6 +22,8 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # The suite takes about 3 minutes; a hung test must not hold the release for hours.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
