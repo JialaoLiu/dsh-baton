@@ -122,6 +122,7 @@ async function waitInChunks({ run_id }, progress, signal, meta) {
     // Never spin: a chunk that came back early still takes a moment before the next one.
     if (Date.now() - t0 < 500) await new Promise((r) => setTimeout(r, 500))
     if (Date.now() >= deadline) {
+      if (st.harness_down) return { run_id, state: st.state, timed_out: true, harness_down: true, hint: core.HARNESS_DOWN_HINT }
       return {
         run_id, state: st.state, timed_out: true,
         ...(st.waiting_on ? { waiting_on: st.waiting_on } : {}),
@@ -182,6 +183,7 @@ async function waitAnyInChunks(run_ids, progress, signal, meta) {
     if (Date.now() - t0 < 500) await new Promise((r) => setTimeout(r, 500))
     if (Date.now() >= deadline) {
       const asking = running.filter((r) => r.state === 'waiting').map((r) => r.run_id)
+      if ([...answers.values()].some((st) => st.harness_down)) return { run_ids, timed_out: true, harness_down: true, still_running: running, hint: `${core.HARNESS_DOWN_HINT.replace('the same run_id', 'the same run_ids')}` }
       return {
         run_ids, timed_out: true, still_running: running,
         hint: `None of these runs has ended yet. Call dsh_wait again with the same run_ids, with no progress check or progress note in between (work the user asked you to do meanwhile is fine).${asking.length ? ` ${asking.join(', ')} still wait${asking.length === 1 ? 's' : ''} for a person (see dsh_status for the question): answer with dsh_answer if you may, or tell the user.` : ''}`,
@@ -200,12 +202,15 @@ function anyResult({ done, running }) {
       : res
   })
   const ids = running.map((r) => r.run_id)
+  // Stopped by the user, cancelled or cut off by a Harness restart: not work to send back.
+  const stopped = ended.filter((r) => r.stopped_by_user || r.state === 'interrupted' || r.state === 'cancelled').map((r) => r.run_id)
+  const leave = stopped.length ? ` ${stopped.join(', ')} did not end by ${stopped.length === 1 ? 'its' : 'their'} own work (stopped by the user, cancelled or cut off by a Harness restart, see ${stopped.length === 1 ? 'its' : 'each'} hint): send ${stopped.length === 1 ? 'it' : 'them'} nothing more on your own and leave ${stopped.length === 1 ? 'it' : 'them'} out of the next wait.` : ''
   const next = ids.length
     ? `Then call dsh_wait again with run_ids: the ones still running (${ids.join(', ')}) plus the run_id of every fix you sent, so whichever ends next comes back first. Do not wait for one run on its own while others are going.`
     : 'None of these runs is still going.'
   return {
     ended, still_running: running,
-    hint: `${ended.length} of the runs ${ended.length === 1 ? 'has' : 'have'} ended or stopped to ask (ended; each has its own hint). Deal with ${ended.length === 1 ? 'it' : 'them'} now: review against what you asked, and send any fixes with dsh_send to the same session_id right away, or answer a question. ${next}`,
+    hint: `${ended.length} of the runs ${ended.length === 1 ? 'has' : 'have'} ended or stopped to ask (ended; each has its own hint). Deal with ${ended.length === 1 ? 'it' : 'them'} now: review against what you asked, and send any fixes with dsh_send to the same session_id right away, or answer a question.${leave} ${next}`,
   }
 }
 

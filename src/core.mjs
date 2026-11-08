@@ -147,7 +147,8 @@ function hostCallAt(endpoint, method, params = {}, { timeoutMs = 15000 } = {}) {
       msg.error ? finish(new Error(String(msg.error))) : finish(null, msg.result)
     })
     conn.on('error', (e) => finish(Object.assign(e, { hostDown: true })))
-    conn.on('close', () => finish(new Error(`dsh-baton-host closed the connection before answering ${method}`)))
+    // Harness quitting closes the connection mid-call: marked so a wait can wait for it to come back.
+    conn.on('close', () => finish(Object.assign(new Error(`dsh-baton-host closed the connection before answering ${method}`), { hostClosed: true })))
   })
 }
 
@@ -623,12 +624,33 @@ const NEEDS_INPUT_HINT = (st) => st.question
   ? `The run stopped to ask the user ${st.question.count} question(s) (in question). Unless the user let you decide, show the user relay, written in the user's language, with its first line filled in with your own pick and reason (not the asker's pick and not its option description repeated), then ask which they want. ${ASKED} After answering, wait for the run again.`
   : 'The run waits for something only a person can do in the Harness UI (an approval, for example). Tell the user, then wait for the run again.'
 
+// A run the user stopped in the Harness UI: its turn ended aborted, by the user. With the usual
+// hint, Codex took that for a failure and sent the task again each time the user stopped it
+// (Windows, 2026-11-08). The UI stop leaves background jobs of the session running; dsh_cancel
+// stops them too.
+export const stoppedByUser = (st) => st?.state === 'failed' && st.turn_end?.kind === 'aborted' && st.turn_end?.reason?.kind === 'user'
+export const USER_STOPPED_HINT = 'The user stopped this run in Harness (stopped_by_user). It is not a failure to repair: do not send it again, continue it or send fixes. Tell the user it was stopped and what evidence shows it got done, then ask what to do next. Background jobs it started may still be running in that session; stop them with dsh_cancel and its session_id only if the user asks.'
+// Ended by something other than the work: Harness restarting under the run, or a cancel (dsh_cancel,
+// or in Harness: the user stopping the session drops its queued messages, or removing one). Sending
+// again on one's own would override the user here too.
+export const INTERRUPTED_HINT = 'Harness restarted or quit while this run was going, and its turn was stopped (interrupted). It is not a failure in the work: do not send it again or continue it on your own. Tell the user Harness was restarted and what evidence shows the run got done, then ask whether to run it again or continue in the same session.'
+export const CANCELLED_HINT = 'This run was cancelled before it finished: with dsh_cancel, or in Harness, where the user stopped the session or removed the queued message. If you did not cancel it yourself, the user did: do not send it again. Tell the user it was cancelled and ask what to do next.'
+// The hint for a run that did not end by its own work, or null for one that did.
+export function stopHint(st) {
+  if (stoppedByUser(st)) return { stopped_by_user: true, hint: USER_STOPPED_HINT }
+  if (st?.state === 'interrupted') return { hint: INTERRUPTED_HINT }
+  if (st?.state === 'cancelled') return { hint: CANCELLED_HINT }
+  return null
+}
+
 // The result of a run that ended, kept short: the client already knows what it sent, and a
 // completed run's event log is only the work behind final_text (dsh_status still has it).
 // A run that did not complete keeps its last events, to show where it stopped.
 function ended({ recent_events, message_preview, backend, ...st }) {
   const out = { ...st, ...(st.state !== 'completed' && recent_events?.length ? { recent_events: recent_events.slice(-5) } : {}) }
   if (outOfBalance(st)) return { ...out, hint: QUOTA_HINT }
+  const stop = stopHint(st)
+  if (stop) return { ...out, ...stop }
   // decided_for_user first, so a client that skims to final_text still meets it.
   return st.decided_for_user
     ? { hint: `${DECIDED_HINT} ${endedHint(st)}`, decided_for_user: st.decided_for_user, ...out }
@@ -757,6 +779,10 @@ export async function followThrough(params, { total_s, chunk_s = 300, onChunk, s
   }
 }
 
+// How often a wait looks for Harness again while it is not running.
+const HOST_RETRY_MS = Number(process.env.DSH_BATON_HOST_RETRY_MS) || 2000
+export const HARNESS_DOWN_HINT = 'DeepSeek Harness is not running (closed, or restarting), so the run cannot be followed right now; Harness ends a running turn when it quits. Do not send the task again. Tell the user Harness is closed and to open it; then call dsh_wait again with the same run_id: it reports how the run ended (interrupted, if Harness quit while it ran).'
+
 export const api = {
   async workspaces() {
     if (!(await useHost())) throw new Error('Listing workspaces needs the dsh-baton-host plugin running inside DeepSeek Harness.')
@@ -828,8 +854,20 @@ export const api = {
     return changed ? { ...st, changed_files: changed } : st
   },
   async wait({ run_id, timeout_s = 300 }) {
-    if (isHostRun(run_id)) return withEvidence(shaped(tag('host', await hostCall('wait', { run_id, timeout_s }, { timeoutMs: (timeout_s + 15) * 1000 }))))
-    return withEvidence(tag('headless', await waitRun(run_id, { timeout_s })))
+    if (!isHostRun(run_id)) return withEvidence(tag('headless', await waitRun(run_id, { timeout_s })))
+    // Harness quit or restarting: wait for it to come back within the same call (the plugin then
+    // reports the run as interrupted) instead of failing, which had Codex retry every few seconds.
+    const deadline = Date.now() + timeout_s * 1000
+    for (;;) {
+      const left = Math.max(1, Math.ceil((deadline - Date.now()) / 1000))
+      try {
+        return withEvidence(shaped(tag('host', await hostCall('wait', { run_id, timeout_s: left }, { timeoutMs: (left + 15) * 1000 }))))
+      } catch (error) {
+        if (!(error?.hostDown || error?.hostClosed)) throw error
+        if (Date.now() + HOST_RETRY_MS >= deadline) return { run_id, state: 'unknown', timed_out: true, harness_down: true, backend: 'host' }
+        await new Promise((r) => setTimeout(r, HOST_RETRY_MS))
+      }
+    }
   },
   async cancel({ run_id, session_id }) {
     if (run_id && !isHostRun(run_id)) return tag('headless', cancelRun(run_id))

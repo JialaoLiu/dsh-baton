@@ -91,6 +91,7 @@ async function main() {
       const total_s = Number(flags.timeout) || 24 * 3600
       const waitStarted = Date.now()
       const st = await core.api.wait({ run_id: rest[0], timeout_s: total_s })
+      const stop = core.stopHint(st)
       // A Harness goal goes on after the run's own round: so does this wait, until the goal
       // stops (or the next report, with --until turn), with every round since the run began.
       if (core.goalGoesOn(st)) {
@@ -113,6 +114,10 @@ async function main() {
         // The hint points at evidence: it goes with it (files changed, checks run, other runs in the folder).
         ...(st.evidence ? { evidence: st.evidence } : {}),
         ...(st.state === 'completed' && !st.decided_for_user ? { hint: core.endedHint(st) } : {}),
+        // Stopped by the user, cancelled, or cut off by a Harness restart: say so, or the client
+        // takes it for a failure in the work and sends it again.
+        ...(st.harness_down ? { harness_down: true, hint: core.HARNESS_DOWN_HINT.replace('call dsh_wait again with the same run_id', 'run this same wait command again') } : {}),
+        ...(stop ? { ...(st.turn_end ? { turn_end: st.turn_end } : {}), ...stop } : {}),
         ...(st.needs_input ? { needs_input: st.needs_input, question: st.question, ...(st.question ? { relay: core.relayText(st.question) } : {}), hint: st.question ? 'The run asks the user something. If the user allowed you to decide, choose by your own judgment and answer with dsh_answer (or dsh-baton answer), passing reason, and tell the user what you chose and why. Otherwise show the user relay, written in the user\'s language, with its first line filled in with your own pick and a reason from your own judgment of the question and the task (harness_suggested is only the asker\'s pick, never a reason by itself), and ask the user first. Then wait again.' : 'The run waits for a person in the Harness UI. Tell the user, then wait again.' } : {}) })
       process.exitCode = st.state === 'completed' ? 0 : st.needs_input ? 3 : 1
       return

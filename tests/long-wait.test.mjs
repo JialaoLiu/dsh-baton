@@ -355,3 +355,33 @@ test('wait_command prints the evidence its hint points at', async () => {
     rm(cwd)
   }
 })
+
+test('wait_command says when the user stopped the run in Harness, with the turn_end', async () => {
+  const { socketEndpoint } = await import('../host/lib/socket.js')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-lw-'))
+  const sock = path.join(dir, 'h.sock')
+  const turn_end = { kind: 'aborted', reason: { kind: 'user' } }
+  const server = net.createServer((c) => c.on('data', (d) => {
+    const req = JSON.parse(String(d).split('\n')[0])
+    const result = req.method === 'wait' ? { run_id: 'hrun-s', state: 'failed', final_text: null, error: null, turn_end } : { version: '0' }
+    c.end(JSON.stringify({ id: req.id, result }) + '\n')
+  }))
+  await new Promise((r) => server.listen(socketEndpoint(sock), r))
+  try {
+    const cli = path.join(path.dirname(SERVER), 'cli.mjs')
+    const { out, code } = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [cli, 'wait', 'hrun-s'], { env: { ...baseEnv, DSH_BATON_HOME: dir, DSH_BATON_SOCKET: sock, DSH_BATON_BACKEND: 'host' } })
+      let s = ''
+      child.stdout.on('data', (d) => { s += d })
+      child.on('close', (code) => resolve({ out: s, code }))
+    })
+    const st = JSON.parse(out)
+    assert.equal(code, 1)
+    assert.equal(st.stopped_by_user, true)
+    assert.deepEqual(st.turn_end, turn_end)
+    assert.match(st.hint, /The user stopped this run in Harness/)
+  } finally {
+    server.close()
+    rm(dir)
+  }
+})

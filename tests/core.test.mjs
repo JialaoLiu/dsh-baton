@@ -223,6 +223,28 @@ test('a run that ran out of DeepSeek balance says not to send again; other failu
   assert.equal(core.waitResult({ run_id: 'r4', state: 'completed', final_text: 'done' }).hint, core.endedHint({}))
 })
 
+test('a run the user stopped in Harness says so and says not to send it again; other aborts keep the usual hint', () => {
+  const stopped = core.waitResult({ run_id: 'r1', state: 'failed', error: null, final_text: null, turn_end: { kind: 'aborted', reason: { kind: 'user' } } })
+  assert.equal(stopped.stopped_by_user, true)
+  assert.equal(stopped.hint, core.USER_STOPPED_HINT)
+  assert.match(stopped.hint, /do not send it again, continue it or send fixes/)
+  const other = core.waitResult({ run_id: 'r2', state: 'failed', turn_end: { kind: 'aborted', reason: { kind: 'restart' } } })
+  assert.equal(other.stopped_by_user, undefined)
+  assert.equal(other.hint, core.endedHint({}))
+  assert.equal(core.stoppedByUser({ state: 'completed', turn_end: { kind: 'aborted', reason: { kind: 'user' } } }), false)
+})
+
+test('a run cut off by a Harness restart, or cancelled, says not to send it again on one\'s own', () => {
+  const restarted = core.waitResult({ run_id: 'r1', state: 'interrupted', error: 'Harness restarted while this run was active; its turn was stopped.' })
+  assert.equal(restarted.hint, core.INTERRUPTED_HINT)
+  assert.match(restarted.hint, /Tell the user Harness was restarted/)
+  const removed = core.waitResult({ run_id: 'r2', state: 'cancelled', error: 'Removed from the Harness queue before it ran.' })
+  assert.equal(removed.hint, core.CANCELLED_HINT)
+  assert.match(removed.hint, /If you did not cancel it yourself, the user did: do not send it again/)
+  assert.equal(core.stopHint({ state: 'completed' }), null)
+  assert.equal(core.stopHint({ state: 'failed', error: 'network down' }), null)
+})
+
 test('the ended hint follows the checks: none sent, all passed, or one failed for a missing tool', () => {
   const none = core.waitResult({ run_id: 'r5', state: 'completed', final_text: 'done', evidence: { changes: {} } }).hint
   assert.match(none, /sent without checks/)

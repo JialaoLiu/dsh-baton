@@ -15,7 +15,8 @@ import { socketEndpoint } from '../host/lib/socket.js'
 const SERVER = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'server.mjs')
 
 // A fake host whose runs end at given times (ms after start; Infinity: never). A run with
-// `ask` stops to ask a person at that time, and its question is reported once, like the host's.
+// `ask` stops to ask a person at that time, and its question is reported once, like the host's;
+// one with `stop` is stopped by the user in Harness then.
 async function fakeHost(runs) {
   // Times count from the first request, so a slow server start does not shift them.
   let t0
@@ -31,7 +32,7 @@ async function fakeHost(runs) {
     const reply = (msg) => c.end(JSON.stringify({ id: req.id, ...msg }) + '\n')
     const run = runs[req.params?.run_id]
     if (!run) return reply({ error: `Unknown run: ${req.params?.run_id} (only the latest 100 runs are kept)` })
-    const at = run.ask ?? run.end
+    const at = run.ask ?? run.stop ?? run.end
     const left = at - (Date.now() - t0)
     const timeout = (req.params.timeout_s ?? 1) * 1000
     setTimeout(() => {
@@ -42,6 +43,7 @@ async function fakeHost(runs) {
         asked.add(req.params.run_id)
         return reply({ result: { ...base, state: 'waiting', needs_input: 'harness-ui' } })
       }
+      if (run.stop !== undefined) return reply({ result: { ...base, state: 'failed', final_text: null, error: null, turn_end: { kind: 'aborted', reason: { kind: 'user' } } } })
       reply({ result: { ...base, state: 'completed', final_text: `done ${req.params.run_id}` } })
     }, Math.max(0, Math.min(left, timeout)))
   }) })
@@ -195,3 +197,53 @@ test('a question that comes after the wait returned is kept for the next wait', 
     child.kill(); host.close()
   }
 }))
+
+test('a run the user stopped comes back marked, and the next step leaves it out', async () => {
+  const host = await fakeHost({ 'hrun-a': { stop: 200 }, 'hrun-b': { end: Infinity } })
+  const { result } = await call(host, { run_ids: ['hrun-a', 'hrun-b'] }).finally(host.close)
+  assert.equal(result.ended[0].run_id, 'hrun-a')
+  assert.equal(result.ended[0].stopped_by_user, true)
+  assert.match(result.ended[0].hint, /The user stopped this run in Harness/)
+  assert.match(result.hint, /hrun-a did not end by its own work \(stopped by the user, cancelled or cut off by a Harness restart, see its hint\): send it nothing more on your own and leave it out of the next wait/)
+  assert.deepEqual(result.still_running.map((r) => r.run_id), ['hrun-b'])
+})
+
+// Harness closed or restarting: no plugin socket for a while. A wait keeps going in the same call.
+async function hostLater(sock, delayMs, result) {
+  await new Promise((r) => setTimeout(r, delayMs))
+  const server = net.createServer((c) => c.on('data', (d) => {
+    const req = JSON.parse(String(d).split('\n')[0])
+    c.end(JSON.stringify({ id: req.id, result: { run_id: req.params?.run_id, session_id: 's-r', backend: 'host', ...result } }) + '\n')
+  }))
+  await new Promise((r) => server.listen(socketEndpoint(sock), r))
+  return server
+}
+
+test('a wait outlasts a Harness restart and then reports the run as interrupted', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-down-'))
+  const sock = path.join(dir, 'h.sock')
+  const later = hostLater(sock, 1500, { state: 'interrupted', error: 'Harness restarted while this run was active; its turn was stopped.' })
+  const host = { sock, firstRequestAt: () => Date.now() }
+  try {
+    const { result } = await call(host, { run_id: 'hrun-r' }, { DSH_BATON_HOST_RETRY_MS: '200' })
+    assert.equal(result.state, 'interrupted')
+    assert.match(result.hint, /Tell the user Harness was restarted/)
+  } finally {
+    ;(await later).close(); fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('a wait while Harness stays closed says so, without an error', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-down-'))
+  const host = { sock: path.join(dir, 'h.sock'), firstRequestAt: () => Date.now() }
+  try {
+    const one = await call(host, { run_id: 'hrun-r' }, { DSH_BATON_HOST_RETRY_MS: '200', DSH_BATON_WAIT_S: '2' })
+    assert.equal(one.result.harness_down, true)
+    assert.match(one.result.hint, /DeepSeek Harness is not running .* Do not send the task again/)
+    const many = await call(host, { run_ids: ['hrun-a', 'hrun-b'] }, { DSH_BATON_HOST_RETRY_MS: '200', DSH_BATON_WAIT_S: '2' })
+    assert.equal(many.result.harness_down, true)
+    assert.match(many.result.hint, /call dsh_wait again with the same run_ids/)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
