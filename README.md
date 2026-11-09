@@ -3,18 +3,28 @@
 </p>
 
 <p align="center">
-  English | <a href="README.zh-CN.md">中文</a> · macOS · Windows (<a href="WINDOWS.md">guide</a>) · no Node.js needed · zero dependencies · MIT
+  <img src="https://img.shields.io/badge/English-2563EB?style=for-the-badge" alt="English">
+  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-8B95A5?style=for-the-badge" alt="中文"></a>
 </p>
 
-<p align="center"><a href="#quick-start">Quick start</a> · <a href="#see-it-run">See it run</a> · <a href="#token-usage">Token usage</a> · <a href="#how-it-works">How it works</a> · <a href="#tools">Tools</a> · <a href="#security-and-limits">Security</a></p>
+<p align="center">
+  <a href="https://www.npmjs.com/package/dsh-baton-host"><img src="https://img.shields.io/npm/v/dsh-baton-host?label=dsh-baton-host&color=CB3837" alt="npm version"></a>
+  <img src="https://img.shields.io/badge/macOS-supported-000000?logo=apple&logoColor=white" alt="macOS supported">
+  <a href="WINDOWS.md"><img src="https://img.shields.io/badge/Windows-guide-0078D4" alt="Windows guide"></a>
+  <img src="https://img.shields.io/badge/Node.js-not%20needed-5FA04E?logo=nodedotjs&logoColor=white" alt="Node.js not needed">
+  <img src="https://img.shields.io/badge/dependencies-zero-2EA44F" alt="zero dependencies">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-DFB317" alt="MIT license"></a>
+</p>
+
+<p align="center"><a href="#quick-start"><b>Quick start</b></a> &nbsp;·&nbsp; <a href="#see-it-run"><b>See it run</b></a> &nbsp;·&nbsp; <a href="#how-it-compares"><b>How it compares</b></a> &nbsp;·&nbsp; <a href="#token-usage"><b>Token usage</b></a> &nbsp;·&nbsp; <a href="#how-it-works"><b>How it works</b></a> &nbsp;·&nbsp; <a href="#tools"><b>Tools</b></a> &nbsp;·&nbsp; <a href="#security-and-limits"><b>Security</b></a></p>
 
 <br>
 
 Hand coding tasks from Claude Code or Codex to DeepSeek Harness on your machine: the task runs live in the Harness window, the main agent hears back once when it ends, and it gets back the files that changed, the project's own test results and a requirement-by-requirement checklist.
 
-- **Cheaper on money and on quota:** with Claude Code, the total cost, DeepSeek included, is 51–78% lower. On a long Codex job, the share of a ChatGPT Plus 5-hour window it uses goes from 86.01% to 16.01% with GPT-6 Astra, and from 13.71% to 2.67% with GPT-6.1 Sol.
-- **Nothing to watch or poll:** Claude Code is woken once when the run ends; Codex waits out a run of up to an hour in a single call.
-- **A clear split of the work:** Claude Code or Codex writes the request and checks the result; DeepSeek writes the code and runs the tests in Harness. The one who checks is not the one who wrote it.
+- **Watch it and step in:** the task runs live in the Harness window and you can type into it at any time. Every message is labelled "Sent by ChatGPT / Claude from another chat". When Harness stops to ask a question, the main agent answers it if you told it to decide, or brings it to you with its own recommendation.
+- **Less of the 5-hour window:** a long Codex job takes 16% of a ChatGPT Plus 5-hour window instead of 86% (GPT-6 Astra, the kanban task). The rest of the numbers are under [Token usage](#token-usage).
+- **Nothing to watch or poll:** the main agent waits without polling and gets the result when the run ends. With several runs going at once, each one comes back within a second of finishing.
 
 Needs DeepSeek Harness ≥ 0.2.1-rc.2 (signed in) and Claude Code or Codex. [Quick start →](#quick-start)
 
@@ -24,58 +34,68 @@ dsh-baton is an MCP server plus a small Harness plugin. The main agent hands the
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/divider-dark.svg"><img src="./assets/readme/en/divider.svg" width="100%" alt=""></picture></p>
 
+## How it compares
+
+|  | **dsh-baton** | Model-swap gateway | Background sub-agent |
+|---|---|---|---|
+| The main agent keeps its own model | **Yes** | No, the whole chat runs on the other model | Yes |
+| You can watch the work | **Yes, live in the Harness window** | Yes, in the same chat | The main chat gets a summary |
+| You can step in mid-run | **Yes, in Harness, or the main agent steers it in** | Yes | Usually not |
+| Each message says who sent it | **Yes, sent by ChatGPT / Claude** | One side only | Not needed |
+| Changed files and test results come back | **dsh-baton lists the files and runs your tests itself** | No hand-over step | The sub-agent's own summary |
+| Questions reach you | **Yes, with the main agent's recommendation** | It asks you directly | Usually not |
+
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/divider-dark.svg"><img src="./assets/readme/en/divider.svg" width="100%" alt=""></picture></p>
+
 ## Why split the work
 
 Beyond the savings, the split itself helps:
 
-- **A spec before the code.** The main agent turns your request into concrete items before handing it over, so Harness gets a spec rather than a one-line "build me an X".
+- **A spec before the code.** The main agent turns your loose request into clear requirements before handing it over, so Harness gets a clear spec rather than a relayed "build me an X".
 - **Checked on evidence.** The result carries the changed files, your project's own test output and a point-by-point check against the request; anything missing goes back for another round, instead of taking "done" on trust.
 - **The main conversation keeps the decisions.** Hundreds of steps of reading files, editing and running tests stay in the Harness session; the main conversation holds your request and the conclusions.
-- **Visible and steerable.** The work runs live in the Harness window. You can step in there at any time, and the main agent can steer a new requirement into the running turn.
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/divider-dark.svg"><img src="./assets/readme/en/divider.svg" width="100%" alt=""></picture></p>
 
 ## Quick start
 
+**Install in one step, check in two.**
+
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/install-dark.svg"><img src="./assets/readme/en/install.svg" width="100%" alt="Step 1: in Harness open Plugins, Add plugin, enter dsh-baton-host, Install, Enable now; it registers dsh-baton for Claude Code and Codex. Step 2: open a new conversation in Claude Code or Codex; Codex asks once to approve the dsh-baton tools. Step 3: ask it to call dsh_list_workspaces; it lists your Harness workspaces."></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/install-dark.svg"><img src="./assets/readme/en/install.svg" width="100%" alt="Install: in Harness open Plugins, Add plugin, enter dsh-baton-host, Install, Enable now; it registers dsh-baton for Claude Code and Codex. Then check that it works: open a new conversation in Claude Code or Codex (Codex asks once to approve the dsh-baton tools), and ask it to call dsh_list_workspaces; it lists your Harness workspaces."></picture>
 </p>
 
-Nothing else to install: no Node.js, no terminal. The steps are the same on macOS and Windows.
+Nothing else to install: no Node.js, no terminal. It is the same on macOS and Windows.
 
-**1. Add the plugin in Harness:** **Plugins** (插件) → **Add plugin** (添加插件) → type `dsh-baton-host` → **Install** (安装) → **Enable now** (立即启用).
+**Install:** in Harness, **Plugins** (插件) → **Add plugin** (添加插件) → type `dsh-baton-host` → **Install** (安装) → **Enable now** (立即启用). Switched on, the plugin registers dsh-baton for Claude Code and Codex, for every folder, and Harness says so.
 
-Switched on, the plugin registers dsh-baton for Claude Code and Codex, for every folder, and Harness says so.
+**Check that it works:**
 
-**2. Open a new chat:** in Claude Code or Codex, start a **new** conversation; one that was already open does not see dsh-baton yet. The steps are the same for both. Codex asks you to approve MCP tool calls: approve the `dsh-baton` tools (for unattended `codex exec` runs, add `--approve-for-me`).
+① **Open a new chat:** in Claude Code or Codex, start a **new** conversation; one that was already open does not see dsh-baton yet. It is the same in both. Codex asks you to approve MCP tool calls: approve the `dsh-baton` tools (for unattended `codex exec` runs, add `--approve-for-me`).
 
-**3. Check:** ask it to call `dsh_list_workspaces`. It lists your Harness workspaces.
+② **Ask for the workspaces:** ask it to call `dsh_list_workspaces`. It lists your Harness workspaces.
 
 That is all. To hand a task over, end the request with "hand it to DeepSeek Harness". Updating, removing, Windows, and registering by hand when the plugin could not, are [further down](#install-details).
 
-**Installed on the day of a release?** For about a day after a release, Harness installs the previous version, and its install dialog says so. Open the plugin's page and press **Update to x.y.z** (更新到), or add the plugin with its version, such as `dsh-baton-host@0.6.8`.
+**Installed on the day of a release?** For about a day after a release, Harness installs the previous version, and its install dialog says so. Open the plugin's page and press **Update to x.y.z** (更新到), or add the plugin with its version, such as `dsh-baton-host@x.y.z`.
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/divider-dark.svg"><img src="./assets/readme/en/divider.svg" width="100%" alt=""></picture></p>
 
 ## See it run
 
-<p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/flow-dark.gif"><img src="./assets/readme/en/flow.gif" width="100%" alt="Typical flow: create a workspace, send the task, wait without polling (Claude Code is woken once, Codex waits up to 59 minutes in one dsh_wait call), follow up in the same session"></picture>
-</p>
-
-One Codex chat starts a task, queues a follow-up, steers the running turn, and waits for all three:
+Codex and Claude take turns in the same Harness session, and every message says who sent it:
 
 <p align="center">
-  <img src="./assets/demos/s3-queue-en.gif" width="100%" alt="Codex on the left starts a DeepSeek task, queues a follow-up, steers the running turn and waits; DeepSeek Harness on the right runs each one live">
+  <img src="./assets/demos/s8-label-en.gif" alt="Harness chat where messages alternate between Codex and Claude, each labelled Sent by ChatGPT or Sent by Claude from another chat">
 </p>
 
-Codex and Claude take turns in the same Harness session, and every message is labelled with who sent it:
+Queue and steer: the first task is running, the steer joins the same turn, and the queued follow-up waits above the input:
 
 <p align="center">
-  <img src="./assets/demos/s8-relay-en-zoom.gif" width="100%" alt="Harness chat where messages alternate between Codex and Claude, each labelled Sent by ChatGPT or Sent by Claude from another chat">
+  <img src="./assets/demos/s3-steer-en.gif" alt="Harness chat: the first task runs, the steer arrives as a new message in the same turn, and the queued follow-up sits in the queue above the input">
 </p>
 
-<p align="center"><a href="docs/demos.md">More demos →</a></p>
+<p align="center"><a href="docs/demos.md">All demos (full recordings) →</a></p>
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/divider-dark.svg"><img src="./assets/readme/en/divider.svg" width="100%" alt=""></picture></p>
 
@@ -84,8 +104,6 @@ Codex and Claude take turns in the same Harness session, and every message is la
 **In short: hand over the big, long jobs.** With Claude Code the total cost, DeepSeek included, is 51–78% lower. With Codex on GPT-6 Astra it is 47–81% lower, and the long kanban app takes 16.01% of a ChatGPT Plus 5-hour window instead of 86.01%.
 
 **Hand it over:** big jobs, long jobs, and whenever the 5-hour window is running low. The main agent's own spend drops 61–87% on every task and model.
-
-**Do it yourself:** small tasks on Codex with GPT-6.1 Sol. Sol is cheap enough that DeepSeek's part of a hand-over, two thirds or more, outweighs what Sol saves.
 
 **The three test tasks**, asked the way a user would (the requests are in Chinese, linked as written):
 - **Task 1 · CLI tool:** a command-line task manager in Node, no dependencies, split into modules, with tests. [Request](docs/benchmarks/token-usage-2026-10/natural/medium.md)
@@ -100,25 +118,44 @@ Codex and Claude take turns in the same Harness session, and every message is la
 
 Cost per task at list price, DeepSeek V4.1 Flash 1017 at its peak price. Opus 5.5 runs in Claude Code, GPT-6.1 Sol and GPT-6 Astra in Codex, all at high effort:
 
-| Task | Model | Alone | Handed over: main agent | Handed over: DeepSeek | Handed over: total | Total | Main agent | 5-hour window, alone → handed over |
-|---|---|---|---|---|---|---|---|---|
-| Task 1 · CLI tool | Opus 5.5 high | $1.07 | $0.42 | $0.10 | $0.52 | −51.2% | −60.8% | — |
-| | GPT-6.1 Sol high | $0.17 | $0.06 | $0.13 | $0.20 | +15.3% | −62.9% | 2.08% → 0.77% |
-| | GPT-6 Astra high | $0.79 | $0.30 | $0.12 | $0.42 | −47.4% | −62.0% | 7.83% → 2.98% |
-| Task 2 · Web app | Opus 5.5 high | $2.13 | $0.47 | $0.13 | $0.60 | −71.7% | −77.7% | — |
-| | GPT-6.1 Sol high | $0.41 | $0.06 | $0.18 | $0.25 | −40.2% | −84.5% | 5.08% → 0.79% |
-| | GPT-6 Astra high | $2.27 | $0.30 | $0.13 | $0.42 | −81.4% | −86.9% | 22.43% → 2.94% |
-| Task 3 · Kanban app (phased) | Opus 5.5 high | $14.18 | $2.32 | $0.84 | $3.16 | −77.7% | −83.6% | — |
-| | GPT-6.1 Sol high | $1.12 | $0.22 | $0.81 | $1.03 | −8.1% | −80.5% | 13.71% → 2.67% |
-| | GPT-6 Astra high | $8.69 | $1.62 | $0.74 | $2.35 | −72.9% | −81.4% | 86.01% → 16.01% |
+| Task | Model | Alone | Handed over: main agent | Handed over: DeepSeek | Handed over: total | Total | Main agent |
+|---|---|---|---|---|---|---|---|
+| Task 1 · CLI tool | Opus 5.5 high | $1.07 | $0.42 | $0.10 | $0.52 | −51.2% | −60.8% |
+| | GPT-6 Astra high | $0.79 | $0.30 | $0.12 | $0.42 | −47.4% | −62.0% |
+| Task 2 · Web app | Opus 5.5 high | $2.13 | $0.47 | $0.13 | $0.60 | −71.7% | −77.7% |
+| | GPT-6 Astra high | $2.27 | $0.30 | $0.13 | $0.42 | −81.4% | −86.9% |
+| Task 3 · Kanban app (phased) | Opus 5.5 high | $14.18 | $2.32 | $0.84 | $3.16 | −77.7% | −83.6% |
+| | GPT-6 Astra high | $8.69 | $1.62 | $0.74 | $2.35 | −72.9% | −81.4% |
+
+Share of a ChatGPT Plus 5-hour window in Codex, and the main agent's own spend:
+
+| Task | Model | 5-hour window, alone → handed over | Main agent |
+|---|---|---|---|
+| Task 1 · CLI tool | GPT-6.1 Sol high | 2.08% → 0.77% | −62.9% |
+| | GPT-6 Astra high | 7.83% → 2.98% | −62.0% |
+| Task 2 · Web app | GPT-6.1 Sol high | 5.08% → 0.79% | −84.5% |
+| | GPT-6 Astra high | 22.43% → 2.94% | −86.9% |
+| Task 3 · Kanban app (phased) | GPT-6.1 Sol high | 13.71% → 2.67% | −80.5% |
+| | GPT-6 Astra high | 86.01% → 16.01% | −81.4% |
 
 <p align="center">
-  <img src="./docs/benchmarks/token-usage-2026-10/charts/cost.svg" width="100%" alt="Cost per task in USD, working alone vs handed over, grouped by model. Opus 5.5 high: $1.07 vs $0.52, $2.13 vs $0.60, $14.18 vs $3.16. GPT-6.1 Sol high: $0.17 vs $0.20, $0.41 vs $0.25, $1.12 vs $1.03. GPT-6 Astra high: $0.79 vs $0.42, $2.27 vs $0.42, $8.69 vs $2.35">
+  <img src="./docs/benchmarks/token-usage-2026-10/charts/cost.svg" width="100%" alt="Cost per task in USD, working alone vs handed over, grouped by model. Opus 5.5 high: $1.07 vs $0.52, $2.13 vs $0.60, $14.18 vs $3.16. GPT-6 Astra high: $0.79 vs $0.42, $2.27 vs $0.42, $8.69 vs $2.35">
 </p>
 
 <p align="center">
   <img src="./docs/benchmarks/token-usage-2026-10/charts/quota.svg" width="100%" alt="Share of a ChatGPT Plus 5-hour window in Codex, working alone vs handed over, grouped by model. GPT-6.1 Sol high: 2.08% vs 0.77%, 5.08% vs 0.79%, 13.71% vs 2.67%. GPT-6 Astra high: 7.83% vs 2.98%, 22.43% vs 2.94%, 86.01% vs 16.01%">
 </p>
+
+**A bigger task: a lighthouse animation.** The same 23-item request, byte for byte, both on GPT-6 Astra, dsh-baton 0.6.5:
+
+| | Alone | Handed over |
+|---|---|---|
+| ChatGPT Plus 5-hour window | 178%–186% (over three 5-hour windows) | 80%–84% |
+| Weekly quota | 30% | 14% |
+| Codex requests | 142 | 40 |
+| DeepSeek | — | $4.20 (peak price), 930 steps |
+
+Working alone, Astra rated its own work 23/23; the independent check found 17/23. Handed over, the side that checks is not the side that wrote the code.
 
 <details>
 <summary>What was tested, and how</summary>
@@ -128,7 +165,7 @@ Cost per task at list price, DeepSeek V4.1 Flash 1017 at its peak price. Opus 5.
 - Tasks 1 and 2: the mean of three runs per cell. Task 3: one run per cell. Every run passed its acceptance check, with no rework.
 - Prices are list prices. DeepSeek is counted at its peak price; the real DeepSeek bill came to about 58% of that.
 - The 5-hour window share is worked out from each run's cost: 12.27 points per $1 for GPT-6.1 Sol, 9.90 for GPT-6 Astra.
-- 0.6.2 cuts the MCP instructions to one sentence, so Codex reads a few thousand to over ten thousand fewer new input tokens per hand-over. The Codex runs were measured with 0.6.1 to 0.6.3, where a Stop hook did the waiting; from 0.6.4 one `dsh_wait` call does it, also in one model request for every 59 minutes of a run.
+- The Codex runs were measured with dsh-baton 0.6.1 to 0.6.3.
 
 </details>
 
@@ -141,19 +178,27 @@ Cost per task at list price, DeepSeek V4.1 Flash 1017 at its peak price. Opus 5.
 </p>
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/comparison-dark.svg"><img src="./assets/readme/en/comparison.svg" width="100%" alt="Plugin vs headless: only the plugin shows runs live in the Harness UI, continues desktop sessions and uses desktop agent presets; both reuse the desktop sign-in"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/flow-dark.gif"><img src="./assets/readme/en/flow.gif" width="100%" alt="Typical flow: create a workspace, send the task, wait without polling (Claude Code is woken once, Codex waits up to 59 minutes in one dsh_wait call), follow up in the same session"></picture>
+</p>
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/comparison-dark.svg"><img src="./assets/readme/en/comparison.svg" width="100%" alt="Plugin mode (the default) vs the headless fallback, both dsh-baton: only plugin mode shows runs live in the Harness UI, continues desktop sessions and uses desktop agent presets; both reuse the desktop sign-in"></picture>
 </p>
 
 **Pick a model:** just say which one, for example "hand it to DeepSeek, V4 Pro". `dsh_send` passes it as `model` (and `reasoning_effort`), matched against the models Harness lists, so a model Harness adds later works as soon as it shows up. It applies to that session only; Harness's default model stays as it was. `dsh_list_models` shows what is available.
 
-Nothing to configure for waiting; if you want to know what each client does while a run is going:
+**Answering Harness's questions:** the main agent answers the way the task needs, rather than picking the least bad option. See `dsh_answer` under [Tools](#tools).
+
+**Several runs at once.** When a task is split across sessions, the main agent sends them all and waits for them together; whichever ends first comes back first, so it can review it and send a fix while the rest still run.
+
+**Sessions with a Harness goal.** A session with a goal (set by a message starting with `/goal`) starts its next round by itself; dsh-baton waits until the goal stops before handing back, and can report progress at an interval you ask for.
 
 <details>
-<summary>How each client waits</summary>
+<summary>Waiting in detail: each client, several runs, goals, changing the request</summary>
 
 - **Claude Code** waits for a run in the background (the `wait_command` that `dsh_send` returns) and is woken once, when the run ends.
-- **Codex** waits inside `dsh_wait`. The plugin sets Codex's tool timeout for dsh-baton to an hour (`tool_timeout_sec = 3600`), so one call waits up to 59 minutes: a run that ends within the hour costs one model request to wait for, however long it takes, and the result comes back as an ordinary tool result in the chat. A longer run returns `timed_out` with just the state after 59 minutes, and Codex calls again without summarising. Pressing Stop ends the wait at once. Codex gets no `wait_command`: its terminal cannot wake it, so it would poll. Conversations still open since before the plugin set the timeout, or an entry you wrote yourself without it, wait 270 s per call, just under Codex's default 300 s timeout; after Codex restarts, they get the long wait too. Measured in the Codex desktop app: a 28-minute run took one `dsh_wait` call; a 62-minute run took two, the first returning `timed_out` after 59 minutes and the second getting the result 3 minutes later, with no `dsh_status` calls in between.
-- **Several runs at once.** When a task is split across sessions (say docs, front end and back end, each in its own worktree), the client sends them all, then waits for them together: Claude Code runs one `wait_command` per run in the background, and Codex calls `dsh_wait` with `run_ids`. That call returns as soon as any of the runs ends or stops to ask a person, with every run that has (`ended`) and the ones still going (`still_running`); the client reviews those, sends fixes right away, and waits again with the rest plus the fixes. Before 0.6.8 Codex waited for one run at a time, so a run that ended meanwhile sat unread: measured on a three-part task, a back end that ended first was read 2 min 53 s late and its rework went out late; with `run_ids` each result was read within a second of its run ending.
+- **Codex** waits inside `dsh_wait`. The plugin sets Codex's tool timeout for dsh-baton to an hour (`tool_timeout_sec = 3600`), so one call waits up to 59 minutes: a run that ends within the hour costs one model request to wait for, however long it takes, and the result comes back as an ordinary tool result in the chat. A longer run returns `timed_out` with just the state after 59 minutes, and Codex calls again without summarising. Pressing Stop ends the wait at once. Codex gets no `wait_command`: its terminal cannot wake it, so it would poll. A conversation without that setting waits 270 s per call. Measured in the Codex desktop app: a 28-minute run took one `dsh_wait` call; a 62-minute run took two, the first returning `timed_out` after 59 minutes and the second getting the result 3 minutes later, with no `dsh_status` calls in between.
+- **Several runs at once.** When a task is split across sessions (say docs, front end and back end, each in its own worktree), the client sends them all, then waits for them together: Claude Code runs one `wait_command` per run in the background, and Codex calls `dsh_wait` with `run_ids`. That call returns as soon as any of the runs ends or stops to ask a person, with every run that has (`ended`) and the ones still going (`still_running`); the client reviews those, sends fixes right away, and waits again with the rest plus the fixes. Measured on a three-part task: waiting for one run at a time, the back end that ended first was read 2 min 53 s late; waiting with `run_ids`, each result was read within a second of its run ending.
 - **Sessions with a Harness goal.** A goal (a message starting with `/goal` sets one) makes Harness start the next round by itself as soon as a turn ends. A run sent to such a session is waited for until the goal stops, not just its first round, so "hand this to Harness" brings back the finished work; sessions without a goal are waited for as before. When the user asks for progress reports ("report every 10 minutes"), the client passes `until` `turn`: it then reports at the end of a round once 10 minutes (`every_minutes`) have passed since the last report, with every round since. To follow a session without sending anything, the client calls `dsh_wait` with `session_id` (Claude Code runs the `follow_command` in the background instead). Each report carries every round since the last one (the latest round's closing reply (up to 1500 characters), each earlier round as a one-line digest with its tools; any round in full through `dsh_read_session`), the files changed in the folder since the last report (since the run began, for the first), and the goal's state (phase, rounds started of the most allowed, whether Harness goes on with it), plus a `cursor` that the next call passes back, so switching between the two modes neither repeats nor misses a round. Both return at once when Harness asks a question (answer it with `dsh_answer` and `session_id`) or waits for an approval, when the goal is complete, paused, blocked or cleared, or when Harness will not go on with it by itself (for example after a Harness restart, until you press Continue). In Codex one call follows a goal for at most 15 minutes and Codex then calls again, so a message you type reaches it within that time; such an in-between return carries only the goal's state and how many rounds wait, not their texts.
 - **Changing the request while it waits.** In Codex, send the change with **Steer**: Codex stops waiting at once, steers it into the same Harness session (`dsh_send` with `mode` `steer`) and waits on the new run; Harness does both in the same turn. Sent with **Queue**, Codex sees it only when the run ends; you can also press Stop first and then send it. In Claude Code, just send it: it waits in the background, so it steers the change in right away. A steered run ends together with the original and they share one result; a queued run comes back on its own. Runs working in the same folder at the same time are named in each other's results, so neither removes the other's files.
 
@@ -184,7 +229,7 @@ When you want the exact parameters and return fields of each tool:
 <details>
 <summary>Full tool reference</summary>
 
-The server's MCP instructions are a single sentence (from 0.6.2); how to hand over, wait and answer is in each tool's own description. Codex repeats the instructions in front of every tool's description, so the catalogue it shows the model is now about 9.7k characters instead of 24.3k.
+The server's MCP instructions are a single sentence; how to hand over, wait and answer is in each tool's own description. Codex repeats the instructions in front of every tool's description, so the catalogue it shows the model is now about 9.7k characters instead of 24.3k.
 
 | Tool | What it does |
 |---|---|
@@ -196,14 +241,14 @@ The server's MCP instructions are a single sentence (from 0.6.2); how to hand ov
 | `dsh_send` | Send a message: `session_id` continues that session; otherwise a new one starts in `cwd` or `workspace_id`, or, with neither, in the folder the conversation works in (a `cwd` that is not a workspace yet is registered first; a `cwd` outside the conversation's folder is allowed and noted in `folder_note`). `checks`: test commands dsh-baton runs itself when the run ends (see [How a hand-over is checked](#how-a-hand-over-is-checked)). Returns a `run_id` at once. In Harness the message is marked "Sent by Claude / ChatGPT from another chat". An archived session is refused: unarchive it in Harness, or start a new session. To a busy session, `mode` `followup` queues the message after the current turn and `steer` adds it to the running turn; left out, it does what Harness's own setting says (Settings → sending while busy: queue or steer), and `followup` when that cannot be read. `mode_source` says which applied. `model` only when the user names one ("DeepSeek-V4 Pro", "v4-pro"; `reasoning_effort` likewise): it is matched against Harness's own model list, ignoring case, spaces, hyphens and a leading DeepSeek, so a model Harness adds later (V4.1 Pro) works as soon as Harness lists it; a name that matches nothing or several fails the send, before anything is created, with the list (`provider/model` picks one). It is set on that session before the message goes in, and Harness's default model is put back as it was (Harness saves a session's pick as the default too). Left out, a continued session keeps its own model and a new one uses Harness's default. The reply says which in `model` and `model_source` |
 | `dsh_status` | Run progress: state, recent text and tool calls, final reply; `waiting_on` when the turn is over but sub-agents or jobs still run; `human_interjections` when someone typed in the Harness UI mid-run; state `interrupted` for a run cut short by a Harness restart; `model` the run was sent with. With `session_id` instead of `run_id`: what the session is doing, its Harness goal and its last turn's reply |
 | `dsh_wait` | Wait for the run to end; a finished run carries `evidence` (files changed, check results) when the message was sent with `checks` (or until it stops to ask a person, see `dsh_answer`): up to 3540 s per call for Codex (its tool timeout for dsh-baton less 60 s; 270 s when that is not set), 50 s for other clients. Still going: returns `timed_out` with just the state; call it again. Clients that can wait in the background use `dsh_send`'s `wait_command` instead. `dsh_status` is a one-off look, not a way to wait. A run in a session with a Harness goal is waited for until the goal stops (`until` `turn` and `every_minutes` for progress reports). With `session_id` instead of `run_id` it follows the session's Harness goal without sending anything (`until`, `cursor`, `every_minutes`; see How each client waits). With `run_ids` it waits for several runs and returns as soon as any ends or asks (`ended`, `still_running`) |
-| `dsh_answer` | Answer the questions a run stopped to ask (Harness's ask_user_question): per question, an option number or label, free text, or skip; one at a time or all at once. `dsh_wait` and `wait_command` return as soon as a run asks, with the questions (`needs_input`, `question`; the option Harness's model would pick is in `harness_suggested`, apart from the labels). The assistant answers by its own judgment only when you told it to decide, and then passes `reason` and tells you what it chose and why; otherwise it brings you the questions, starting with its own recommendation and reason. You can also answer in the Harness window: whoever answers first wins |
+| `dsh_answer` | Answer the questions a run stopped to ask (Harness's ask_user_question): per question, an option number or label, free text, or skip; on a single choice, free text replaces the option. `dsh_wait` and `wait_command` return as soon as a run asks, with the questions (`needs_input`, `question`; the option Harness's model would pick is in `harness_suggested`) and a layout for passing them on (`relay`, `question_tool`). When you let the main agent decide, it takes an option only if it fits as written, and otherwise answers in its own words; before it picks an option for you, the first call is held back and it writes the answer you would want without the options, sending the option only if the two agree. Otherwise it brings you the questions with its recommendation first, which may be an answer outside the options; pick that and only the answer itself is sent. You can also answer in the Harness window: whoever answers first wins |
 | `dsh_session_activity` | Through `dsh_call`. What a session is doing now: running turn, sub-agents (any depth), background jobs; `archived: true` for an archived session |
 | `dsh_update_queued` | Through `dsh_call`. Change a message still waiting in the queue of a busy session, by its `run_id`: `edit` its text, `remove` it, or `steer` it into the running turn now. Once it has reached the conversation it can no longer be changed |
 | `dsh_cancel` | Stop everything a session is doing, by `run_id` or `session_id`: turn, sub-agents, jobs. Harness also drops the messages waiting in its queue; their runs end as `cancelled` |
 | `dsh_rename_session` | Through `dsh_call`. Rename a session |
 | `dsh_rename_workspace` | Through `dsh_call`. Rename a workspace (sidebar title only; the folder is not moved) |
 | `dsh_list_runs` | Through `dsh_call`. Recent runs, optionally of one session |
-| `dsh_call` | Calls any `dsh_*` tool by name: the less used tools (create and rename workspace, rename session, session activity, update queued, list runs) are not in the tool list from 0.6.0 on, to keep every request short, and are reached this way; also for a conversation whose tool list predates an update. An unknown name lists the tools |
+| `dsh_call` | Calls any `dsh_*` tool by name: the less used tools (create and rename workspace, rename session, session activity, update queued, list runs) are not in the tool list, to keep every request short, and are reached this way; also for a conversation whose tool list predates an update. An unknown name lists the tools |
 
 </details>
 
@@ -267,7 +312,7 @@ When the plugin is unreachable, the MCP server falls back to Harness's `dsh head
 
 ## Install details
 
-When you update or remove the plugin, come from dsh-bridge, run from source, or the plugin could not register:
+Version history is on [GitHub Releases](https://github.com/JialaoLiu/dsh-baton/releases). When you update or remove the plugin, come from dsh-bridge, run from source, or the plugin could not register:
 
 <details>
 <summary>What the plugin does, updating, removing, upgrading from dsh-bridge, installing from source, Windows</summary>
@@ -278,17 +323,15 @@ When you update or remove the plugin, come from dsh-bridge, run from source, or 
 
 **Codex's cwd for dsh-baton.** Codex starts an MCP server in the conversation's folder unless its table sets `cwd`; when that folder is gone (a project on an external drive that is not connected) the server cannot start and the conversation has no `dsh_*` tools. The plugin writes `cwd` (your home folder) into `[mcp_servers.dsh-baton]` and adds it to an existing table that has none; a `cwd` you set yourself is kept.
 
-**Updating to 0.6.4.** Nothing to restart, approve or set. Updating the plugin in Harness installs the new server into `~/.dsh-baton/app` and writes the timeout; Codex's running server picks up the new version on its next call (it checks for a newer copy before each `tools/list` and `tools/call`). New conversations wait up to 59 minutes per call; conversations already open go on as before, with 270 s waits. The Stop hook that plugins 0.6.0 to 0.6.3 added is taken out by itself, together with its trust record; there is nothing to untick in Codex. New conversations, and every conversation after Codex restarts, have no hook at all.
-
 **Updates need no restart.** When a newer version lands in `~/.dsh-baton/app` (a plugin update, `setup`, or a copy by hand), or the same version with changed files, conversations already open in Claude Code and Codex use it from their next `dsh_*` call: the server checks the folder before each call, starts the new version, and says once in that call's result that it was updated. A `dsh_wait` that is already running finishes on the old version first. If the new version cannot start, the old one keeps working and the result says why. A tool added in the new version shows up in Claude Code at once (the server tells the client its tool list changed); Codex keeps the tool list a conversation started with, so it does not show a new tool until the next conversation; it can still use one at once through `dsh_call`, which the update note points to, and the tools it already has run the new code right away.
 
 **`npx -y dsh-baton-mcp setup`** does the same registration from a terminal: for a plugin that could not register, or when you come from an MCP directory. With the plugin already registered it changes nothing, then points you to the plugin if it is missing.
 
-**Updating.** On Harness 0.2.2 and later: Plugins → dsh-baton-host → **Update to x.y.z** (更新到) under Version; if it still says up to date, press **Check again** (重新检查) first. Harness 0.2.1 has no update button for this plugin: **Uninstall**, then **Add plugin** → `dsh-baton-host`. For about a day after a release, Harness installs the previous version instead (pnpm's `minimumReleaseAge` holds back versions published very recently, and the install dialog says so); to get the new one at once, type the version: `dsh-baton-host@0.6.8`. A pre-release must always be added by its exact version, such as `dsh-baton-host@0.6.0-next.0`: Harness resolves `@next` to a broken placeholder. Plain `dsh-baton-host` gets the latest release. Switched on again, the plugin brings the MCP server to the same version; new conversations use it. If the two are ever out of step, the first tool call that notices it says so, naming the older side and the newer side's exact version to install.
+**Updating.** On Harness 0.2.2 and later: Plugins → dsh-baton-host → **Update to x.y.z** (更新到) under Version; if it still says up to date, press **Check again** (重新检查) first. Harness 0.2.1 has no update button for this plugin: **Uninstall**, then **Add plugin** → `dsh-baton-host`. For about a day after a release, Harness installs the previous version instead (pnpm's `minimumReleaseAge` holds back versions published very recently, and the install dialog says so); to get the new one at once, type the version: `dsh-baton-host@x.y.z`. A pre-release must always be added by its exact version, such as `dsh-baton-host@0.6.0-next.0`: Harness resolves `@next` to a broken placeholder. Plain `dsh-baton-host` gets the latest release. Switched on again, the plugin brings the MCP server to the same version; new conversations use it. If the two are ever out of step, the first tool call that notices it says so, naming the older side and the newer side's exact version to install.
 
 **Removing.** Harness → Plugins → dsh-baton-host → **Uninstall**, then `npx -y dsh-baton-mcp setup --remove`. The plugin cannot tell an uninstall from Harness quitting, so it leaves the MCP entries to that command, which also deletes `~/.dsh-baton/app`; run records stay in `~/.dsh-baton` until you delete it.
 
-**Upgrading from dsh-bridge.** In Harness, uninstall `dsh-bridge-host`, then add `dsh-baton-host`; switched on, it replaces the old `dsh-bridge` MCP entries. `DSH_BRIDGE_*` variables and an existing `~/.dsh-bridge` folder keep working for now. Tools get a new prefix (`mcp__dsh-baton__…`), so update any permission allowlists. A plugin added before 0.4 by pasting `~/.dsh-baton/app/host` still works but does not update with npm: uninstall it and add `dsh-baton-host` by name.
+**Upgrading from dsh-bridge.** In Harness, uninstall `dsh-bridge-host`, then add `dsh-baton-host`; switched on, it replaces the old `dsh-bridge` MCP entries. `DSH_BRIDGE_*` variables and an existing `~/.dsh-bridge` folder keep working for now. Tools get a new prefix (`mcp__dsh-baton__…`), so update any permission allowlists.
 
 **From source** (to follow `main` or change the code): `git clone https://github.com/JialaoLiu/dsh-baton.git`, then in Harness add the plugin from the clone's `host` folder (Add plugin → paste the path). Switched on, it registers the clone itself, so changes run before they are published. Update with `git pull`. `node dsh-baton/src/cli.mjs setup` registers the clone from a terminal.
 
@@ -330,7 +373,7 @@ codex mcp add dsh-baton -- "$(command -v node)" "$PWD/dsh-baton/src/server.mjs"
   <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/limits-dark.svg"><img src="./assets/readme/en/limits.svg" width="100%" alt="Good to know: a message typed in the UI mid-run is flagged on the run as a human interjection, run records survive a Harness restart (cut-short runs show interrupted), Claude Code is woken once when a run ends, Codex waits up to 59 minutes in one call"></picture>
 </p>
 
-Any process running as your OS user can drive Harness through the socket, the same as running `dsh` directly. dsh-baton relies on Harness 0.2.1-series internal service APIs, so a major Harness update may need a follow-up release.
+Any process running as your OS user can drive Harness through the socket, the same as running `dsh` directly. dsh-baton relies on Harness's internal service APIs (0.2.1 and 0.2.2 today), so a major Harness update may need a follow-up release.
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/divider-dark.svg"><img src="./assets/readme/en/divider.svg" width="100%" alt=""></picture></p>
 
