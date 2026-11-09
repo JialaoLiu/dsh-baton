@@ -385,3 +385,83 @@ test('wait_command says when the user stopped the run in Harness, with the turn_
     rm(dir)
   }
 })
+
+test('wait_command on a stopped run it answered a question in keeps telling the client to say what it answered', async () => {
+  const { socketEndpoint } = await import('../host/lib/socket.js')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-lw-'))
+  const sock = path.join(dir, 'h.sock')
+  fs.writeFileSync(path.join(dir, 'answer-reasons.json'), JSON.stringify({ 'hrun-d': { answers: [{ id: 'q1', selected: [], text: 'use both, in that order' }], reason: 'neither option alone fits', at: Date.now() } }))
+  const server = net.createServer((c) => c.on('data', (d) => {
+    const req = JSON.parse(String(d).split('\n')[0])
+    const result = req.method === 'wait' ? { run_id: 'hrun-d', state: 'failed', final_text: null, error: null, turn_end: { kind: 'aborted', reason: { kind: 'user' } } } : { version: '0' }
+    c.end(JSON.stringify({ id: req.id, result }) + '\n')
+  }))
+  await new Promise((r) => server.listen(socketEndpoint(sock), r))
+  try {
+    const cli = path.join(path.dirname(SERVER), 'cli.mjs')
+    const { out } = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [cli, 'wait', 'hrun-d'], { env: { ...baseEnv, DSH_BATON_HOME: dir, DSH_BATON_SOCKET: sock, DSH_BATON_BACKEND: 'host' } })
+      let s = ''
+      child.stdout.on('data', (d) => { s += d })
+      child.on('close', () => resolve({ out: s }))
+    })
+    const st = JSON.parse(out)
+    assert.equal(st.stopped_by_user, true)
+    assert.equal(st.decided_for_user.answers[0].text, 'use both, in that order')
+    assert.match(st.hint, /You answered a question for the user during this run: tell the user/)
+    assert.match(st.hint, /The user stopped this run in Harness/)
+  } finally {
+    server.close()
+    rm(dir)
+  }
+})
+
+test('wait_command while Harness stays closed says so and to run the same command again', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-lw-'))
+  try {
+    const cli = path.join(path.dirname(SERVER), 'cli.mjs')
+    const { out, code } = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [cli, 'wait', 'hrun-x', '--timeout', '2'], { env: { ...baseEnv, DSH_BATON_HOME: dir, DSH_BATON_SOCKET: path.join(dir, 'none.sock'), DSH_BATON_BACKEND: 'host', DSH_BATON_HOST_RETRY_MS: '200' } })
+      let s = ''
+      child.stdout.on('data', (d) => { s += d })
+      child.on('close', (code) => resolve({ out: s, code }))
+    })
+    const st = JSON.parse(out)
+    assert.equal(code, 1)
+    assert.equal(st.harness_down, true)
+    assert.match(st.hint, /DeepSeek Harness is not running .* then run this same wait command again: it reports how the run ended/)
+    assert.doesNotMatch(st.hint, /dsh_wait/)
+  } finally {
+    rm(dir)
+  }
+})
+
+test('wait_command on a completed run it answered a question in says what it answered, in the shared wording', async () => {
+  const { socketEndpoint } = await import('../host/lib/socket.js')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-lw-'))
+  const sock = path.join(dir, 'h.sock')
+  fs.writeFileSync(path.join(dir, 'answer-reasons.json'), JSON.stringify({ 'hrun-c': { answers: [{ id: 'q1', selected: [], text: 'plain-text Markdown (.md)' }], reason: 'neither option is plain text', at: Date.now() } }))
+  const server = net.createServer((c) => c.on('data', (d) => {
+    const req = JSON.parse(String(d).split('\n')[0])
+    const result = req.method === 'wait' ? { run_id: 'hrun-c', state: 'completed', final_text: 'done', error: null } : { version: '0' }
+    c.end(JSON.stringify({ id: req.id, result }) + '\n')
+  }))
+  await new Promise((r) => server.listen(socketEndpoint(sock), r))
+  try {
+    const cli = path.join(path.dirname(SERVER), 'cli.mjs')
+    const { out, code } = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [cli, 'wait', 'hrun-c'], { env: { ...baseEnv, DSH_BATON_HOME: dir, DSH_BATON_SOCKET: sock, DSH_BATON_BACKEND: 'host' } })
+      let s = ''
+      child.stdout.on('data', (d) => { s += d })
+      child.on('close', (code) => resolve({ out: s, code }))
+    })
+    const st = JSON.parse(out)
+    assert.equal(code, 0)
+    assert.equal(st.decided_for_user.answers[0].text, 'plain-text Markdown (.md)')
+    assert.ok(st.hint.startsWith('Required in your reply: you answered for the user during this run'), st.hint)
+    assert.match(st.hint, /what you answered \(an option or your own words\) and why/)
+  } finally {
+    server.close()
+    rm(dir)
+  }
+})

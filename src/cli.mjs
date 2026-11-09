@@ -106,8 +106,14 @@ async function main() {
         process.exitCode = f.state === 'needs_input' ? 3 : 0
         return
       }
+      if (st.needs_input && st.question) {
+        const { run_id, state, session_id, needs_input, question } = st
+        print(core.asking({ run_id, state, session_id, needs_input, question }, core.askHint(question.count ?? question.questions?.length ?? 1, 'dsh_answer (or dsh-baton answer)', 'wait again')))
+        process.exitCode = 3
+        return
+      }
       print({
-        ...(st.decided_for_user ? { hint: 'Required in your reply: you chose an answer for the user during this run, so start your reply by telling the user, in their language, what you chose and why (decided_for_user: answers and reason), then give the result. Passing on only final_text is not enough. ' + core.endedHint(st), decided_for_user: st.decided_for_user } : {}),
+        ...(st.decided_for_user ? { hint: `${core.DECIDED_HINT} ${core.endedHint(st)}`, decided_for_user: st.decided_for_user } : {}),
         run_id: st.run_id, state: st.state, session_id: st.session_id, timed_out: !!st.timed_out, error: st.error, final_text: st.final_text,
         // A goal goes on after this run: the hint says so and how to follow it.
         ...(st.goal ? { goal: st.goal, ...(st.goal.phase === 'active' ? { follow_command: self(`follow ${st.session_id}`) } : {}) } : {}),
@@ -116,9 +122,9 @@ async function main() {
         ...(st.state === 'completed' && !st.decided_for_user ? { hint: core.endedHint(st) } : {}),
         // Stopped by the user, cancelled, or cut off by a Harness restart: say so, or the client
         // takes it for a failure in the work and sends it again.
-        ...(st.harness_down ? { harness_down: true, hint: core.HARNESS_DOWN_HINT.replace('call dsh_wait again with the same run_id', 'run this same wait command again') } : {}),
+        ...(st.harness_down ? { harness_down: true, hint: core.harnessDownHint('run this same wait command again') } : {}),
         ...(stop ? { ...(st.turn_end ? { turn_end: st.turn_end } : {}), ...stop } : {}),
-        ...(st.needs_input ? { needs_input: st.needs_input, question: st.question, ...(st.question ? { relay: core.relayText(st.question) } : {}), hint: st.question ? 'The run asks the user something. If the user allowed you to decide, choose by your own judgment and answer with dsh_answer (or dsh-baton answer), passing reason, and tell the user what you chose and why. Otherwise show the user relay, written in the user\'s language, with its first line filled in with your own pick and a reason from your own judgment of the question and the task (harness_suggested is only the asker\'s pick, never a reason by itself), and ask the user first. Then wait again.' : 'The run waits for a person in the Harness UI. Tell the user, then wait again.' } : {}) })
+        ...(st.needs_input ? { needs_input: st.needs_input, hint: 'The run waits for a person in the Harness UI. Tell the user, then wait again.' } : {}) })
       process.exitCode = st.state === 'completed' ? 0 : st.needs_input ? 3 : 1
       return
     }

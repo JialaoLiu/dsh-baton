@@ -604,7 +604,7 @@ export function followResult(st) {
     case 'following': return { ...st, hint: `No report is due yet: ${AGAIN}, with no progress note in between. ${QUIET}` }
     case 'goal_ended': return { ...st, hint: `The goal stopped (${st.ended_because}${st.goal?.blocked_reason ? `: ${st.goal.blocked_reason.message}` : ''}), so following is over. ${report}${st.ended_because === 'blocked' || st.ended_because === 'paused' ? ' It needs the user before it goes on: say so.' : ''}` }
     case 'needs_input': return st.question
-      ? { ...st, relay: relayText(st.question), hint: `Harness stopped to ask the user ${st.question.count} question(s). Unless the user let you decide, show the user relay, written in the user's language, with its first line filled in with your own pick and reason, then ask which they want. ${ASKED} Answer with dsh_answer and session_id ${st.session_id} (no run_id), then ${AGAIN}.` }
+      ? asking(st, askHint(st.question.count, `dsh_answer and session_id ${st.session_id} (no run_id)`, AGAIN))
       : { ...st, hint: `Harness waits for something only a person can do in its window (an approval, for example). Tell the user, then ${AGAIN}.` }
     case 'needs_resume': return { ...st, hint: 'The goal is still active, but Harness will not go on with it by itself (for example after a Harness restart). Tell the user to press Continue in Harness, and stop following until they have.' }
     case 'goal_stalled': return { ...st, hint: 'The goal is active, yet no new round has started for 5 minutes: Harness may have stopped going on with it (for example after a restart). Tell the user; they can press Continue in Harness. Stop following until they have.' }
@@ -618,11 +618,28 @@ export const QUOTA_HINT = 'The run stopped because the DeepSeek account has no b
 const outOfBalance = (st) => st.state === 'failed' && (['ACCOUNT_QUOTA', 'QUOTA'].includes(st.turn_end?.error?.code) || st.turn_end?.error?.status === 402 || /insufficient balance/i.test(st.error ?? ''))
 
 // What to do when a run stops to ask a person (dsh_wait, wait_command and the instructions say it).
-export const ASKED = 'If the user told you to decide such questions yourself, choose by your own judgment of the question and the task, call dsh_answer with reason (one sentence on why), then tell the user what you chose and why. Otherwise relay the questions to the user and start with your own advice, on a line of its own: "My recommendation: <option>, because <reason>", the reason drawn from your own judgment of the question and the task (harness_suggested only shows what the asking model would pick; it is never a reason by itself, and your pick may differ). Then list the options, wait for the user\'s decision and submit it with dsh_answer. Never answer on the user\'s behalf without that permission.'
-export const DECIDED_HINT = 'Required in your reply: you chose an answer for the user during this run, so start your reply by telling the user, in their language, what you chose and why (decided_for_user: answers and reason), then give the result. Passing on only final_text is not enough.'
+// The options are the asking model's guesses, not the limit of the answer: every question also
+// takes free text (on a single-choice question it replaces the option, Harness's own rule).
+// The user wants the client to decide as the owner of the task, not pick the least bad option.
+export const OWN_WORDS = 'On a single choice, text replaces the option.'
+export const ASKED = `If the user told you to decide such questions yourself, decide as the task's owner: an option only if it fits as is, else your own words. ${OWN_WORDS} Call dsh_answer with a one-sentence reason, then tell the user what you answered and why. Otherwise relay the questions, starting with your advice on its own line: "My recommendation: <an option, or your own answer>, because <reason>", from your own judgment, even outside the options (harness_suggested is only the asker's pick, never a reason). List the options (the user may also answer in words) and submit their decision with dsh_answer. Never answer on the user's behalf without that permission.`
+export const DECIDED_HINT = 'Required in your reply: you answered for the user during this run, so start your reply by telling the user, in their language, what you answered (an option or your own words) and why (decided_for_user: answers and reason), then give the result. Passing on only final_text is not enough.'
+// What to do when a run asks the user, in one short hint that goes first in the result.
+// Codex relays through its own question tool (request_user_input: a title and plain option
+// strings); the message before that call is folded away in the Codex app, so a recommendation
+// written only there is lost (Mac, 2026-11-08), and longer hints did not change that. The
+// result therefore carries question_tool, the call laid out with the recommendation as its first
+// option, as relay is the message laid out with it as its first line: clients copy a layout
+// more reliably than they follow rules.
+export const askHint = (n, answerWith, then) => `Harness asks the user ${n} question(s). If the user let you decide such questions, answer as the task's owner: an option only if it fits as is, else your own words (text; ${OWN_WORDS.toLowerCase().replace(/\.$/, '')}). An option that needs a note, a fix or an explanation to work for this task does not fit: write the answer it should have been instead. Answer with ${answerWith} and a one-sentence reason, then tell the user what you answered and why. Otherwise ask the user, your own recommendation first: fill the first line of relay (in a message) or the first option of question_tool (in a question tool such as request_user_input) with the answer that best fits this task, checked against its file names and requirements (an option, or your own answer when none fits), and why. Never "your choice", nor the asker's pick (harness_suggested) unchecked. If they pick your recommendation, submit the answer alone, without "Recommended" or the reason. Submit their answer with ${answerWith}, then ${then}.`
 const NEEDS_INPUT_HINT = (st) => st.question
-  ? `The run stopped to ask the user ${st.question.count} question(s) (in question). Unless the user let you decide, show the user relay, written in the user's language, with its first line filled in with your own pick and reason (not the asker's pick and not its option description repeated), then ask which they want. ${ASKED} After answering, wait for the run again.`
+  ? askHint(st.question.count, 'dsh_answer', 'wait for the run again')
   : 'The run waits for something only a person can do in the Harness UI (an approval, for example). Tell the user, then wait for the run again.'
+// The hint first, then the question laid out two ways, then the rest of the status.
+export function asking(st, hint) {
+  const { hint: _old, relay: _r, question_tool: _q, ...rest } = st
+  return { hint, ...(st.question ? { relay: relayText(st.question), question_tool: questionTool(st.question) } : {}), ...rest }
+}
 
 // A run the user stopped in the Harness UI: its turn ended aborted, by the user. With the usual
 // hint, Codex took that for a failure and sent the task again each time the user stopped it
@@ -636,12 +653,16 @@ export const USER_STOPPED_HINT = 'The user stopped this run in Harness (stopped_
 export const INTERRUPTED_HINT = 'Harness restarted or quit while this run was going, and its turn was stopped (interrupted). It is not a failure in the work: do not send it again or continue it on your own. Tell the user Harness was restarted and what evidence shows the run got done, then ask whether to run it again or continue in the same session.'
 export const CANCELLED_HINT = 'This run was cancelled before it finished: with dsh_cancel, or in Harness, where the user stopped the session or removed the queued message. If you did not cancel it yourself, the user did: do not send it again. Tell the user it was cancelled and ask what to do next.'
 // The hint for a run that did not end by its own work, or null for one that did.
+// A run that answered a question for the user before it stopped keeps the sentence telling the
+// client to say so.
 export function stopHint(st) {
-  if (stoppedByUser(st)) return { stopped_by_user: true, hint: USER_STOPPED_HINT }
-  if (st?.state === 'interrupted') return { hint: INTERRUPTED_HINT }
-  if (st?.state === 'cancelled') return { hint: CANCELLED_HINT }
+  const told = (hint) => (st?.decided_for_user ? `${DECIDED_STOPPED} ${hint}` : hint)
+  if (stoppedByUser(st)) return { stopped_by_user: true, hint: told(USER_STOPPED_HINT) }
+  if (st?.state === 'interrupted') return { hint: told(INTERRUPTED_HINT) }
+  if (st?.state === 'cancelled') return { hint: told(CANCELLED_HINT) }
   return null
 }
+const DECIDED_STOPPED = 'You answered a question for the user during this run: tell the user, in their language, what you answered and why (decided_for_user: answers and reason).'
 
 // The result of a run that ended, kept short: the client already knows what it sent, and a
 // completed run's event log is only the work behind final_text (dsh_status still has it).
@@ -659,9 +680,7 @@ function ended({ recent_events, message_preview, backend, ...st }) {
 
 
 // What dsh_wait returns for a run that ended or stopped to ask (the Codex Stop hook returns the same).
-export const waitResult = (st) => (st.needs_input
-  ? { ...st, ...(st.question ? { relay: relayText(st.question) } : {}), hint: NEEDS_INPUT_HINT(st) }
-  : ended(st))
+export const waitResult = (st) => (st.needs_input ? asking(st, NEEDS_INPUT_HINT(st)) : ended(st))
 
 // The asking model marks its favourite option in the label ("(Recommended)", "（推荐）").
 // Clients relaying the question tended to repeat that mark as their own advice, so the
@@ -696,7 +715,17 @@ export function relayText(question) {
     const asker = q.harness_suggested ? [`  (The model in Harness that asked would pick: ${q.harness_suggested.label})`] : []
     return [head, ...options, ...asker].join('\n')
   })
-  return ['My recommendation: <your pick>, because <your own reason>', '', ...blocks].join('\n')
+  return [RECOMMEND_LINE, '', ...blocks, '', 'You can also answer in your own words.'].join('\n')
+}
+const RECOMMEND_LINE = 'My recommendation: <an option, or your own answer>, because <your own reason>'
+// The same questions as a question tool takes them (a title, plain option strings), the first
+// option left for the client's recommendation; the user can still type their own answer there.
+export function questionTool(question) {
+  if (!Array.isArray(question?.questions)) return undefined
+  return question.questions.map((q) => ({
+    title: `${q.question}${q.multi_select ? ' (several can be chosen)' : ''}`,
+    options: ['Recommended: <an option, or your own answer>, because <your own reason>', ...(q.options ?? []).map((o) => o.label)],
+  }))
 }
 
 // When the client chose for the user (dsh_answer with reason), the choice and reason are
@@ -705,6 +734,23 @@ export function relayText(question) {
 // from another process (wait_command).
 const reasonsFile = () => path.join(config.batonHome, 'answer-reasons.json')
 const readReasons = () => { try { return JSON.parse(fs.readFileSync(reasonsFile(), 'utf8')) } catch { return {} } }
+// A client deciding for the user picked the least bad option and patched it with a note
+// (".doc, but keep it plain text"; "XV:00, with a line saying it means 3 pm"), however the hint
+// put it (Codex, Mac, 2026-11-09). So an option chosen for the user is not sent at once: the
+// first call asks for a second look, and the same answers sent again go through. Own words
+// (text) go through at once, as do answers the user gave (no reason).
+export const OPTION_CHECK_HINT = 'Not sent yet, because you chose an option for the user. First, without looking at the options, write down the answer this user would want for this task, as if Harness had asked with no options at all. Send the option (dsh_answer again with the same answers) only if it says the same as that answer. If it does not, answer with text: your answer. An option you can argue for, or make work with a note or an explanation, is not the answer this user would want.'
+const checked = new Map()
+export function optionCheck(a, reason) {
+  if (!(typeof reason === 'string' && reason.trim())) return null
+  const picks = (a.answers ?? []).filter((x) => x.choose?.length && !(typeof x.text === 'string' && x.text.trim()))
+  if (!picks.length) return null
+  const key = JSON.stringify([a.run_id ?? a.session_id, picks.map((x) => [x.id ?? null, x.choose.map(String)])])
+  for (const [k, at] of checked) if (Date.now() - at > 30 * 60_000) checked.delete(k)
+  if (checked.delete(key)) return null
+  checked.set(key, Date.now())
+  return { submitted: false, check: picks.map((x) => ({ ...(x.id ? { id: x.id } : {}), choose: x.choose })), hint: OPTION_CHECK_HINT }
+}
 function rememberReason(runId, answers, reason) {
   try {
     const all = readReasons()
@@ -781,7 +827,9 @@ export async function followThrough(params, { total_s, chunk_s = 300, onChunk, s
 
 // How often a wait looks for Harness again while it is not running.
 const HOST_RETRY_MS = Number(process.env.DSH_BATON_HOST_RETRY_MS) || 2000
-export const HARNESS_DOWN_HINT = 'DeepSeek Harness is not running (closed, or restarting), so the run cannot be followed right now; Harness ends a running turn when it quits. Do not send the task again. Tell the user Harness is closed and to open it; then call dsh_wait again with the same run_id: it reports how the run ended (interrupted, if Harness quit while it ran).'
+// again: how to wait once Harness is back (dsh_wait for one run or several, or the CLI command).
+export const harnessDownHint = (again = 'call dsh_wait again with the same run_id') => `DeepSeek Harness is not running (closed, or restarting), so the run cannot be followed right now; Harness ends a running turn when it quits. Do not send the task again. Tell the user Harness is closed and to open it; then ${again}: it reports how the run ended (interrupted, if Harness quit while it ran).`
+export const HARNESS_DOWN_HINT = harnessDownHint()
 
 export const api = {
   async workspaces() {
@@ -898,6 +946,8 @@ export const api = {
   // user, not for Harness.
   async answer({ reason, ...a }) {
     if (!(await useHost())) throw new Error('Answering a question needs the dsh-baton-host plugin running inside DeepSeek Harness.')
+    const check = optionCheck(a, reason)
+    if (check) return check
     try {
       const result = shaped(await hostCall('answer', a))
       if (!(typeof reason === 'string' && reason.trim())) return result

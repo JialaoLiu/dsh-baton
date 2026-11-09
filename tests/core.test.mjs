@@ -194,6 +194,9 @@ test('answer keeps reason for the client and sends Harness only the answers', as
   }))
   await new Promise((r) => server.listen(core.hostSocket(), r))
   try {
+    const looked = await core.api.answer({ run_id: 'hrun-1', answers: [{ choose: [1] }], reason: 'short' })
+    assert.equal(looked.submitted, false, 'an option chosen for the user gets a second look first')
+    assert.equal(sent, null)
     const st = await core.api.answer({ run_id: 'hrun-1', answers: [{ choose: [1] }], reason: '  short and says what it does ' })
     assert.deepEqual(sent, { run_id: 'hrun-1', answers: [{ choose: [1] }] })
     assert.equal(st.reason, 'short and says what it does')
@@ -211,7 +214,7 @@ test('answer keeps reason for the client and sends Harness only the answers', as
 
 test('relay lays the question out with the first line left for the client\'s own pick', () => {
   const text = core.relayText(core.shapeQuestion({ questions: [{ id: 'n', question: 'Which name?', options: [{ number: 1, label: 'csvmd (Recommended)', description: 'short' }, { number: 2, label: 'tabula' }] }] }))
-  assert.equal(text, 'My recommendation: <your pick>, because <your own reason>\n\nWhich name?\n  1. csvmd - short\n  2. tabula\n  (The model in Harness that asked would pick: csvmd)')
+  assert.equal(text, 'My recommendation: <an option, or your own answer>, because <your own reason>\n\nWhich name?\n  1. csvmd - short\n  2. tabula\n  (The model in Harness that asked would pick: csvmd)\n\nYou can also answer in your own words.')
   assert.equal(core.relayText(undefined), undefined)
 })
 
@@ -257,4 +260,62 @@ test('the ended hint follows the checks: none sent, all passed, or one failed fo
   assert.equal(core.waitResult(broken).hint, core.ENDED_HINT, 'a real failure: fixes as usual')
   const shared = { run_id: 'r9', state: 'completed', evidence: { same_folder_runs: ['hrun-x'] } }
   assert.match(core.waitResult(shared).hint, /never delete or revert a file because this run was not asked for it/)
+})
+
+test('a client allowed to decide may answer in its own words, and a relay may recommend outside the options', () => {
+  assert.match(core.ASKED, /decide as the task's owner: an option only if it fits as is, else your own words/)
+  assert.match(core.ASKED, /On a single choice, text replaces the option/)
+  assert.match(core.ASKED, /My recommendation: <an option, or your own answer>, because <reason>/)
+  assert.match(core.ASKED, /even outside the options/)
+  const st = core.waitResult({ run_id: 'r', state: 'waiting', needs_input: 'question', question: { count: 1, questions: [{ id: 'q', question: 'Which?', options: [{ number: 1, label: 'a' }] }] } })
+  assert.match(st.hint, /answer as the task's owner: an option only if it fits as is, else your own words \(text; on a single choice, text replaces the option\)/)
+  assert.match(st.hint, /the answer that best fits this task, checked against its file names and requirements \(an option, or your own answer when none fits\)/)
+  assert.match(st.hint, /Never "your choice"/)
+  assert.match(st.hint, /If they pick your recommendation, submit the answer alone, without "Recommended" or the reason/)
+  assert.match(st.hint, /An option that needs a note, a fix or an explanation to work for this task does not fit/)
+})
+
+test('an option chosen for the user gets a second look before it is sent; own words and the user\'s own answers go at once', () => {
+  const a = { run_id: 'oc-1', answers: [{ id: 'q', choose: [2] }] }
+  const first = core.optionCheck(a, 'fits')
+  assert.equal(first.submitted, false)
+  assert.equal(first.hint, core.OPTION_CHECK_HINT)
+  assert.match(first.hint, /without looking at the options, write down the answer this user would want/)
+  assert.deepEqual(first.check, [{ id: 'q', choose: [2] }])
+  assert.equal(core.optionCheck(a, 'fits'), null, 'the same answers again go through')
+  assert.notEqual(core.optionCheck(a, 'fits'), null, 'and the next time asks again')
+  assert.equal(core.optionCheck({ run_id: 'oc-2', answers: [{ id: 'q', text: 'plain .md' }] }, 'fits'), null)
+  assert.equal(core.optionCheck({ run_id: 'oc-3', answers: [{ id: 'q', choose: [1] }] }), null)
+  assert.notEqual(core.optionCheck({ run_id: 'oc-1', answers: [{ id: 'q', choose: [1] }] }, 'fits'), null, 'another option is looked at anew')
+})
+
+test('a stopped run that answered a question for the user keeps the sentence to say so', () => {
+  const decided_for_user = { answers: [{ id: 'q', selected: ['a'] }], reason: 'fits' }
+  for (const st of [{ state: 'failed', turn_end: { kind: 'aborted', reason: { kind: 'user' } } }, { state: 'interrupted' }, { state: 'cancelled' }]) {
+    const hint = core.stopHint({ ...st, decided_for_user }).hint
+    assert.match(hint, /^You answered a question for the user during this run/)
+    assert.doesNotMatch(core.stopHint(st).hint, /You answered a question/)
+    assert.equal(core.waitResult({ run_id: 'r', ...st, decided_for_user }).hint, hint)
+  }
+})
+
+test('a question comes hint first, laid out as a message (relay) and as a question tool call with the recommendation as its first option', () => {
+  const question = { count: 2, questions: [
+    { id: 'q', question: 'Which?', options: [{ number: 1, label: 'a (Recommended)' }, { number: 2, label: 'b' }] },
+    { id: 'm', question: 'Which parts?', multi_select: true, options: [{ number: 1, label: 'x' }] },
+  ] }
+  const st = core.waitResult({ run_id: 'r', state: 'waiting', needs_input: 'question', question: core.shapeQuestion(question), hint: 'old' })
+  assert.deepEqual(Object.keys(st).slice(0, 3), ['hint', 'relay', 'question_tool'])
+  assert.match(st.hint, /^Harness asks the user 2 question\(s\)\./)
+  assert.match(st.hint, /first option of question_tool \(in a question tool such as request_user_input\)/)
+  assert.deepEqual(st.question_tool, [
+    { title: 'Which?', options: ['Recommended: <an option, or your own answer>, because <your own reason>', 'a', 'b'] },
+    { title: 'Which parts? (several can be chosen)', options: ['Recommended: <an option, or your own answer>, because <your own reason>', 'x'] },
+  ])
+  assert.equal(st.run_id, 'r')
+  const f = core.followResult({ state: 'needs_input', session_id: 's', question: { count: 1, questions: [{ id: 'q', question: 'Which?', options: [] }] } })
+  assert.equal(Object.keys(f)[0], 'hint')
+  assert.match(f.hint, /with dsh_answer and session_id s \(no run_id\) and a one-sentence reason/)
+  assert.match(f.hint, /then call dsh_wait again with the same session_id, until and this cursor\.$/)
+  assert.equal(core.questionTool(undefined), undefined)
 })

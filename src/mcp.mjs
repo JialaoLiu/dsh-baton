@@ -183,7 +183,7 @@ async function waitAnyInChunks(run_ids, progress, signal, meta) {
     if (Date.now() - t0 < 500) await new Promise((r) => setTimeout(r, 500))
     if (Date.now() >= deadline) {
       const asking = running.filter((r) => r.state === 'waiting').map((r) => r.run_id)
-      if ([...answers.values()].some((st) => st.harness_down)) return { run_ids, timed_out: true, harness_down: true, still_running: running, hint: `${core.HARNESS_DOWN_HINT.replace('the same run_id', 'the same run_ids')}` }
+      if ([...answers.values()].some((st) => st.harness_down)) return { run_ids, timed_out: true, harness_down: true, still_running: running, hint: core.harnessDownHint('call dsh_wait again with the same run_ids') }
       return {
         run_ids, timed_out: true, still_running: running,
         hint: `None of these runs has ended yet. Call dsh_wait again with the same run_ids, with no progress check or progress note in between (work the user asked you to do meanwhile is fine).${asking.length ? ` ${asking.join(', ')} still wait${asking.length === 1 ? 's' : ''} for a person (see dsh_status for the question): answer with dsh_answer if you may, or tell the user.` : ''}`,
@@ -369,7 +369,7 @@ const TOOLS = [
   {
     name: 'dsh_answer',
     annotations: annotations('Answer question', hints(false, false, false)),
-    description: `Answer the questions a waiting run asked (needs_input: answer in dsh_wait or dsh_status). ${core.ASKED} Per question: option numbers or labels in choose, text for a free answer, or skip. The answer reaches Harness once every question has one (submitted: true; remaining lists the rest); then wait for the run again. If the user already answered in Harness, it reports that there is no open question.`,
+    description: `Answer the questions a waiting run asked (needs_input in dsh_wait or dsh_status). ${core.ASKED} Per question: choose (option numbers or labels), text (your own answer, complete on its own), or skip. It reaches Harness once every question has an answer (submitted: true; remaining lists the rest); then wait again. If the user already answered in Harness, it says there is no open question.`,
     inputSchema: {
       type: 'object', required: ['answers'], properties: {
         run_id: str('Run id that is waiting (needs_input: answer)'),
@@ -379,7 +379,7 @@ const TOOLS = [
             type: 'object', properties: {
               id: str('Question id from question.questions[].id; may be left out when there is one question'),
               choose: { type: 'array', items: { type: ['integer', 'string'] }, description: 'Option numbers (1 = first) or labels; one for a single-choice question' },
-              text: str('Free-text answer'),
+              text: str('Your own answer in words'),
               skip: { type: 'boolean', description: 'Skip this question' },
             },
           },
@@ -389,6 +389,8 @@ const TOOLS = [
     },
     run: async (a) => {
       const st = await core.api.answer(a)
+      // The second look at an option chosen for the user: nothing was sent, its hint says what next.
+      if (st.check) return st
       if (!a.run_id) return { ...st, hint: `${st.reason ? 'Tell the user what you chose and this reason. ' : ''}Then call dsh_wait again as before (the same run_id or session_id), with the same until and the last cursor.` }
       return {
         ...st,

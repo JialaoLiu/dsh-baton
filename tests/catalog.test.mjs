@@ -49,7 +49,8 @@ test('the rules that left the instructions are in the tools that need them', asy
     assert.match(tools.dsh_send.inputSchema.properties.checks.description, /project's own test commands.*never check scripts you write yourself/)
     const answer = tools.dsh_answer.description
     assert.match(answer, /If the user told you to decide such questions yourself/)
-    assert.match(answer, /My recommendation: <option>, because <reason>/)
+    assert.match(answer, /My recommendation: <an option, or your own answer>, because <reason>/)
+    assert.match(answer, /text \(your own answer, complete on its own\)/)
     assert.match(answer, /Never answer on the user's behalf without that permission/)
     assert.match(tools.dsh_list_sessions.description, /archived or gone: do not look for them on disk/)
     assert.match(tools.dsh_call.description, /does not list \(dsh-baton was updated without a restart/)
