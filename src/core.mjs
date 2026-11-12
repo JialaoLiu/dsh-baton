@@ -873,6 +873,9 @@ export const api = {
         throw new Error(`The Harness plugin dsh-baton-host ${hostVersion ?? ''} is too old to choose a model; this MCP server is ${VERSION}. Nothing was sent. Update the plugin: Plugins → dsh-baton-host → Uninstall, then Add plugin → dsh-baton-host@${VERSION}, or send without model.`.replace('  ', ' '))
       })
     }
+    // A client whose tool list predates team (a conversation open since before an update) sends
+    // it as the string "true" or "false": take that as the boolean it means.
+    if (typeof a.team === 'string' && /^(true|false)$/i.test(a.team.trim())) a = { ...a, team: a.team.trim().toLowerCase() === 'true' }
     // Agent Teams live in Harness itself; a plugin without the team feature would drop it silently.
     if (a.team != null) {
       if (!host) throw new Error('Agent Teams need the dsh-baton-host plugin running inside DeepSeek Harness. Nothing was sent.')

@@ -126,3 +126,12 @@ test('team goes to the plugin with the message; a plugin before 0.6.12 gets noth
   assert.match(old.reply.error, /dsh-baton-host 0\.6\.11 is too old to turn on Agent Teams.*Nothing was sent/)
   rm(project)
 })
+
+test('team as the string "true" or "false" (a client with a tool list from before team) goes as a boolean', async () => {
+  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
+  const on = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'hi', team: 'true' } })
+  assert.equal(on.host.team, true)
+  const off = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'hi', team: 'False' } })
+  assert.equal(off.host.team, false)
+  rm(project)
+})
