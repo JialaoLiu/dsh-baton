@@ -156,10 +156,13 @@ export const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'
 
 // The plugin version from the last successful ping.
 let hostVersion = null
+let hostFeatures = []
 
 export async function hostAvailable() {
   try {
-    hostVersion = (await hostCall('ping', {}, { timeoutMs: 2000 }))?.version ?? null
+    const pong = await hostCall('ping', {}, { timeoutMs: 2000 })
+    hostVersion = pong?.version ?? null
+    hostFeatures = Array.isArray(pong?.features) ? pong.features : []
     return true
   } catch {
     return false
@@ -869,6 +872,11 @@ export const api = {
         if (!/Unknown method: models/.test(error?.message)) throw error
         throw new Error(`The Harness plugin dsh-baton-host ${hostVersion ?? ''} is too old to choose a model; this MCP server is ${VERSION}. Nothing was sent. Update the plugin: Plugins → dsh-baton-host → Uninstall, then Add plugin → dsh-baton-host@${VERSION}, or send without model.`.replace('  ', ' '))
       })
+    }
+    // Agent Teams live in Harness itself; a plugin without the team feature would drop it silently.
+    if (a.team != null) {
+      if (!host) throw new Error('Agent Teams need the dsh-baton-host plugin running inside DeepSeek Harness. Nothing was sent.')
+      if (!hostFeatures.includes('team')) throw new Error(`The Harness plugin dsh-baton-host ${hostVersion} is too old to turn on Agent Teams; this MCP server is ${VERSION}. Nothing was sent. Update the plugin (Plugins → dsh-baton-host → Update to ${VERSION}), or send without team.`)
     }
     // No Harness CLI to run the turn without the app (the Windows app has none on PATH): what
     // is wrong is that Harness is not running, not that a CLI is missing.

@@ -21,7 +21,7 @@ process.env.DSH_BATON_AUTO_REGISTER = '0'
 // goal: sessionId -> the goal projection's wire value (Harness's values.goal);
 // log: sessionId -> the session's event log as inspect returns it; goals / agents: Harness's
 // goals and agents services, reached through inject.
-function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web, settings, queue = false, recheckMs = 300, models, account, goal, log, goals, agents } = {}) {
+function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web, settings, queue = false, recheckMs = 300, models, account, goal, log, goals, agents, agentTeams } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-'))
   // Run records go to the bridge home: keep them out of the real ~/.dsh-baton.
   process.env.DSH_BATON_HOME = home ?? path.join(dir, 'bridge')
@@ -40,9 +40,9 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
     effect: (fn) => disposers.push(fn()),
     waterfall: async (ev, { sessionId }) => activity(sessionId),
     logger: { info: () => {}, error: (m) => logs.push(m) },
-    ...(web || settings || models?.viaInject || account || goals || agents ? {
+    ...(web || settings || models?.viaInject || account || goals || agents || agentTeams ? {
       inject: (deps, fn) => {
-        const services = { webServer: web, settings, agentDefaultModel: models?.viaInject ? models.agentDefaultModel : undefined, accountController: account, goals, agents }
+        const services = { webServer: web, settings, agentDefaultModel: models?.viaInject ? models.agentDefaultModel : undefined, accountController: account, goals, agents, agentTeams }
         if (deps.every((d) => services[d])) fn({ effect: (f) => disposers.push(f()), ...services })
       },
     } : {}),
@@ -1272,4 +1272,40 @@ test('status by session id: what it is doing, its goal and its last turn\'s repl
   assert.equal(st.turn_running, false)
   const plain = await h.call('status', { session_id: 's2' })
   assert.equal('goal' in plain, false)
+})
+
+test('team: Agent Teams go on for the session before the prompt; a Harness without them sends nothing', async (t) => {
+  const order = []
+  const agentTeams = { setEnabled: async (agent, enabled) => { order.push(['team', agent.id, enabled]) } }
+  const agents = { get: (id) => ({ id }) }
+  const h = startHost({ agentTeams, agents })
+  t.after(h.close); await h.ready
+  const prompt = h.ctx.sessionController.prompt
+  h.ctx.sessionController.prompt = async (r) => { order.push(['prompt', r.sessionId]); return prompt(r) }
+  assert.deepEqual((await h.call('ping')).features, ['team'], 'the MCP server reads team support from ping')
+  const st = await h.call('send', { message: 'split this up', cwd: W, team: true })
+  assert.equal(st.team, true)
+  assert.deepEqual(order, [['team', 'new-1', true], ['prompt', 'new-1']])
+  const off = await h.call('send', { message: 'alone now', session_id: 'new-1', team: false })
+  assert.equal(off.team, false)
+  assert.deepEqual(order.slice(2), [['team', 'new-1', false], ['prompt', 'new-1']])
+  const plain = await h.call('send', { message: 'more', session_id: 'new-1' })
+  assert.equal('team' in plain, false)
+  assert.equal(order.length, 5, 'no team, no change')
+  await assert.rejects(h.call('send', { message: 'x', session_id: 'new-1', team: 'yes' }), /team must be true or false/)
+})
+
+test('team on a Harness without per-session Agent Teams (0.2.2-rc.1 has only the install-wide one): no session is made, nothing is sent', async (t) => {
+  const h = startHost({ agentTeams: { listMembers: () => [] }, agents: { get: (id) => ({ id }) } })
+  t.after(h.close); await h.ready
+  await assert.rejects(h.call('send', { message: 'split this up', cwd: W, team: true }), /Nothing was sent: this DeepSeek Harness cannot turn Agent Teams on per session; that needs Harness 0\.2\.2-rc\.2 or later/)
+  assert.deepEqual([h.calls.create.length, h.calls.prompt.length], [0, 0], 'no session is made')
+})
+
+test('team: Harness\'s own refusal (not the root session) comes back and nothing is sent', async (t) => {
+  const agentTeams = { setEnabled: async () => { throw new Error('change Team mode from the root Session') } }
+  const h = startHost({ agentTeams, agents: { get: (id) => ({ id }) } })
+  t.after(h.close); await h.ready
+  await assert.rejects(h.call('send', { message: 'x', session_id: 'child-1', team: true }), /No message was sent: Agent Teams could not be turned on \(change Team mode from the root Session\)/)
+  assert.equal(h.calls.prompt.length, 0)
 })

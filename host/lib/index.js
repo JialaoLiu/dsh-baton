@@ -790,6 +790,7 @@ export function apply(ctx) {
 
   let goalsService = null
   let agentsService = null
+  let teamsService = null
   const activations = new Map() // sessionId -> 'armed' | 'disarmed', from goal/activation-changed
   ctx.on('goal/activation-changed', guard('goal activation', ({ sessionId, goal } = {}) => {
     if (!sessionId) return
@@ -1174,9 +1175,32 @@ export function apply(ctx) {
     }
   }
 
-  async function send({ message, session_id, cwd, workspace_id, mode: asked, sender, model, reasoning_effort }) {
+  // --- Agent Teams ----------------------------------------------------------------
+  // Harness 0.2.2-rc.2 turns a root session's Team mode on or off from its model menu
+  // ("Use Agent Teams"): agentTeams.setEnabled with the session's live root Agent. The
+  // selection is saved in the session, so it holds for later messages and restarts.
+  const TEAMS_UNSUPPORTED = 'this DeepSeek Harness cannot turn Agent Teams on per session; that needs Harness 0.2.2-rc.2 or later: update Harness, or send without team'
+  async function setTeam(sessionId, enabled) {
+    if (typeof teamsService?.setEnabled !== 'function') throw new Error(TEAMS_UNSUPPORTED)
+    // The exact live Agent from Harness's registry, as its own UI lookup takes it: Team rejects
+    // any other object ("subagent tree access requires the exact live caller"). A session not
+    // loaded yet is loaded first.
+    let agent = agentsService?.get?.(sessionId)
+    if (!agent && typeof controller.resolveAgent === 'function') {
+      await controller.resolveAgent(sessionId)
+      agent = agentsService?.get?.(sessionId)
+    }
+    // A finished sub-agent's session is never loaded again: name the likely cause.
+    if (!agent) throw new Error(`session ${sessionId} is not loaded in Harness; if it is a sub-agent's (teammate's) session, change Team mode on its root session instead`)
+    await teamsService.setEnabled(agent, enabled)
+  }
+
+  async function send({ message, session_id, cwd, workspace_id, mode: asked, sender, model, reasoning_effort, team }) {
     if (!message || !message.trim()) throw new Error('message is required')
     if (asked != null && asked !== 'followup' && asked !== 'steer') throw new Error('mode must be followup or steer')
+    if (team != null && typeof team !== 'boolean') throw new Error('team must be true or false')
+    // Checked before a new session is made, so a Harness without them is left as it was.
+    if (team != null && typeof teamsService?.setEnabled !== 'function') throw new Error(`Nothing was sent: ${TEAMS_UNSUPPORTED}`)
     // Without a mode, a message to a busy session does what Harness's own busy-send setting says.
     const fromHarness = asked == null ? harnessBusyMode() : null
     const mode = asked ?? fromHarness ?? 'followup'
@@ -1209,6 +1233,12 @@ export function apply(ctx) {
     const chosen = await applyModel(sessionId, plan, isNew).catch((error) => {
       throw new Error(`${isNew ? `Session ${sessionId} was created, but no message was sent: ` : 'No message was sent: '}the model could not be set (${error?.message ?? error})`)
     })
+    // Team mode goes on (or off) before the prompt, so the first step already has the Team tools.
+    if (team != null) {
+      await setTeam(sessionId, team).catch((error) => {
+        throw new Error(`${isNew ? `Session ${sessionId} was created, but no message was sent: ` : 'No message was sent: '}Agent Teams could not be turned ${team ? 'on' : 'off'} (${error?.message ?? error})`)
+      })
+    }
     // A session that never picked a model runs on Harness's default.
     let provider = chosen.model?.provider
     if (!provider) try { provider = defaultModel()?.currentSelection?.()?.provider } catch { /* unknown: no check */ }
@@ -1237,6 +1267,7 @@ export function apply(ctx) {
       mode_source: modeSource,
       model: chosen.model,
       model_source: chosen.source,
+      ...(team != null ? { team } : {}),
       ...(ahead.length ? { other_active_runs: ahead } : {}),
       ...(workspace ? { workspace } : {}),
     }
@@ -1362,7 +1393,8 @@ export function apply(ctx) {
   }
 
   const methods = {
-    ping: () => ({ name, version: VERSION, pid: process.pid }),
+    // features: what this plugin can do that an older one cannot (team: dsh_send team).
+    ping: () => ({ name, version: VERSION, pid: process.pid, features: ['team'] }),
     workspaces,
     create_workspace: createWorkspace,
     list_sessions: listSessions,
@@ -1468,6 +1500,10 @@ export function apply(ctx) {
     ctx.inject(['agents'], (child) => {
       agentsService = child.agents
       child.effect(() => () => { if (agentsService === child.agents) agentsService = null }, 'dsh-baton-host agents')
+    })
+    ctx.inject(['agentTeams'], (child) => {
+      teamsService = child.agentTeams
+      child.effect(() => () => { if (teamsService === child.agentTeams) teamsService = null }, 'dsh-baton-host agent teams')
     })
     ctx.inject(['webServer'], (web) => {
       web.effect(() => web.webServer.register({
