@@ -1,4 +1,4 @@
-// Registering the dsh-baton MCP server for Claude Code and Codex, user-wide, by writing
+// Registering the dsh-baton MCP server for Claude Code, Codex and Antigravity, user-wide, by writing
 // their config files directly. This needs no `claude` or `codex` on PATH (desktop-only
 // installs have neither) and no hand-editing of TOML.
 //
@@ -20,6 +20,12 @@ export const claudeConfigPath = (env = process.env, home = os.homedir()) =>
   path.join(env.CLAUDE_CONFIG_DIR || home, '.claude.json')
 export const codexConfigPath = (env = process.env, home = os.homedir()) =>
   path.join(env.CODEX_HOME || path.join(home, '.codex'), 'config.toml')
+// Antigravity 2.x reads its MCP servers from ~/.gemini/config/mcp_config.json (1.x used
+// ~/.gemini/antigravity/mcp_config.json, which 2.x no longer reads). ~/.gemini/antigravity
+// is its own data folder, so it tells Antigravity from the Gemini CLI, which also uses ~/.gemini.
+export const antigravityConfigPath = (env = process.env, home = os.homedir()) =>
+  path.join(home, '.gemini', 'config', 'mcp_config.json')
+const antigravityPresent = (home) => fs.existsSync(path.join(home, '.gemini', 'antigravity'))
 
 // ~/.claude.json: the top-level "mcpServers" map is Claude Code's user scope.
 export function editClaudeConfig(text, entry) {
@@ -31,8 +37,27 @@ export function editClaudeConfig(text, entry) {
   return JSON.stringify({ ...cfg, mcpServers: servers }, null, 2) + '\n'
 }
 
+// Antigravity's mcp_config.json: the same "mcpServers" map, without Claude Code's "type".
+// It starts the server once, when Antigravity starts, so a new entry needs a restart of it.
+// Antigravity never had the old dsh-bridge entry, so only our own is touched; a file with
+// nothing of ours to remove stays as it is (or absent).
+export function editAntigravityConfig(text, entry) {
+  // A file saved by an editor that writes a byte order mark is still JSON.
+  const json = text.replace(/^\uFEFF/, '')
+  const cfg = json.trim() ? JSON.parse(json) : {}
+  const servers = { ...(cfg.mcpServers ?? {}) }
+  if (!entry && !(NAME in servers)) return text
+  if (entry) {
+    // Keys of the user's own (such as "disabled") stay; ours are set afresh.
+    const { env: _env, ...kept } = servers[NAME] ?? {}
+    servers[NAME] = { ...kept, command: entry.command, args: entry.args, ...(entry.env && Object.keys(entry.env).length ? { env: entry.env } : {}) }
+  } else delete servers[NAME]
+  return JSON.stringify({ ...cfg, mcpServers: servers }, null, 2) + '\n'
+}
+
 export function readClaudeEntry(text) {
-  const e = text.trim() ? JSON.parse(text).mcpServers?.[NAME] : null
+  const json = text.replace(/^\uFEFF/, '')
+  const e = json.trim() ? JSON.parse(json).mcpServers?.[NAME] : null
   if (!e?.command) return null
   return { command: e.command, args: e.args ?? [], ...(e.env && Object.keys(e.env).length ? { env: e.env } : {}) }
 }
@@ -418,6 +443,8 @@ export function clients(env = process.env, home = os.homedir()) {
   return [
     { id: 'claude', label: 'Claude Code', file: claude, present: fs.existsSync(claude) || fs.existsSync(path.join(home, '.claude')), edit: editClaudeConfig, read: readClaudeEntry },
     { id: 'codex', label: 'Codex', file: codex, present: fs.existsSync(path.dirname(codex)), edit: (t, e) => editCodexConfig(t, e, home), read: readCodexEntry },
+    // Same "mcpServers" shape as ~/.claude.json, so Claude Code's reader fits.
+    { id: 'antigravity', label: 'Antigravity', file: antigravityConfigPath(env, home), present: antigravityPresent(home), edit: editAntigravityConfig, read: readClaudeEntry },
   ]
 }
 
@@ -590,7 +617,9 @@ export function autoRegister({ root, home = os.homedir(), env = process.env, nod
         rewrite(c.file, (t) => c.edit(t, { ...launch, args: [script] }))
         result.clients.push({ id: c.id, label: c.label, state: 'registered' })
       } catch (e) {
-        result.clients.push({ id: c.id, label: c.label, state: 'failed', error: e.message })
+        // A config the user broke by hand (a comment, a trailing comma) is left alone and named,
+        // since running setup would fail the same way.
+        result.clients.push({ id: c.id, label: c.label, state: 'failed', ...(e instanceof SyntaxError ? { error: 'bad-json', file: c.file } : { error: e.message }) })
       }
     }
     const codex = list.find((c) => c.id === 'codex')

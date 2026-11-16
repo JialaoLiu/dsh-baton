@@ -18,15 +18,17 @@
 
 <p align="center"><a href="#quick-start"><b>Quick start</b></a> &nbsp;·&nbsp; <a href="#see-it-run"><b>See it run</b></a> &nbsp;·&nbsp; <a href="#how-it-compares"><b>How it compares</b></a> &nbsp;·&nbsp; <a href="#token-usage"><b>Token usage</b></a> &nbsp;·&nbsp; <a href="#how-it-works"><b>How it works</b></a> &nbsp;·&nbsp; <a href="#tools"><b>Tools</b></a> &nbsp;·&nbsp; <a href="#security-and-limits"><b>Security</b></a></p>
 
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/clients-dark.svg"><img src="./assets/readme/en/clients.svg" width="100%" alt="Works with Claude Code, Codex and Antigravity. In Harness their messages are labelled Sent by Claude, Sent by ChatGPT and Sent by Antigravity from another chat."></picture></p>
+
 <br>
 
-Hand coding tasks from Claude Code or Codex to DeepSeek Harness on your machine: the task runs live in the Harness window, the main agent hears back once when it ends, and it gets back the files that changed, the project's own test results and a requirement-by-requirement checklist.
+Hand coding tasks from Claude Code, Codex or Antigravity to DeepSeek Harness on your machine: the task runs live in the Harness window, the main agent hears back once when it ends, and it gets back the files that changed, the project's own test results and a requirement-by-requirement checklist.
 
-- **Watch it and step in:** the task runs live in the Harness window and you can type into it at any time. Every message is labelled "Sent by ChatGPT / Claude from another chat". When Harness stops to ask a question, the main agent answers it if you told it to decide, or brings it to you with its own recommendation.
+- **Watch it and step in:** the task runs live in the Harness window and you can type into it at any time. Every message is labelled "Sent by Claude / ChatGPT / Antigravity from another chat". When Harness stops to ask a question, the main agent answers it if you told it to decide, or brings it to you with its own recommendation.
 - **Less of the 5-hour window:** a long Codex job takes 16% of a ChatGPT Plus 5-hour window instead of 86% (GPT-6 Astra, the kanban task). The rest of the numbers are under [Token usage](#token-usage).
 - **Nothing to watch or poll:** the main agent waits without polling and gets the result when the run ends. With several runs going at once, each one comes back within a second of finishing.
 
-Needs DeepSeek Harness ≥ 0.2.1-rc.2 (signed in) and Claude Code or Codex. [Quick start →](#quick-start)
+Needs DeepSeek Harness ≥ 0.2.1-rc.2 (signed in) and Claude Code, Codex or Antigravity. [Quick start →](#quick-start)
 
 ## What it is
 
@@ -62,16 +64,16 @@ Beyond the savings, the split itself helps:
 **Install in one step, check in two.**
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/install-dark.svg"><img src="./assets/readme/en/install.svg" width="100%" alt="Install: in Harness open Plugins, Add plugin, enter dsh-baton-host, Install, Enable now; it registers dsh-baton for Claude Code and Codex. Then check that it works: open a new conversation in Claude Code or Codex (Codex asks once to approve the dsh-baton tools), and ask it to call dsh_list_workspaces; it lists your Harness workspaces."></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/install-dark.svg"><img src="./assets/readme/en/install.svg" width="100%" alt="Install: in Harness open Plugins, Add plugin, enter dsh-baton-host, Install, Enable now; it registers dsh-baton for Claude Code, Codex and Antigravity. Then check that it works: open a new conversation in Claude Code, Codex or Antigravity (restart Antigravity once; Codex asks once to approve the dsh-baton tools), and ask it to call dsh_list_workspaces; it lists your Harness workspaces."></picture>
 </p>
 
 Nothing else to install: no Node.js, no terminal. It is the same on macOS and Windows.
 
-**Install:** in Harness, **Plugins** (插件) → **Add plugin** (添加插件) → type `dsh-baton-host` → **Install** (安装) → **Enable now** (立即启用). Switched on, the plugin registers dsh-baton for Claude Code and Codex, for every folder, and Harness says so.
+**Install:** in Harness, **Plugins** (插件) → **Add plugin** (添加插件) → type `dsh-baton-host` → **Install** (安装) → **Enable now** (立即启用). Switched on, the plugin registers dsh-baton for Claude Code, Codex and Antigravity, for every folder, and Harness says so.
 
 **Check that it works:**
 
-① **Open a new chat:** in Claude Code or Codex, start a **new** conversation; one that was already open does not see dsh-baton yet. It is the same in both. Codex asks you to approve MCP tool calls: approve the `dsh-baton` tools (for unattended `codex exec` runs, add `--approve-for-me`).
+① **Open a new chat:** in Claude Code or Codex, start a **new** conversation; one that was already open does not see dsh-baton yet. It is the same in both. Antigravity starts its MCP servers only when it starts: restart it once after the plugin is switched on. Codex asks you to approve MCP tool calls: approve the `dsh-baton` tools (for unattended `codex exec` runs, add `--approve-for-me`).
 
 ② **Ask for the workspaces:** ask it to call `dsh_list_workspaces`. It lists your Harness workspaces.
 
@@ -219,7 +221,7 @@ You don't have to take DeepSeek's word for it. Before the run, dsh-baton notes w
 ## Tools
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/tools-dark.svg"><img src="./assets/readme/en/tools.svg" width="100%" alt="Ten tools in the tool list: list workspaces, list sessions, read session, list models, send, status, wait, answer, cancel, call. Six less used tools are reached through dsh_call: create and rename workspace, session activity, rename session, update queued, list runs"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/en/tools-dark.svg"><img src="./assets/readme/en/tools.svg" width="100%" alt="Ten tools in the tool list: list workspaces, list sessions, read session, list models, send, status, wait, answer, cancel, call. Six less used tools, listed in Claude Code and Antigravity, reached through dsh_call in Codex: create and rename workspace, session activity, rename session, update queued, list runs"></picture>
 </p>
 
 <p align="center">
@@ -236,7 +238,7 @@ The server's MCP instructions are a single sentence; how to hand over, wait and 
 | Tool | What it does |
 |---|---|
 | `dsh_list_workspaces` | Workspaces in the Harness sidebar |
-| `dsh_create_workspace` | Through `dsh_call`. Register a folder as a workspace (creates the folder if missing); returns the existing one if already registered |
+| `dsh_create_workspace` | Codex: through `dsh_call`. Register a folder as a workspace (creates the folder if missing); returns the existing one if already registered |
 | `dsh_list_sessions` | Sessions newest first, with title, folder, running state and `model` (what its next request uses); filter by folder or text. Archived sessions are left out |
 | `dsh_list_models` | The models Harness can run (provider, id, name, reasoning efforts) and its default model |
 | `dsh_read_session` | Recent prompts and replies of one session (with tool names); `archived: true` for an archived session |
@@ -244,12 +246,12 @@ The server's MCP instructions are a single sentence; how to hand over, wait and 
 | `dsh_status` | Run progress: state, recent text and tool calls, final reply; `waiting_on` when the turn is over but sub-agents or jobs still run; `human_interjections` when someone typed in the Harness UI mid-run; state `interrupted` for a run cut short by a Harness restart; `model` the run was sent with. With `session_id` instead of `run_id`: what the session is doing, its Harness goal and its last turn's reply |
 | `dsh_wait` | Wait for the run to end; a finished run carries `evidence` (files changed, check results) when the message was sent with `checks` (or until it stops to ask a person, see `dsh_answer`): up to 3540 s per call for Codex (its tool timeout for dsh-baton less 60 s; 270 s when that is not set), 50 s for other clients. Still going: returns `timed_out` with just the state; call it again. Clients that can wait in the background use `dsh_send`'s `wait_command` instead. `dsh_status` is a one-off look, not a way to wait. A run in a session with a Harness goal is waited for until the goal stops (`until` `turn` and `every_minutes` for progress reports). With `session_id` instead of `run_id` it follows the session's Harness goal without sending anything (`until`, `cursor`, `every_minutes`; see How each client waits). With `run_ids` it waits for several runs and returns as soon as any ends or asks (`ended`, `still_running`) |
 | `dsh_answer` | Answer the questions a run stopped to ask (Harness's ask_user_question): per question, an option number or label, free text, or skip; on a single choice, free text replaces the option. `dsh_wait` and `wait_command` return as soon as a run asks, with the questions (`needs_input`, `question`; the option Harness's model would pick is in `harness_suggested`) and a layout for passing them on (`relay`, `question_tool`). When you let the main agent decide, it takes an option only if it fits as written, and otherwise answers in its own words; before it picks an option for you, the first call is held back and it writes the answer you would want without the options, sending the option only if the two agree. Otherwise it brings you the questions with its recommendation first, which may be an answer outside the options; pick that and only the answer itself is sent. You can also answer in the Harness window: whoever answers first wins |
-| `dsh_session_activity` | Through `dsh_call`. What a session is doing now: running turn, sub-agents (any depth), background jobs; `archived: true` for an archived session |
-| `dsh_update_queued` | Through `dsh_call`. Change a message still waiting in the queue of a busy session, by its `run_id`: `edit` its text, `remove` it, or `steer` it into the running turn now. Once it has reached the conversation it can no longer be changed |
+| `dsh_session_activity` | Codex: through `dsh_call`. What a session is doing now: running turn, sub-agents (any depth), background jobs; `archived: true` for an archived session |
+| `dsh_update_queued` | Codex: through `dsh_call`. Change a message still waiting in the queue of a busy session, by its `run_id`: `edit` its text, `remove` it, or `steer` it into the running turn now. Once it has reached the conversation it can no longer be changed |
 | `dsh_cancel` | Stop everything a session is doing, by `run_id` or `session_id`: turn, sub-agents, jobs. Harness also drops the messages waiting in its queue; their runs end as `cancelled` |
-| `dsh_rename_session` | Through `dsh_call`. Rename a session |
-| `dsh_rename_workspace` | Through `dsh_call`. Rename a workspace (sidebar title only; the folder is not moved) |
-| `dsh_list_runs` | Through `dsh_call`. Recent runs, optionally of one session |
+| `dsh_rename_session` | Codex: through `dsh_call`. Rename a session |
+| `dsh_rename_workspace` | Codex: through `dsh_call`. Rename a workspace (sidebar title only; the folder is not moved) |
+| `dsh_list_runs` | Codex: through `dsh_call`. Recent runs, optionally of one session |
 | `dsh_call` | Calls any `dsh_*` tool by name: the less used tools (create and rename workspace, rename session, session activity, update queued, list runs) are not in the tool list, to keep every request short, and are reached this way; also for a conversation whose tool list predates an update. An unknown name lists the tools |
 
 </details>
@@ -325,7 +327,7 @@ Version history is on [GitHub Releases](https://github.com/JialaoLiu/dsh-baton/r
 
 **Codex's cwd for dsh-baton.** Codex starts an MCP server in the conversation's folder unless its table sets `cwd`; when that folder is gone (a project on an external drive that is not connected) the server cannot start and the conversation has no `dsh_*` tools. The plugin writes `cwd` (your home folder) into `[mcp_servers.dsh-baton]` and adds it to an existing table that has none; a `cwd` you set yourself is kept.
 
-**Updates need no restart.** When a newer version lands in `~/.dsh-baton/app` (a plugin update, `setup`, or a copy by hand), or the same version with changed files, conversations already open in Claude Code and Codex use it from their next `dsh_*` call: the server checks the folder before each call, starts the new version, and says once in that call's result that it was updated. A `dsh_wait` that is already running finishes on the old version first. If the new version cannot start, the old one keeps working and the result says why. A tool added in the new version shows up in Claude Code at once (the server tells the client its tool list changed); Codex keeps the tool list a conversation started with, so it does not show a new tool until the next conversation; it can still use one at once through `dsh_call`, which the update note points to, and the tools it already has run the new code right away.
+**Updates need no restart.** When a newer version lands in `~/.dsh-baton/app` (a plugin update, `setup`, or a copy by hand), or the same version with changed files, conversations already open in Claude Code, Codex and Antigravity use it from their next `dsh_*` call: the server checks the folder before each call, starts the new version, and says once in that call's result that it was updated. A `dsh_wait` that is already running finishes on the old version first. If the new version cannot start, the old one keeps working and the result says why. A tool added in the new version shows up in Claude Code at once (the server tells the client its tool list changed); Codex keeps the tool list a conversation started with, so it does not show a new tool until the next conversation; it can still use one at once through `dsh_call`, which the update note points to, and the tools it already has run the new code right away.
 
 **`npx -y dsh-baton-mcp setup`** does the same registration from a terminal: for a plugin that could not register, or when you come from an MCP directory. With the plugin already registered it changes nothing, then points you to the plugin if it is missing.
 

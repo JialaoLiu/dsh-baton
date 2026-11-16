@@ -8,7 +8,7 @@ import { runHook, parseHookInput } from './codex-hook.mjs'
 
 const USAGE = `Usage: dsh-baton <command> [args]
 
-  setup [--remove]                                        register the MCP server for Claude Code and Codex (user-wide)
+  setup [--remove]                                        register the MCP server for Claude Code, Codex and Antigravity
   codex-stop-hook                                         the Codex Stop hook of plugins 0.6.0–0.6.3, for conversations opened before 0.6.4
   workspaces                                              list Harness sidebar workspaces (host plugin)
   new-workspace <dir> [--title <t>]                       register (and create) a folder as a workspace

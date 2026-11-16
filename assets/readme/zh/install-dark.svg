@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="452" viewBox="0 0 1200 452" role="img" aria-labelledby="title desc">
   <title id="title">一步装好，两步验证</title>
-  <desc id="desc">安装：Harness → 插件 → 添加插件 → 输入 dsh-baton-host → 安装 → 立即启用，它会为 Claude Code 和 Codex 注册 dsh-baton。然后验证能用：在 Claude Code 或 Codex 里新开一个对话（Codex 第一次会请你批准 dsh-baton 的工具），让它调用 dsh_list_workspaces，会列出你的 Harness 工作区。</desc>
+  <desc id="desc">安装：Harness → 插件 → 添加插件 → 输入 dsh-baton-host → 安装 → 立即启用，它会为 Claude Code、Codex 和 Antigravity 注册 dsh-baton。然后验证能用：在 Claude Code、Codex 或 Antigravity 里新开一个对话（Antigravity 先重启一次；Codex 第一次会请你批准 dsh-baton 的工具），让它调用 dsh_list_workspaces，会列出你的 Harness 工作区。</desc>
   <rect width="1200" height="452" rx="24" fill="#0D1117"/>
 <text x="64" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="18" fill="#9198A1" letter-spacing="2">安装</text><path d="M64 90 v-8 H405 v8" stroke="#484F58" stroke-width="2" fill="none"/>
 <text x="429" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, monospace" font-size="18" fill="#9198A1" letter-spacing="2">验证能用</text><path d="M429 90 v-8 H1135 v8" stroke="#484F58" stroke-width="2" fill="none"/>
@@ -20,16 +20,18 @@
 <path d="M150 299 l6 6 l-6 6" stroke="#9198A1" stroke-width="2" fill="none"/>
 <rect x="164" y="288" width="94" height="34" rx="17" fill="#0D1117" stroke="#484F58" stroke-width="1"/>
 <text x="211.0" y="311" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="17" fill="#E6EDF3" text-anchor="middle">立即启用</text>
-<text x="88" y="362" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">为 Claude Code 和 Codex 注册。</text>
+<text x="88" y="362" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">为 Claude Code、Codex 和</text>
+<text x="88" y="388" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">Antigravity 注册。</text>
 <path d="M409 262.0 h16" stroke="#9198A1" stroke-width="2"/>
 <rect x="429" y="112" width="341" height="300" rx="16" fill="#161B22" stroke="#30363D" stroke-width="1"/>
 <circle cx="470" cy="156" r="16" fill="none" stroke="#4493F8" stroke-width="2.5"/>
 <text x="470" y="163" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="19" fill="#4493F8" font-weight="700" text-anchor="middle">1</text>
 <text x="495" y="164" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="23" fill="#E6EDF3" font-weight="700">新开对话</text>
-<text x="453" y="212" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">在 Claude Code 或 Codex 里</text>
-<text x="453" y="240" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">新开一个对话。</text>
-<text x="453" y="268" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">Codex 第一次会请你</text>
-<text x="453" y="296" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">批准 dsh-baton 的工具。</text>
+<text x="453" y="212" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">在 Claude Code、Codex 或</text>
+<text x="453" y="240" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">Antigravity 里新开一个对话</text>
+<text x="453" y="268" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">（Antigravity 先重启一次）。</text>
+<text x="453" y="296" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">Codex 第一次会请你</text>
+<text x="453" y="324" font-family="&quot;Microsoft YaHei&quot;, &quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" font-size="18" fill="#9198A1">批准 dsh-baton 的工具。</text>
 <path d="M774 262.0 h16" stroke="#9198A1" stroke-width="2"/>
 <rect x="794" y="112" width="341" height="300" rx="16" fill="#161B22" stroke="#30363D" stroke-width="1"/>
 <circle cx="835" cy="156" r="16" fill="none" stroke="#4493F8" stroke-width="2.5"/>

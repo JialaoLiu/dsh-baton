@@ -173,7 +173,7 @@ test('switched on, the plugin registers the MCP server and serves the outcome to
   for (let i = 0; i < 50 && s.registration.state === 'pending'; i++) { await sleep(100); s = await status() }
   assert.equal(s.registration.state, 'done')
   assert.equal(s.registration.ok, true, JSON.stringify(s))
-  assert.deepEqual(s.registration.clients.map((c) => [c.id, c.state]), [['claude', 'registered'], ['codex', 'registered']])
+  assert.deepEqual(s.registration.clients.map((c) => [c.id, c.state]), [['claude', 'registered'], ['codex', 'registered'], ['antigravity', 'not-installed']])
   // This repo is a git checkout: its own server is registered, no copy is made.
   const entry = JSON.parse(fs.readFileSync(path.join(dir, '.claude.json'), 'utf8')).mcpServers['dsh-baton']
   assert.equal(entry.args[0], path.resolve(import.meta.dirname, '..', 'src', 'server.mjs'))
@@ -1286,6 +1286,14 @@ test('team: Agent Teams go on for the session before the prompt; a Harness witho
   const st = await h.call('send', { message: 'split this up', cwd: W, team: true })
   assert.equal(st.team, true)
   assert.deepEqual(order, [['team', 'new-1', true], ['prompt', 'new-1']])
+  // Agent Teams belong to the session: not changed for a message that would wait behind a
+  // running turn (that turn would change too).
+  await assert.rejects(h.call('send', { message: 'alone now', session_id: 'new-1', team: false }), /No message was sent: the session is busy, and Agent Teams apply to the whole session/)
+  assert.equal(order.length, 2, 'nothing changed')
+  const s = S('new-1')
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.emit(...s.status('running'))
+  h.emit(...s.text('split')); h.emit(...s.turnEnd()); h.emit(...s.status('idle'))
+  assert.equal((await h.call('wait', { run_id: st.run_id, timeout_s: 5 })).state, 'completed')
   const off = await h.call('send', { message: 'alone now', session_id: 'new-1', team: false })
   assert.equal(off.team, false)
   assert.deepEqual(order.slice(2), [['team', 'new-1', false], ['prompt', 'new-1']])

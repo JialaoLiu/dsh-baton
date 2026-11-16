@@ -6,15 +6,16 @@ Newline-delimited JSON: request `{"id", "method", "params"}`, reply `{"id", "res
 
 | Method | Params |
 |---|---|
-| `ping` | — |
+| `ping` | — (returns `name`, `version`, `pid`, `features`; `features` has `team` when `send` takes `team`) |
 | `workspaces` | — |
 | `create_workspace` | `path`, `title?`, `create_dir?` (default `true`) |
 | `list_sessions` | `cwd?`, `query?`, `limit?` |
 | `read_session` | `session_id`, `last?` |
 | `models` | — |
-| `send` | `message`, and `session_id` or `cwd` or `workspace_id`; `mode?` (`followup` \| `steer`; left out, Harness's busy-send setting, else `followup`) |
-| `status` | `run_id`, `tail?` |
+| `send` | `message`, and `session_id` or `cwd` or `workspace_id`; `mode?` (`followup` \| `steer`; left out, Harness's busy-send setting, else `followup`); `sender?`, `model?`, `reasoning_effort?`, `team?` (`true` \| `false`) |
+| `status` | `run_id` and `tail?`, or `session_id` |
 | `wait` | `run_id`, `timeout_s?` |
+| `follow` | `session_id`, `until?` (`goal` \| `turn`), `cursor?`, `since_ms?`, `every_s?`, `timeout_s?` |
 | `activity` | `session_id` |
 | `cancel` | `run_id` or `session_id` |
 | `rename_session` | `session_id`, `title` |

@@ -1,11 +1,11 @@
-// `dsh-baton setup`: register the dsh-baton MCP server for Claude Code and Codex, user-wide
+// `dsh-baton setup`: register the dsh-baton MCP server for Claude Code, Codex and Antigravity, user-wide
 // (see register.mjs, which the Harness plugin also uses), and say what is left to do in Harness.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { ROOT, VERSION, config, hostAvailable, hostVersionSeen as versionOfHost, versionWarning } from './core.mjs'
-import { appDir, installApp, rewrite, stableNodePath, claudeConfigPath, codexConfigPath, editClaudeConfig, editCodexConfig, removeCodexHookBlock, noteCodexToolTimeout, readCodexToolTimeout } from './register.mjs'
+import { appDir, installApp, rewrite, stableNodePath, claudeConfigPath, codexConfigPath, antigravityConfigPath, editClaudeConfig, editCodexConfig, editAntigravityConfig, removeCodexHookBlock, noteCodexToolTimeout, readCodexToolTimeout } from './register.mjs'
 
 export { appDir, installApp, stableNodePath, claudeConfigPath, codexConfigPath, editClaudeConfig, editCodexConfig }
 
@@ -71,13 +71,14 @@ export function pluginSteps({ current, old }, running, hostDir, fromSource = fs.
   if (old) steps.push('  The plugin is installed under its old name: first Plugins (插件) → dsh-bridge-host → Uninstall (卸载).')
   if (current && !ok) {
     steps.push(isLink(current)
-      ? `  The plugin installed now comes from a local folder (${current.replace(/^(link|file):/, '')}): first Plugins (插件) → dsh-baton-host → Uninstall (卸载).`
+      ? `  The plugin installed now comes from a local folder (${current.replace(/^(link|file):/, '')}): first Plugins (插件) → dsh-baton-host → Uninstall (卸载). Harness deletes the files of a folder plugin it uninstalls: commit or copy that folder first.`
       : '  The plugin installed now comes from npm, not this checkout: first Plugins (插件) → dsh-baton-host → Uninstall (卸载).')
   }
   if (ok && !old) return ['Harness plugin: installed but not answering. Open Harness and check that dsh-baton-host is switched on in Plugins (插件).']
   if (fromSource) {
     const copied = copyToClipboard(hostDir)
     steps.push(`  Plugins (插件) → Add plugin (添加插件) → paste ${copied ? 'the path (already copied)' : 'this path'}: ${hostDir}`)
+    steps.push('  (Uninstalling a plugin added from a folder deletes that folder\'s files: commit your changes first, or add a copy of the folder.)')
   } else {
     const copied = copyToClipboard(PLUGIN)
     steps.push(`  Plugins (插件) → Add plugin (添加插件) → registry: Official npm registry → package: ${PLUGIN}${copied ? ' (already copied)' : ''}`)
@@ -128,6 +129,8 @@ export async function setup({ remove = false } = {}) {
   const hadTimeout = fs.existsSync(codexFile) && readCodexToolTimeout(fs.readFileSync(codexFile, 'utf8')) !== null
   register('Codex', codexFile, fs.existsSync(path.dirname(codexFile)), editCodexConfig)
   if (!remove && fs.existsSync(codexFile)) noteCodexToolTimeout(codexFile, undefined, undefined, !hadTimeout)
+  const antigravityFile = antigravityConfigPath()
+  register('Antigravity', antigravityFile, fs.existsSync(path.join(os.homedir(), '.gemini', 'antigravity')), editAntigravityConfig)
   // The Codex Stop hook plugins 0.6.0–0.6.3 added goes too, as the plugin takes it out.
   if (fs.existsSync(codexFile)) {
     try {
@@ -160,7 +163,8 @@ export async function setup({ remove = false } = {}) {
     }
     return lines.join('\n')
   }
-  lines.push('', 'MCP server registered user-wide: new conversations in Claude Code and Codex have the dsh_* tools.')
+  const agNote = fs.existsSync(path.join(os.homedir(), '.gemini', 'antigravity')) ? '; Antigravity has them after a restart' : ''
+  lines.push('', `MCP server registered user-wide: new conversations in Claude Code and Codex have the dsh_* tools${agNote}.`)
 
   lines.push('', ...pluginSteps(installedPlugins(), await hostAvailable() ? versionOfHost() : null, path.join(root, 'host')))
   return lines.join('\n')

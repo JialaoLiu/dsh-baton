@@ -24,6 +24,14 @@ const int = (description, d) => ({ type: 'integer', description, default: d })
 const MAX_WAIT_S = 24 * 3600
 const envWait = Math.floor(Number(core.setting('WAIT_S')))
 const isCodex = () => core.senderOf(clientName) === 'codex'
+// Clients that list the six rarely used tools: Claude Code loads tools on demand and
+// Antigravity keeps one file per tool, so a model searching its tools finds them. Others
+// (Codex, with its catalog limit, and any client not known) reach them through dsh_call.
+const listsHidden = () => ['claude', 'antigravity'].includes(core.senderOf(clientName))
+// Whether the client may wait with a background command that wakes it when it exits. Not
+// Codex (no wake-on-exit), and not Antigravity on Windows: its terminal is sandboxed there and
+// may not open Harness's named pipe (EPERM), while this server, started outside it, can.
+const backgroundWaits = () => !isCodex() && !(process.platform === 'win32' && core.senderOf(clientName) === 'antigravity')
 let codexTimeout = { mtime: null, value: null }
 function codexToolTimeout() {
   try {
@@ -95,6 +103,13 @@ const followCommand = (sid, until = 'goal', cursor, everyMin) => (/^[\w.-]+$/.te
   ? cliCommand(`follow ${sid} --until ${until}${/^\d+:\d+$/.test(cursor ?? '') ? ` --cursor ${cursor}` : ''}${everyMin ? ` --every ${everyMin}m` : ''}`)
   : undefined)
 // A run in a session with a Harness goal is waited for until the goal stops.
+// A model that wants to change a queued message has to know dsh_update_queued is there: hidden
+// from tools/list, Claude Code searched its tools, found nothing and gave up (2026-11-16: it
+// steered a "merge the two" note instead). Now only Codex's list leaves it out (its catalog
+// limit), and the results of queued runs say how to change them.
+const QUEUE_HINT = () => !listsHidden()
+  ? 'While this message waits in the session\'s queue behind a running turn, you can change it: dsh_call {name: "dsh_update_queued", arguments: {run_id, action: "edit" (with message) | "remove" | "steer"}}. It is not in your tool list; dsh_call reaches it.'
+  : 'While this message waits in the session\'s queue behind a running turn, you can change it with dsh_update_queued {run_id, action: "edit" (with message) | "remove" | "steer"}.'
 const GOAL_WAIT_HINT = (how) => `In a session with a Harness goal (a message starting with /goal sets one) the wait goes on until the goal stops; add ${how} only when the user asked for progress reports.`
 const FOLLOW_COMMAND_HINT = ' Your client wakes you when a background command exits, so run follow_command that way instead of calling dsh_wait with session_id: it ends at the next report, with no polling.'
 // Several runs in parallel: one dsh_wait for all of them, so whichever ends first is dealt with
@@ -253,7 +268,7 @@ const TOOLS = [
   },
   {
     name: 'dsh_create_workspace',
-    hidden: true, // not in tools/list; reachable directly or through dsh_call
+    hidden: true, // not in Codex's tools/list; reachable directly or through dsh_call
     annotations: annotations('Create workspace', EDIT),
     description: 'Register a folder as a Harness workspace without starting a session (dsh_send with cwd does this too). Creates the folder unless create_dir is false; an already registered folder returns its workspace. Returns id, path, title and created. Needs the dsh-baton-host plugin.',
     inputSchema: { type: 'object', required: ['path'], properties: { path: str('Absolute folder path (~ allowed)'), title: str('Sidebar title; defaults to the folder name'), create_dir: { type: 'boolean', description: 'Create the folder if missing', default: true } } },
@@ -288,21 +303,43 @@ const TOOLS = [
     run: async (a, { meta } = {}) => {
       // A new session goes to this conversation's folder unless the call names another one;
       // a different folder is allowed but said back, so a wrong guess does not go unnoticed.
-      const here = a.session_id ? undefined : conversationFolder(meta, isCodex())
-      // Codex starts the server in the home folder (register.mjs), so its conversation folder
-      // comes from the thread's rollout only; when that is not found, ask rather than guess.
-      if (!here && !a.session_id && !a.cwd && !a.workspace_id && isCodex()) {
-        throw new Error('Could not tell which folder this Codex conversation works in, so nothing was sent. Call dsh_send again with cwd set to the project folder (or workspace_id from dsh_list_workspaces).')
+      const client = core.senderOf(clientName)
+      // Looked up with cwd too, to say so when cwd is outside this conversation's folder.
+      const here = a.session_id || a.workspace_id ? undefined : conversationFolder(meta, client)
+      // Codex starts the server in the home folder (register.mjs) and Antigravity in /, so their
+      // conversation folder comes from the client's own records only; when that is not found
+      // (or an Antigravity conversation has no project), ask rather than guess.
+      if (!here && !a.session_id && !a.cwd && !a.workspace_id && (client === 'codex' || client === 'antigravity')) {
+        const who = client === 'codex' ? 'Codex' : 'Antigravity'
+        throw new Error(`Could not tell which folder this ${who} conversation works in, so nothing was sent. Call dsh_send again with cwd set to the project folder (or workspace_id from dsh_list_workspaces).`)
       }
       const args = here && !a.cwd && !a.workspace_id ? { ...a, cwd: here } : a
       const folder = here && a.cwd && !within(a.cwd, here)
         ? { folder_note: `This conversation works in ${here}; the new session was started in ${a.cwd} as asked. If that was not intended, cancel it and send again without cwd.` }
         : args !== a ? { cwd: here } : {}
-      const st = { ...(await core.api.send({ ...args, sender: core.senderOf(core.setting('SENDER') || clientName) })), ...folder }
+      const sent = await core.api.send({ ...args, sender: core.senderOf(core.setting('SENDER') || clientName) })
+      // Only when it waits behind a turn (queued_behind; a plugin before 0.6.14 says only
+      // other_active_runs): every run starts out queued until Harness takes its prompt.
+      const behind = a.session_id && sent.state === 'queued' && sent.mode === 'followup' && (sent.queued_behind || sent.other_active_runs?.length)
+      const st = { ...sent, ...folder, ...(behind ? { queue_hint: QUEUE_HINT() } : {}) }
       // Codex has no wake-on-exit for shell commands: offered wait_command, it runs it in a
       // terminal and polls that, so it gets dsh_wait only.
       if (isCodex()) {
         return { ...st, hint: `Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something. ${PARALLEL_HINT} ${GOAL_WAIT_HINT('until turn and every_minutes')} ${NO_POLL} ${codeModeYield()}` }
+      }
+      // Antigravity on Windows: its terminal may not open Harness's pipe, so it waits with dsh_wait.
+      if (client === 'antigravity' && !backgroundWaits()) {
+        return { ...st, hint: `Run started. Call dsh_wait with this run_id; it returns when the run ends or stops to ask the user something (a wait command in Antigravity's terminal cannot reach Harness on Windows). ${PARALLEL_HINT} ${GOAL_WAIT_HINT('until turn and every_minutes')} ${NO_POLL}` }
+      }
+      // Antigravity runs a terminal command in the background and wakes the model when it
+      // exits, but left to judge that, some models (Sonnet 5.5, Gemini 3.8 Flash) waited with
+      // dsh_wait inside the turn instead: so it is told plainly.
+      if (client === 'antigravity') {
+        return {
+          ...st,
+          wait_command: waitCommand(st.run_id),
+          hint: `Run started. Run wait_command now as a background terminal command and end your turn: Antigravity wakes you when it exits, which is when the run ends or stops to ask the user something; it prints the reply or the questions, with no polling and no turns spent meanwhile. Do not call dsh_wait for it. Several runs: one background wait_command each, so whichever ends first wakes you. ${GOAL_WAIT_HINT('--until turn --every 10m on wait_command')}`,
+        }
       }
       return {
         ...st,
@@ -316,12 +353,15 @@ const TOOLS = [
     annotations: annotations('Run status'),
     description: 'Look once at a run or a session without waiting. A run (run_id): state, recent events, final reply, waiting_on (sub-agents or jobs still working) and human_interjections. A session (session_id): busy, activity, its Harness goal (phase, rounds, whether Harness goes on with it), needs_input, and its last turn\'s reply. Never a way to wait: use dsh_wait.',
     inputSchema: { type: 'object', properties: { run_id: str('Run id from dsh_send'), session_id: str('Session id, when you have no run_id (for example to look at a session whose goal you follow)'), tail: int('How many recent events of a run', 5) } },
-    run: async (a) => clip(await core.api.status({ tail: 5, ...a })),
+    run: async (a) => {
+      const st = clip(await core.api.status({ tail: 5, ...a }))
+      return a.run_id && st?.state === 'queued' ? { ...st, queue_hint: QUEUE_HINT() } : st
+    },
   },
   {
     name: 'dsh_wait',
     annotations: annotations('Wait for run'),
-    description: () => `Wait for a run sent with dsh_send to end and return its state and final reply.${!isCodex() ? ' Prefer the background wait_command from dsh_send if your client wakes you when a background command exits: it costs no turns.' : ''} It also returns at once when the run stops to ask a person: needs_input answer (reply with dsh_answer) or harness-ui (an approval in the Harness window). Each call waits up to ${waitSeconds()} s${isCodex() && waitSeconds() > 270 ? ' (270 s in a conversation that was already open when dsh-baton set Codex\'s tool timeout)' : ''}; if it returns timed_out: true, call dsh_wait again with the same run_id, without a progress note. Parallel runs: all ids in run_ids, never one by one; returns once any ends or asks (ended; the rest in still_running); then wait again with the rest plus your fixes. A run in a session with a Harness goal is followed on until the goal stops, with every round since the run began. With session_id instead of run_id it follows that session's Harness goal (see until) without sending anything; it also returns when Harness needs a person or will not go on by itself. Pass back the cursor each result gives.${isCodex() ? ` ${NO_POLL} ${codeModeYield()}` : ''}`,
+    description: () => `Wait for a run sent with dsh_send to end and return its state and final reply.${backgroundWaits() ? ' Prefer the background wait_command from dsh_send if your client wakes you when a background command exits: it costs no turns.' : ''} It also returns at once when the run stops to ask a person: needs_input answer (reply with dsh_answer) or harness-ui (an approval in the Harness window). Each call waits up to ${waitSeconds()} s${isCodex() && waitSeconds() > 270 ? ' (270 s in a conversation that was already open when dsh-baton set Codex\'s tool timeout)' : ''}; if it returns timed_out: true, call dsh_wait again with the same run_id, without a progress note. Parallel runs: all ids in run_ids, never one by one; returns once any ends or asks (ended; the rest in still_running); then wait again with the rest plus your fixes. A run in a session with a Harness goal is followed on until the goal stops, with every round since the run began. With session_id instead of run_id it follows that session's Harness goal (see until) without sending anything; it also returns when Harness needs a person or will not go on by itself. Pass back the cursor each result gives.${isCodex() ? ` ${NO_POLL} ${codeModeYield()}` : ''}`,
     inputSchema: {
       type: 'object', properties: {
         run_id: str('Run id from dsh_send'),
@@ -341,7 +381,7 @@ const TOOLS = [
       if (ids.length === 1) a = { ...a, run_id: ids[0] }
       if (!a.run_id && a.session_id) {
         const st = await followInChunks(a, progress, signal, meta)
-        if (isCodex() || st.cancelled || !['report', 'following', 'needs_input'].includes(st.state)) return st
+        if (!backgroundWaits() || st.cancelled || !['report', 'following', 'needs_input'].includes(st.state)) return st
         return { ...st, follow_command: followCommand(a.session_id, a.until, st.cursor, a.until === 'turn' ? (a.every_minutes ?? 10) : undefined), hint: `${st.hint}${FOLLOW_COMMAND_HINT}` }
       }
       if (!a.run_id) throw new Error('run_id is required (or session_id, to follow a session\'s goal)')
@@ -359,10 +399,10 @@ const TOOLS = [
         const f = await followInChunks({ session_id: result.session_id, until: a.until, every_minutes: a.every_minutes, ...(a.cursor ? { cursor: a.cursor } : { since_ms: Date.parse(result.started_at) || callStarted }), max_s: left - forChecks }, progress, signal, meta)
         const budget_ms = (waitSeconds(meta ?? null) - Math.round((Date.now() - callStarted) / 1000) - 5) * 1000
         const st = f.cancelled ? f : core.throughGoal(result, f, { budget_ms })
-        if (isCodex() || st.cancelled || !['report', 'following', 'needs_input'].includes(st.state)) return st
+        if (!backgroundWaits() || st.cancelled || !['report', 'following', 'needs_input'].includes(st.state)) return st
         return { ...st, follow_command: waitOnCommand(a.run_id, st.until, st.cursor, st.until === 'turn' ? (a.every_minutes ?? 10) : undefined), hint: `${st.hint}${FOLLOW_COMMAND_HINT}` }
       }
-      if (result.goal && !isCodex() && result.goal.phase === 'active') return { ...result, follow_command: followCommand(result.session_id), hint: `${result.hint}${FOLLOW_COMMAND_HINT}` }
+      if (result.goal && backgroundWaits() && result.goal.phase === 'active') return { ...result, follow_command: followCommand(result.session_id), hint: `${result.hint}${FOLLOW_COMMAND_HINT}` }
       return result
     },
   },
@@ -402,7 +442,7 @@ const TOOLS = [
   },
   {
     name: 'dsh_rename_session',
-    hidden: true, // not in tools/list; reachable directly or through dsh_call
+    hidden: true, // not in Codex's tools/list; reachable directly or through dsh_call
     annotations: annotations('Rename session', EDIT),
     description: 'Set the title of a Harness session; nothing else changes. Returns session_id and title.',
     inputSchema: { type: 'object', required: ['session_id', 'title'], properties: { session_id: str('Session id from dsh_list_sessions'), title: str('New title; surrounding spaces are trimmed and it must not be empty') } },
@@ -410,7 +450,7 @@ const TOOLS = [
   },
   {
     name: 'dsh_rename_workspace',
-    hidden: true, // not in tools/list; reachable directly or through dsh_call
+    hidden: true, // not in Codex's tools/list; reachable directly or through dsh_call
     annotations: annotations('Rename workspace', EDIT),
     description: 'Set the sidebar title of a workspace, by workspace_id or path; the folder is not renamed. Returns id, path and title.',
     inputSchema: { type: 'object', required: ['title'], properties: { workspace_id: str('Workspace id from dsh_list_workspaces'), path: str('Workspace folder, used when workspace_id is not given'), title: str('New title; surrounding spaces are trimmed and it must not be empty') } },
@@ -418,7 +458,7 @@ const TOOLS = [
   },
   {
     name: 'dsh_session_activity',
-    hidden: true, // not in tools/list; reachable directly or through dsh_call
+    hidden: true, // not in Codex's tools/list; reachable directly or through dsh_call
     annotations: annotations('Session activity'),
     description: 'What a session is doing now: busy, activity (running turn, sub-agents, background jobs, reminders) and bridge_runs. Read-only. Check it before dsh_send to a busy session or before dsh_cancel.',
     inputSchema: { type: 'object', required: ['session_id'], properties: { session_id: str('Session id from dsh_list_sessions') } },
@@ -427,13 +467,13 @@ const TOOLS = [
   {
     name: 'dsh_cancel',
     annotations: annotations('Cancel session work', hints(false, true, true)),
-    description: 'Stop everything a session is doing (turn, sub-agents, background jobs, reminders), by run_id or session_id; the session is kept. Messages queued in it are dropped too (removed_from_queue); to drop one queued message use dsh_update_queued. Safe to repeat. Returns still_busy, activity and removed_from_queue.',
+    description: () => `Stop everything a session is doing (turn, sub-agents, background jobs, reminders), by run_id or session_id; the session is kept. Messages queued in it are dropped too (removed_from_queue); to drop one queued message use dsh_update_queued${listsHidden() ? '' : ' (via dsh_call)'}. Safe to repeat. Returns still_busy, activity and removed_from_queue.`,
     inputSchema: { type: 'object', properties: { run_id: str('Run id from dsh_send; stops the session that run belongs to'), session_id: str('Session id, to stop work dsh-baton did not start') } },
     run: (a) => core.api.cancel(a),
   },
   {
     name: 'dsh_update_queued',
-    hidden: true, // not in tools/list; reachable directly or through dsh_call
+    hidden: true, // not in Codex's tools/list; reachable directly or through dsh_call
     annotations: annotations('Change queued message', hints(false, true, false)),
     description: 'Change a dsh_send message still queued behind a running turn: edit replaces its text, remove deletes it, steer sends it into the running turn now. Only while its run is queued.',
     inputSchema: { type: 'object', required: ['run_id', 'action'], properties: { run_id: str('Run id from dsh_send of the queued message'), action: { type: 'string', enum: ['edit', 'remove', 'steer'], description: 'edit replaces the text, remove deletes the message, steer sends it into the running turn now' }, message: str('New text for action edit (plain text, not empty)') } },
@@ -441,7 +481,7 @@ const TOOLS = [
   },
   {
     name: 'dsh_list_runs',
-    hidden: true, // not in tools/list; reachable directly or through dsh_call
+    hidden: true, // not in Codex's tools/list; reachable directly or through dsh_call
     annotations: annotations('List runs'),
     description: 'List the runs sent with dsh_send, newest first (the last 100 are kept), to recover a run_id: run_id, session_id, state, times, message_preview, final_text and error. Read-only.',
     inputSchema: { type: 'object', properties: { session_id: str('Only runs sent to this session'), limit: int('Max runs returned', 10) } },
@@ -461,10 +501,10 @@ const catalog = () => TOOLS.filter((t) => t.name !== 'dsh_call').map((t) => ({
 TOOLS.push({
   name: 'dsh_call',
   annotations: annotations('Call dsh-baton tool by name', hints(false, true, false)),
-  description: 'Call a dsh-baton tool by name, for a tool this conversation does not list (dsh-baton was updated without a restart; the update note names it). Runs the same code as a direct call, so it can do whatever that tool does. An unknown name changes nothing and returns the tools with their input schemas.',
+  description: 'Call a dsh-baton tool this conversation does not list, by name: dsh_update_queued (change a queued message), dsh_list_runs, dsh_session_activity, dsh_create_workspace, dsh_rename_session, dsh_rename_workspace, or one an update added. Same code as a direct call. An unknown name changes nothing and lists every tool with its schema.',
   inputSchema: {
     type: 'object', required: ['name'], properties: {
-      name: str('Tool name, e.g. dsh_send or a tool added by an update'),
+      name: str('Tool name'),
       arguments: { type: 'object', description: 'Arguments for that tool, as its input schema describes them (see the list returned for an unknown name)', default: {} },
     },
   },
@@ -501,7 +541,7 @@ async function handle(req) {
     case 'ping':
       return {}
     case 'tools/list':
-      return { tools: TOOLS.filter((t) => !t.hidden).map(({ run, hidden, ...t }) => ({ ...t, description: typeof t.description === 'function' ? t.description() : t.description })) }
+      return { tools: TOOLS.filter((t) => !t.hidden || listsHidden()).map(({ run, hidden, ...t }) => ({ ...t, description: typeof t.description === 'function' ? t.description() : t.description })) }
     case 'tools/call': {
       const tool = TOOLS.find((t) => t.name === req.params?.name)
       if (!tool) throw Object.assign(new Error(`Unknown tool: ${req.params?.name}`), { code: -32602 })

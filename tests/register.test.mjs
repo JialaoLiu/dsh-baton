@@ -6,19 +6,20 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { autoRegister, harnessRuntime, findNode, readClaudeEntry, readCodexEntry, editClaudeConfig, editCodexConfig, codexHookBlockFor, compareVersions, nodeVersionOk } from '../src/register.mjs'
+import { autoRegister, harnessRuntime, findNode, readClaudeEntry, readCodexEntry, editClaudeConfig, editCodexConfig, editAntigravityConfig, codexHookBlockFor, compareVersions, nodeVersionOk } from '../src/register.mjs'
 
 const REPO = path.resolve(import.meta.dirname, '..')
 const VERSION = JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).version
 
 // A home with Claude Code and Codex installed, and a package root that looks like the
 // dsh-baton-mcp package installed with the plugin (no .git).
-function sandbox({ claude = true, codex = true } = {}) {
+function sandbox({ claude = true, codex = true, antigravity = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-reg-'))
   const home = path.join(dir, 'home')
   fs.mkdirSync(home)
   if (claude) fs.mkdirSync(path.join(home, '.claude'))
   if (codex) fs.mkdirSync(path.join(home, '.codex'))
+  if (antigravity) fs.mkdirSync(path.join(home, '.gemini', 'antigravity'), { recursive: true })
   const pkg = path.join(dir, 'pkg')
   for (const part of ['src', 'host', 'package.json']) fs.cpSync(path.join(REPO, part), path.join(pkg, part), { recursive: true })
   const env = { PATH: '' }
@@ -26,10 +27,12 @@ function sandbox({ claude = true, codex = true } = {}) {
   const run = (opts = {}) => autoRegister({ root: pkg, home, env, app, find: () => process.execPath, ...opts })
   const claudeFile = path.join(home, '.claude.json')
   const codexFile = path.join(home, '.codex', 'config.toml')
-  return { dir, home, pkg, app, run, claudeFile, codexFile, done: () => fs.rmSync(dir, { recursive: true, force: true }) }
+  const antigravityFile = path.join(home, '.gemini', 'config', 'mcp_config.json')
+  return { dir, home, pkg, app, run, claudeFile, codexFile, antigravityFile, done: () => fs.rmSync(dir, { recursive: true, force: true }) }
 }
 
-const states = (r) => Object.fromEntries(r.clients.map((c) => [c.id, c.state]))
+// Antigravity is left out of the sandbox unless asked for: its "not-installed" is not listed.
+const states = (r) => Object.fromEntries(r.clients.filter((c) => !(c.id === 'antigravity' && c.state === 'not-installed')).map((c) => [c.id, c.state]))
 
 test('reads back the entries setup writes', () => {
   const entry = { command: "C:\\Program Files\\nodejs\\node.exe", args: ["C:\\Users\\o'neil\\app\\src\\server.mjs"] }
@@ -54,6 +57,53 @@ test('first switch-on copies the server to the app folder and registers it for b
     assert.deepEqual(states(s.run()), { claude: 'unchanged', codex: 'unchanged' })
     assert.equal(fs.readFileSync(s.claudeFile, 'utf8'), before)
   } finally { s.done() }
+})
+
+test('Antigravity: registered in ~/.gemini/config/mcp_config.json next to its other servers', () => {
+  const s = sandbox({ antigravity: true })
+  try {
+    // What Antigravity 2.32 had there: an HTTP server of the user's own.
+    fs.mkdirSync(path.dirname(s.antigravityFile), { recursive: true })
+    const unity = { serverUrl: 'http://127.0.0.1:8080/mcp', type: 'http', disabled: false }
+    fs.writeFileSync(s.antigravityFile, JSON.stringify({ mcpServers: { unityMCP: unity, 'dsh-bridge': { command: 'node', args: ['/old/server.mjs'] } } }, null, 2))
+    const r = s.run()
+    assert.equal(r.ok, true)
+    assert.deepEqual(states(r), { claude: 'registered', codex: 'registered', antigravity: 'registered' })
+    const cfg = JSON.parse(fs.readFileSync(s.antigravityFile, 'utf8'))
+    const script = path.join(s.app, 'src', 'server.mjs')
+    assert.deepEqual(cfg.mcpServers['dsh-baton'], { command: process.execPath, args: [script] }, 'no Claude Code "type", no empty env')
+    assert.deepEqual(cfg.mcpServers.unityMCP, unity)
+    assert.deepEqual(cfg.mcpServers['dsh-bridge'], { command: 'node', args: ['/old/server.mjs'] }, 'not ours to remove: Antigravity never had the old name')
+    assert.equal(states(s.run()).antigravity, 'unchanged')
+  } finally { s.done() }
+  // A config the user broke by hand is left as it is and named, for the plugin page to show.
+  const b = sandbox({ antigravity: true })
+  try {
+    fs.mkdirSync(path.dirname(b.antigravityFile), { recursive: true })
+    const broken = '{"mcpServers":{"unityMCP":{"command":"npx"},},}'
+    fs.writeFileSync(b.antigravityFile, broken)
+    const r = b.run()
+    assert.deepEqual(r.clients.find((c) => c.id === 'antigravity'), { id: 'antigravity', label: 'Antigravity', state: 'failed', error: 'bad-json', file: b.antigravityFile })
+    assert.equal(fs.readFileSync(b.antigravityFile, 'utf8'), broken)
+    assert.equal(states(r).claude, 'registered', 'the others are registered all the same')
+  } finally { b.done() }
+  // Only the Gemini CLI (no ~/.gemini/antigravity): nothing written there.
+  const g = sandbox()
+  try {
+    fs.mkdirSync(path.join(g.home, '.gemini'))
+    const r = g.run()
+    assert.equal(r.clients.find((c) => c.id === 'antigravity').state, 'not-installed')
+    assert.equal(fs.existsSync(g.antigravityFile), false)
+  } finally { g.done() }
+  assert.equal(JSON.parse(editAntigravityConfig('{"mcpServers":{"dsh-baton":{"command":"x"}}}', null)).mcpServers['dsh-baton'], undefined, 'setup --remove')
+  // setup --remove with nothing of ours there: no file is created, a file is left as it is.
+  assert.equal(editAntigravityConfig('', null), '')
+  const theirs = '{"mcpServers":{"dsh-bridge":{"command":"x"}}}'
+  assert.equal(editAntigravityConfig(theirs, null), theirs)
+  // The user's own keys on our entry (turned off in Antigravity) survive a new registration;
+  // a file with a byte order mark is still read.
+  const off = JSON.parse(editAntigravityConfig('\uFEFF{"mcpServers":{"dsh-baton":{"command":"old","env":{"X":"1"},"disabled":true}}}', { command: 'node', args: ['s.mjs'] }))
+  assert.deepEqual(off.mcpServers['dsh-baton'], { disabled: true, command: 'node', args: ['s.mjs'] })
 })
 
 test('a working table from before cwd gets it on the next start; a cwd the user set is kept', () => {

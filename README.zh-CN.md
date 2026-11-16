@@ -18,15 +18,17 @@
 
 <p align="center"><a href="#快速上手"><b>快速上手</b></a> &nbsp;·&nbsp; <a href="#看它跑"><b>看它跑</b></a> &nbsp;·&nbsp; <a href="#和其他做法的区别"><b>和其他做法的区别</b></a> &nbsp;·&nbsp; <a href="#token-用量实测"><b>Token 用量</b></a> &nbsp;·&nbsp; <a href="#工作原理"><b>工作原理</b></a> &nbsp;·&nbsp; <a href="#工具"><b>工具</b></a> &nbsp;·&nbsp; <a href="#安全与限制"><b>安全</b></a></p>
 
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/zh/clients-dark.svg"><img src="./assets/readme/zh/clients.svg" width="100%" alt="已支持 Claude Code、Codex 和 Antigravity。它们发到 Harness 的消息分别标着由 Claude、由 ChatGPT、由 Antigravity 从另一个聊天发送。"></picture></p>
+
 <br>
 
-把 Claude Code 或 Codex 的编码任务交给本机的 DeepSeek Harness：任务在 Harness 界面里实时跑，跑完主 Agent 收到一次结果，带回改了哪些文件、项目自己的测试结果，以及逐条需求对照表。
+把 Claude Code、Codex 或 Antigravity 的编码任务交给本机的 DeepSeek Harness：任务在 Harness 界面里实时跑，跑完主 Agent 收到一次结果，带回改了哪些文件、项目自己的测试结果，以及逐条需求对照表。
 
-- **看得见、能插话**：任务在 Harness 界面里实时跑，你随时能插话；每条消息都标着“由 ChatGPT / Claude 从另一个聊天发送”。Harness 中途提问时，你让主 Agent 自己决定的，它直接回答；否则它带着自己的建议把问题转给你。
+- **看得见、能插话**：任务在 Harness 界面里实时跑，你随时能插话；每条消息都标着“由 Claude / ChatGPT / Antigravity 从另一个聊天发送”。Harness 中途提问时，你让主 Agent 自己决定的，它直接回答；否则它带着自己的建议把问题转给你。
 - **省额度**：Codex 长任务占 ChatGPT Plus 5 小时额度，从 86% 降到 16%（GPT-6 Astra，看板案例）。其他数字在 [Token 用量实测](#token-用量实测)。
 - **不用盯**：主 Agent 等着结果、不轮询，做完就交回；几个任务同时跑时，每个做完 1 秒内就拿到。
 
-需要 DeepSeek Harness ≥ 0.2.1-rc.2（已登录）和 Claude Code 或 Codex。[快速上手 →](#快速上手)
+需要 DeepSeek Harness ≥ 0.2.1-rc.2（已登录），以及 Claude Code、Codex 或 Antigravity。[快速上手 →](#快速上手)
 
 ## 这是什么
 
@@ -62,16 +64,16 @@ dsh-baton 是一个 MCP 服务器加一个 Harness 小插件。主 Agent 用一�
 **一步装好，两步验证。**
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/zh/install-dark.svg"><img src="./assets/readme/zh/install.svg" width="100%" alt="安装：Harness → 插件 → 添加插件 → 输入 dsh-baton-host → 安装 → 立即启用，它会为 Claude Code 和 Codex 注册 dsh-baton。然后验证能用：在 Claude Code 或 Codex 里新开一个对话（Codex 第一次会请你批准 dsh-baton 的工具），让它调用 dsh_list_workspaces，会列出你的 Harness 工作区。"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/zh/install-dark.svg"><img src="./assets/readme/zh/install.svg" width="100%" alt="安装：Harness → 插件 → 添加插件 → 输入 dsh-baton-host → 安装 → 立即启用，它会为 Claude Code、Codex 和 Antigravity 注册 dsh-baton。然后验证能用：在 Claude Code、Codex 或 Antigravity 里新开一个对话（Antigravity 先重启一次；Codex 第一次会请你批准 dsh-baton 的工具），让它调用 dsh_list_workspaces，会列出你的 Harness 工作区。"></picture>
 </p>
 
 别的都不用装：不用 Node.js，也不用开终端。macOS 和 Windows 完全一样。
 
-**安装**：在 Harness 里 **插件** → **添加插件** → 输入 `dsh-baton-host` → **安装** → **立即启用**。插件启用后会为 Claude Code 和 Codex 注册 dsh-baton（对所有文件夹生效），Harness 里会弹出提示。
+**安装**：在 Harness 里 **插件** → **添加插件** → 输入 `dsh-baton-host` → **安装** → **立即启用**。插件启用后会为 Claude Code、Codex 和 Antigravity 注册 dsh-baton（对所有文件夹生效），Harness 里会弹出提示。
 
 **验证**：
 
-① **新开对话**：在 Claude Code 或 Codex 里**新开**一个对话，之前开着的对话还看不到 dsh-baton。两边一样。Codex 调用 MCP 工具时会请你批准，批准 `dsh-baton` 的工具即可（无人值守的 `codex exec` 加上 `--approve-for-me`）。
+① **新开对话**：在 Claude Code 或 Codex 里**新开**一个对话，之前开着的对话还看不到 dsh-baton。两边一样。Antigravity 只在启动时加载 MCP，插件启用后要重启它一次。Codex 调用 MCP 工具时会请你批准，批准 `dsh-baton` 的工具即可（无人值守的 `codex exec` 加上 `--approve-for-me`）。
 
 ② **检查**：让它调用 `dsh_list_workspaces`，会列出你的 Harness 工作区。
 
@@ -219,7 +221,7 @@ Codex 占 ChatGPT Plus 5 小时额度的比例，以及主 Agent 自己的花费
 ## 工具
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/zh/tools-dark.svg"><img src="./assets/readme/zh/tools.svg" width="100%" alt="工具列表里有 10 个：列出工作区、列出对话、读取对话、列出模型、发送、状态、等待、回答、取消、dsh_call。另外 6 个不常用的经 dsh_call 调用：新建和改名工作区、对话动态、给对话改名、修改排队消息、列出运行"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/zh/tools-dark.svg"><img src="./assets/readme/zh/tools.svg" width="100%" alt="工具列表里有 10 个：列出工作区、列出对话、读取对话、列出模型、发送、状态、等待、回答、取消、dsh_call。另外 6 个不常用的，Claude Code 和 Antigravity 直接列出，Codex 里经 dsh_call 调用：新建和改名工作区、对话动态、给对话改名、修改排队消息、列出运行"></picture>
 </p>
 
 <p align="center">
@@ -236,7 +238,7 @@ Codex 占 ChatGPT Plus 5 小时额度的比例，以及主 Agent 自己的花费
 | 工具 | 作用 |
 |---|---|
 | `dsh_list_workspaces` | 列出 Harness 侧边栏里的工作区 |
-| `dsh_create_workspace` | 经 `dsh_call` 调用。把一个文件夹登记为工作区（文件夹不存在会先创建）；已登记的直接返回原来那个 |
+| `dsh_create_workspace` | Codex 里经 `dsh_call` 调用。把一个文件夹登记为工作区（文件夹不存在会先创建）；已登记的直接返回原来那个 |
 | `dsh_list_sessions` | 列出对话（最新在前），带标题、目录、是否在跑和 `model`（下一次请求用的模型）；可按目录或关键字过滤。已归档的对话不会列出 |
 | `dsh_list_models` | 列出 Harness 能用的模型（provider、id、名称、推理强度）和它的默认模型 |
 | `dsh_read_session` | 读某个对话最近的消息和回复（含用到的工具名）；已归档的对话会带 `archived: true` |
@@ -244,12 +246,12 @@ Codex 占 ChatGPT Plus 5 小时额度的比例，以及主 Agent 自己的花费
 | `dsh_status` | 查看运行进度：状态、最近的文字和工具调用、最终回复；回合结束但子智能体/后台任务还在跑时给出 `waiting_on`；中途有人在 Harness 界面里发消息时给出 `human_interjections`；被 Harness 重启打断的任务状态为 `interrupted`；以及这次运行发送时用的 `model`。用 `session_id` 代替 `run_id` 时：会话正在做什么、它的 Harness 目标，以及上一回合的回复 |
 | `dsh_wait` | 等运行结束；发消息时带了 `checks` 的，结束后会附上 `evidence`（改了哪些文件、测试结果）（或者等到它停下来问人，见 `dsh_answer`）：Codex 每次最多等 3540 秒（它对 dsh-baton 的工具超时减 60 秒；没设时 270 秒），其他客户端 50 秒。没做完会带 `timed_out`，只返回状态，再调用一次即可。能在后台等待的客户端改用 `dsh_send` 返回的 `wait_command`。`dsh_status` 只用来看一眼，不用来等待。发到带 Harness 目标的会话的任务会一直等到目标停下（要汇报进度时用 `until` 为 `turn` 和 `every_minutes`）。用 `session_id` 代替 `run_id` 时，不发任何消息，跟进这个会话的 Harness 目标（`until`、`cursor`、`every_minutes`；见“各客户端怎么等待”）。用 `run_ids` 时同时等多个任务，任何一个做完或提问就返回（`ended`、`still_running`） |
 | `dsh_answer` | 回答运行中途提出的问题（Harness 的 ask_user_question）：每道题可以填选项编号或选项文字、自由填写，或者跳过；单选题填了文字就以文字为准。运行一提问，`dsh_wait` 和 `wait_command` 就立刻返回，带上题目（`needs_input`、`question`；Harness 模型推荐的选项在 `harness_suggested`）和转给你时用的排版（`relay`、`question_tool`）。你让主 Agent 自己决定时，选项照原文正好合适它才选，否则用自己的话回答；要替你选某个选项时，第一次调用不会发出，它得先不看选项写出你想要的答案，两者一致才发。没让它决定时，它把题目转给你，开头先写它的建议，建议可以不在选项里；你选了这条建议，就只发这条答案。你也可以直接在 Harness 窗口里回答，谁先答就算谁的 |
-| `dsh_session_activity` | 经 `dsh_call` 调用。对话此刻在做什么：正在跑的回合、子智能体（任意层级）、后台任务；已归档的对话会带 `archived: true` |
-| `dsh_update_queued` | 经 `dsh_call` 调用。按 `run_id` 修改还在忙碌对话队列里等待的消息：`edit` 改文字，`remove` 撤回，`steer` 立刻插进正在跑的回合。消息一旦进入对话就改不了了 |
+| `dsh_session_activity` | Codex 里经 `dsh_call` 调用。对话此刻在做什么：正在跑的回合、子智能体（任意层级）、后台任务；已归档的对话会带 `archived: true` |
+| `dsh_update_queued` | Codex 里经 `dsh_call` 调用。按 `run_id` 修改还在忙碌对话队列里等待的消息：`edit` 改文字，`remove` 撤回，`steer` 立刻插进正在跑的回合。消息一旦进入对话就改不了了 |
 | `dsh_cancel` | 按 `run_id` 或 `session_id` 停掉整个对话的工作：当前回合、子智能体、后台任务。Harness 会同时清掉队列里等待的消息，这些运行记为 `cancelled` |
-| `dsh_rename_session` | 经 `dsh_call` 调用。给对话改名 |
-| `dsh_rename_workspace` | 经 `dsh_call` 调用。给工作区改名（只改侧边栏标题，不动文件夹） |
-| `dsh_list_runs` | 经 `dsh_call` 调用。列出最近的运行，可按会话筛选 |
+| `dsh_rename_session` | Codex 里经 `dsh_call` 调用。给对话改名 |
+| `dsh_rename_workspace` | Codex 里经 `dsh_call` 调用。给工作区改名（只改侧边栏标题，不动文件夹） |
+| `dsh_list_runs` | Codex 里经 `dsh_call` 调用。列出最近的运行，可按会话筛选 |
 | `dsh_call` | 按名字调用任意 `dsh_*` 工具：不常用的工具（新建和重命名工作区、重命名对话、对话动态、修改排队消息、运行列表）不再出现在工具列表里，好让每次请求更短，改由这里调用；对话的工具列表还是更新前的旧版时也用它。名字不存在时会列出所有可用工具 |
 
 </details>
@@ -325,7 +327,7 @@ Harness 插件连不上时：
 
 **Codex 里 dsh-baton 的 cwd**。除非那张表里设了 `cwd`，Codex 会在对话所在的文件夹里启动 MCP 服务器；那个文件夹不在了（比如项目在没接上的移动硬盘上），服务器就启动不了，这个对话里也就没有 `dsh_*` 工具。插件会在 `[mcp_servers.dsh-baton]` 里写入 `cwd`（你的主文件夹），已有的表没有这一项时也会补上；你自己设过的 `cwd` 会保留。
 
-**更新不用重启**。新版本装进 `~/.dsh-baton/app` 后（插件更新、`setup` 或手动复制），或者同一版本但文件有改动时，Claude Code 和 Codex 里已经开着的对话，下一次调用 `dsh_*` 工具时就会用上：服务器每次调用前检查这个文件夹，启动新版本，并在这次调用的结果里提示一次已经更新。正在进行的 `dsh_wait` 会先在旧版本里跑完。新版本启动失败时，旧版本继续工作，结果里会说明原因。新版本新增的工具，Claude Code 里马上就能用（服务器会通知客户端工具列表变了）；Codex 一直用对话开始时的工具列表，新工具要到下一个新对话才会显示；不过旧对话里也能通过 `dsh_call` 马上用上新功能（更新提示里会写明），已有的工具也会立刻用上新代码。
+**更新不用重启**。新版本装进 `~/.dsh-baton/app` 后（插件更新、`setup` 或手动复制），或者同一版本但文件有改动时，Claude Code、Codex 和 Antigravity 里已经开着的对话，下一次调用 `dsh_*` 工具时就会用上：服务器每次调用前检查这个文件夹，启动新版本，并在这次调用的结果里提示一次已经更新。正在进行的 `dsh_wait` 会先在旧版本里跑完。新版本启动失败时，旧版本继续工作，结果里会说明原因。新版本新增的工具，Claude Code 里马上就能用（服务器会通知客户端工具列表变了）；Codex 一直用对话开始时的工具列表，新工具要到下一个新对话才会显示；不过旧对话里也能通过 `dsh_call` 马上用上新功能（更新提示里会写明），已有的工具也会立刻用上新代码。
 
 **`npx -y dsh-baton-mcp setup`** 在终端里做同样的注册：用于插件没能注册的情况，或者从 MCP 目录过来的用户。插件已经注册过时它什么都不改；插件没装的话，它会提示去添加。
 

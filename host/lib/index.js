@@ -258,17 +258,27 @@ export function apply(ctx) {
     fs.renameSync(tmp, file)
   }
 
+  // A write refused for a moment (Windows: an antivirus holding the file) is tried again a few
+  // times: a record left saying "running" would come back as interrupted after a restart.
+  const writeTries = new Map()
   function flushRuns() {
     clearTimeout(store.timer)
     store.timer = null
+    const again = new Set()
     for (const id of store.dirty) {
       const run = runs.get(id)
       try {
         if (run) writeRunFile(run)
         else fs.rmSync(path.join(store.dir, `${id}.json`), { force: true })
-      } catch (error) { logError('persist run', error) }
+        writeTries.delete(id)
+      } catch (error) {
+        logError('persist run', error)
+        const tries = (writeTries.get(id) ?? 0) + 1
+        if (['EPERM', 'EBUSY', 'EACCES'].includes(error?.code) && tries < 5) { writeTries.set(id, tries); again.add(id) } else writeTries.delete(id)
+      }
     }
-    store.dirty.clear()
+    store.dirty = again
+    if (again.size) store.timer = setTimeout(guard('persist runs', flushRuns), PERSIST_DELAY_MS)
   }
 
   // Load earlier records. A run that was active when Harness went away cannot
@@ -1222,6 +1232,12 @@ export function apply(ctx) {
         throw new Error(`The folder ${dir}${workspace_id ? ` (workspace ${workspace_id})` : ''} does not exist, so no session was started and nothing was sent. Check the path (a project on an external drive needs that drive connected), or create the folder first.`)
       }
     }
+    // Agent Teams belong to the whole session: changed while a turn runs (for a message that
+    // waits behind it, or one steered into it), they would change that turn too.
+    if (team != null && sessionId) {
+      const busy = activeRunsFor(sessionId).length > 0 || (await sessionActivity(sessionId).catch(() => [])).length > 0
+      if (busy) throw new Error(`No message was sent: the session is busy, and Agent Teams apply to the whole session, so turning them ${team ? 'on' : 'off'} now would change the running turn too. Send it again once the session is idle, or without team.`)
+    }
     const plan = await planModel(sessionId, { model, reasoning_effort })
     const isNew = !sessionId
     if (isNew) {
@@ -1233,12 +1249,6 @@ export function apply(ctx) {
     const chosen = await applyModel(sessionId, plan, isNew).catch((error) => {
       throw new Error(`${isNew ? `Session ${sessionId} was created, but no message was sent: ` : 'No message was sent: '}the model could not be set (${error?.message ?? error})`)
     })
-    // Team mode goes on (or off) before the prompt, so the first step already has the Team tools.
-    if (team != null) {
-      await setTeam(sessionId, team).catch((error) => {
-        throw new Error(`${isNew ? `Session ${sessionId} was created, but no message was sent: ` : 'No message was sent: '}Agent Teams could not be turned ${team ? 'on' : 'off'} (${error?.message ?? error})`)
-      })
-    }
     // A session that never picked a model runs on Harness's default.
     let provider = chosen.model?.provider
     if (!provider) try { provider = defaultModel()?.currentSelection?.()?.provider } catch { /* unknown: no check */ }
@@ -1246,7 +1256,17 @@ export function apply(ctx) {
       const empty = await emptyBalance()
       if (empty) throw new Error(`${isNew ? `Session ${sessionId} was created, but no message was sent` : 'No message was sent'}: the DeepSeek account has no balance left (${empty}), so the run would fail at once. Do not send again until the user has topped up (Harness → Settings → Account, or platform.deepseek.com).`)
     }
+    // Team mode goes on (or off) before the prompt, so the first step already has the Team tools,
+    // and after the checks that can refuse the send, so a refused send leaves it as it was.
+    if (team != null) {
+      await setTeam(sessionId, team).catch((error) => {
+        throw new Error(`${isNew ? `Session ${sessionId} was created, but no message was sent: ` : 'No message was sent: '}Agent Teams could not be turned ${team ? 'on' : 'off'} (${error?.message ?? error})`)
+      })
+    }
     const ahead = activeRunsFor(sessionId).map((r) => r.id)
+    // A followup into a busy session waits in its queue, behind our runs or a turn the user
+    // typed in Harness: said back, so the client knows it can still change it.
+    const queuedBehind = !isNew && mode === 'followup' && (ahead.length > 0 || (await sessionActivity(sessionId).catch(() => [])).length > 0)
     const run = {
       id: `hrun-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`,
       sessionId, requestId: requestIdFor(sender), ...(sender ? { sender } : {}), mode, state: 'queued', sawPrompt: false,
@@ -1269,6 +1289,7 @@ export function apply(ctx) {
       model_source: chosen.source,
       ...(team != null ? { team } : {}),
       ...(ahead.length ? { other_active_runs: ahead } : {}),
+      ...(queuedBehind ? { queued_behind: true } : {}),
       ...(workspace ? { workspace } : {}),
     }
   }
@@ -1459,7 +1480,7 @@ export function apply(ctx) {
 
 
   // --- MCP registration -----------------------------------------------------
-  // Switching the plugin on registers the dsh-baton MCP server for Claude Code and Codex,
+  // Switching the plugin on registers the dsh-baton MCP server for Claude Code, Codex and Antigravity,
   // the same entries `dsh-baton setup` writes, so adding the plugin is the whole install.
   // It runs again on every Harness start: a plugin update brings the server along, and an
   // entry that is already right is left untouched. The Plugins page reads the outcome from
@@ -1512,7 +1533,7 @@ export function apply(ctx) {
         handler: (request, response) => {
           const { state, ok, error, version, runtime, clients = [] } = registration
           response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
-          response.end(JSON.stringify({ version: VERSION, registration: { state, ok, error, version, runtime, clients: clients.map(({ id, label, state }) => ({ id, label, state })) } }))
+          response.end(JSON.stringify({ version: VERSION, registration: { state, ok, error, version, runtime, clients: clients.map(({ id, label, state, error, file }) => ({ id, label, state, ...(error === 'bad-json' ? { error, file } : {}) })) } }))
         },
       }), 'dsh-baton-host status route')
     })

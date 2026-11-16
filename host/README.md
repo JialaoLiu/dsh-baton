@@ -6,10 +6,10 @@ Hand coding tasks from Claude Code or Codex to DeepSeek Harness: they run live i
 
 ## Install / 安装
 
-**Install / 安装**: Plugins / 插件 → Add plugin / 添加插件 → `dsh-baton-host` → Install / 安装 → Enable now / 立即启用. That registers dsh-baton for Claude Code and Codex. / 启用后会为 Claude Code 和 Codex 注册 dsh-baton。
+**Install / 安装**: Plugins / 插件 → Add plugin / 添加插件 → `dsh-baton-host` → Install / 安装 → Enable now / 立即启用. That registers dsh-baton for Claude Code, Codex and Antigravity. / 启用后会为 Claude Code、Codex 和 Antigravity 注册 dsh-baton。
 
 **Check / 验证**:
-1. Open a new chat in Claude Code or Codex; Codex asks once to approve the dsh-baton tools. / 在 Claude Code 或 Codex 里新开对话，Codex 第一次会请你批准 dsh-baton 的工具。
+1. Open a new chat in Claude Code or Codex (restart Antigravity once); Codex asks once to approve the dsh-baton tools. / 在 Claude Code 或 Codex 里新开对话（Antigravity 要重启一次），Codex 第一次会请你批准 dsh-baton 的工具。
 2. Ask it to call `dsh_list_workspaces`; it lists your Harness workspaces. / 让它调用 `dsh_list_workspaces`，会列出你的 Harness 工作区。
 
 Not registered? / 没能注册？Run `npx -y dsh-baton-mcp setup`.

@@ -146,7 +146,12 @@ function hostCallAt(endpoint, method, params = {}, { timeoutMs = 15000 } = {}) {
       if (msg === null || typeof msg !== 'object' || Array.isArray(msg)) return finish(new Error(`dsh-baton-host sent an unreadable reply to ${method}`))
       msg.error ? finish(new Error(String(msg.error))) : finish(null, msg.result)
     })
-    conn.on('error', (e) => finish(Object.assign(e, { hostDown: true })))
+    // Refused rather than absent: Harness is running but this process may not open its pipe or
+    // socket (Antigravity's sandboxed terminal on Windows). Waiting for Harness to come back
+    // would never end, so it fails at once and says what to use instead.
+    conn.on('error', (e) => finish(['EPERM', 'EACCES'].includes(e.code)
+      ? Object.assign(new Error(`dsh-baton may not connect to Harness from here (${e.code} on ${endpoint}): this process is not allowed to, as in a sandboxed terminal. Use the dsh_* tools instead (dsh_wait, dsh_status).`), { code: e.code })
+      : Object.assign(e, { hostDown: true })))
     // Harness quitting closes the connection mid-call: marked so a wait can wait for it to come back.
     conn.on('close', () => finish(Object.assign(new Error(`dsh-baton-host closed the connection before answering ${method}`), { hostClosed: true })))
   })
@@ -187,9 +192,11 @@ export function versionWarning(plugin = hostVersion, server = VERSION) {
 }
 
 // Who a relayed message is from, shown on it in the Harness chat: DSH_BATON_SENDER if set,
-// else the MCP client's name (claude-code, claude-ai → claude; codex-mcp-client → codex).
+// else the MCP client's name (claude-code, claude-ai → claude; codex-mcp-client → codex;
+// antigravity-client → antigravity, whichever model the Antigravity conversation runs).
 export function senderOf(clientName = setting('SENDER')) {
   const n = String(clientName ?? '').toLowerCase()
+  if (n.includes('antigravity')) return 'antigravity'
   if (n.includes('claude')) return 'claude'
   if (n.includes('codex')) return 'codex'
   const slug = n.replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32)
@@ -607,7 +614,7 @@ export function followResult(st) {
     case 'following': return { ...st, hint: `No report is due yet: ${AGAIN}, with no progress note in between. ${QUIET}` }
     case 'goal_ended': return { ...st, hint: `The goal stopped (${st.ended_because}${st.goal?.blocked_reason ? `: ${st.goal.blocked_reason.message}` : ''}), so following is over. ${report}${st.ended_because === 'blocked' || st.ended_because === 'paused' ? ' It needs the user before it goes on: say so.' : ''}` }
     case 'needs_input': return st.question
-      ? asking(st, askHint(st.question.count, `dsh_answer and session_id ${st.session_id} (no run_id)`, AGAIN))
+      ? asking(st, askHint(st.question.count ?? st.question.questions?.length ?? 1, `dsh_answer and session_id ${st.session_id} (no run_id)`, AGAIN))
       : { ...st, hint: `Harness waits for something only a person can do in its window (an approval, for example). Tell the user, then ${AGAIN}.` }
     case 'needs_resume': return { ...st, hint: 'The goal is still active, but Harness will not go on with it by itself (for example after a Harness restart). Tell the user to press Continue in Harness, and stop following until they have.' }
     case 'goal_stalled': return { ...st, hint: 'The goal is active, yet no new round has started for 5 minutes: Harness may have stopped going on with it (for example after a restart). Tell the user; they can press Continue in Harness. Stop following until they have.' }
@@ -636,7 +643,7 @@ export const DECIDED_HINT = 'Required in your reply: you answered for the user d
 // more reliably than they follow rules.
 export const askHint = (n, answerWith, then) => `Harness asks the user ${n} question(s). If the user let you decide such questions, answer as the task's owner: an option only if it fits as is, else your own words (text; ${OWN_WORDS.toLowerCase().replace(/\.$/, '')}). An option that needs a note, a fix or an explanation to work for this task does not fit: write the answer it should have been instead. Answer with ${answerWith} and a one-sentence reason, then tell the user what you answered and why. Otherwise ask the user, your own recommendation first: fill the first line of relay (in a message) or the first option of question_tool (in a question tool such as request_user_input) with the answer that best fits this task, checked against its file names and requirements (an option, or your own answer when none fits), and why. Never "your choice", nor the asker's pick (harness_suggested) unchecked. If they pick your recommendation, submit the answer alone, without "Recommended" or the reason. Submit their answer with ${answerWith}, then ${then}.`
 const NEEDS_INPUT_HINT = (st) => st.question
-  ? askHint(st.question.count, 'dsh_answer', 'wait for the run again')
+  ? askHint(st.question.count ?? st.question.questions?.length ?? 1, 'dsh_answer', 'wait for the run again')
   : 'The run waits for something only a person can do in the Harness UI (an approval, for example). Tell the user, then wait for the run again.'
 // The hint first, then the question laid out two ways, then the rest of the status.
 export function asking(st, hint) {
@@ -744,13 +751,17 @@ const readReasons = () => { try { return JSON.parse(fs.readFileSync(reasonsFile(
 // (text) go through at once, as do answers the user gave (no reason).
 export const OPTION_CHECK_HINT = 'Not sent yet, because you chose an option for the user. First, without looking at the options, write down the answer this user would want for this task, as if Harness had asked with no options at all. Send the option (dsh_answer again with the same answers) only if it says the same as that answer. If it does not, answer with text: your answer. An option you can argue for, or make work with a note or an explanation, is not the answer this user would want.'
 const checked = new Map()
-export function optionCheck(a, reason) {
+// questionId: the question being answered, so a check left over from an earlier question
+// (answered another way, or in the Harness window) never lets a later one through.
+export function optionCheck(a, reason, questionId = null) {
   if (!(typeof reason === 'string' && reason.trim())) return null
   const picks = (a.answers ?? []).filter((x) => x.choose?.length && !(typeof x.text === 'string' && x.text.trim()))
   if (!picks.length) return null
-  const key = JSON.stringify([a.run_id ?? a.session_id, picks.map((x) => [x.id ?? null, x.choose.map(String)])])
+  const key = JSON.stringify([a.run_id ?? a.session_id, questionId, picks.map((x) => [x.id ?? null, x.choose.map(String)])])
   for (const [k, at] of checked) if (Date.now() - at > 30 * 60_000) checked.delete(k)
-  if (checked.delete(key)) return null
+  // Once looked at, the same answers go through each time: a send that then fails (the user
+  // answered in the window meanwhile) is retried and shows its real error.
+  if (checked.has(key)) return null
   checked.set(key, Date.now())
   return { submitted: false, check: picks.map((x) => ({ ...(x.id ? { id: x.id } : {}), choose: x.choose })), hint: OPTION_CHECK_HINT }
 }
@@ -957,7 +968,12 @@ export const api = {
   // user, not for Harness.
   async answer({ reason, ...a }) {
     if (!(await useHost())) throw new Error('Answering a question needs the dsh-baton-host plugin running inside DeepSeek Harness.')
-    const check = optionCheck(a, reason)
+    let questionId = null
+    if (typeof reason === 'string' && reason.trim()) {
+      const st = await hostCall('status', a.run_id ? { run_id: a.run_id } : { session_id: a.session_id }).catch(() => null)
+      questionId = st?.question?.question_id ?? null
+    }
+    const check = optionCheck(a, reason, questionId)
     if (check) return check
     try {
       const result = shaped(await hostCall('answer', a))

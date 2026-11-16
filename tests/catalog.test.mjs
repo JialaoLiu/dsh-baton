@@ -37,6 +37,20 @@ test('instructions are one short sentence; the catalogue Codex builds stays unde
   assert.ok(size.total < 24283 / 2, `Codex catalogue: ${size.total} chars`)
 })
 
+test('Codex lists 10 tools (its catalog limit); Claude Code and Antigravity list the six hidden ones too', async () => {
+  const HIDDEN = ['dsh_create_workspace', 'dsh_rename_session', 'dsh_rename_workspace', 'dsh_session_activity', 'dsh_update_queued', 'dsh_list_runs']
+  const codex = Object.keys((await listTools('codex-mcp-client')).tools)
+  assert.equal(codex.length, 10)
+  for (const name of HIDDEN) assert.ok(!codex.includes(name), name)
+  for (const client of ['claude-code', 'antigravity-client']) {
+    const listed = Object.keys((await listTools(client)).tools)
+    for (const name of HIDDEN) assert.ok(listed.includes(name), `${client}: ${name}`)
+    assert.equal(listed.length, 16, client)
+  }
+  // A client not known here keeps the short list, as before.
+  assert.equal(Object.keys((await listTools('some-other-client')).tools).length, 10)
+})
+
 test('the rules that left the instructions are in the tools that need them', async () => {
   for (const client of ['codex-mcp-client', 'claude-code']) {
     const { tools } = await listTools(client)
@@ -53,7 +67,11 @@ test('the rules that left the instructions are in the tools that need them', asy
     assert.match(answer, /text \(your own answer, complete on its own\)/)
     assert.match(answer, /Never answer on the user's behalf without that permission/)
     assert.match(tools.dsh_list_sessions.description, /archived or gone: do not look for them on disk/)
-    assert.match(tools.dsh_call.description, /does not list \(dsh-baton was updated without a restart/)
+    // dsh_call names the tools left out of tools/list (a model searching its tools finds them
+    // nowhere else), and still covers a tool an update added without a restart.
+    assert.match(tools.dsh_call.description, /does not list, by name: dsh_update_queued \(change a queued message\), dsh_list_runs, dsh_session_activity, dsh_create_workspace, dsh_rename_session, dsh_rename_workspace, or one an update added/)
+    // Codex reaches dsh_update_queued through dsh_call; other clients list it.
+    assert.match(tools.dsh_cancel.description, client === 'codex-mcp-client' ? /to drop one queued message use dsh_update_queued \(via dsh_call\)\./ : /to drop one queued message use dsh_update_queued\. /)
     assert.match(tools.dsh_wait.description, /needs_input answer/)
   }
 })
