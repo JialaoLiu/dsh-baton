@@ -28,6 +28,75 @@ const fileOf = (home, runId) => path.join(home, 'evidence', `${String(runId).rep
 const beforeOf = (file) => file.replace(/\.json$/, '.before.json')
 const isBefore = (name) => name.endsWith('.before.json')
 
+function git(dir, args) {
+  try {
+    // quotePath off: file names with Chinese or other non-ASCII letters come back as they are.
+    const r = spawnSync('git', ['-C', dir, '-c', 'core.quotePath=false', ...args], { encoding: 'utf8', timeout: 15_000, maxBuffer: 16 * 1024 * 1024 })
+    return r.status === 0 ? r.stdout : null
+  } catch { return null }
+}
+
+// Git worktrees the run made inside the folder (Harness's "Git worktree" plugin puts them in
+// .agents/worktrees and moves the session there): a new ".git" file that points at the
+// repository. Newest last, as the session works in the last one it entered.
+const WORKTREE_GITDIR = /[\\/]worktrees[\\/]/
+function newWorktrees(cwd, created) {
+  const out = []
+  for (const c of created) {
+    if (path.posix.basename(c.path) !== '.git') continue
+    const dir = path.posix.dirname(c.path)
+    if (dir === '.') continue
+    try {
+      const abs = path.join(cwd, c.path)
+      // A linked worktree points into <repo>/.git/worktrees/; a submodule (.git/modules/) is not one.
+      const text = fs.readFileSync(abs, 'utf8')
+      if (text.startsWith('gitdir:') && WORKTREE_GITDIR.test(text)) out.push({ dir, at: fs.statSync(abs).mtimeMs })
+    } catch { /* not a worktree */ }
+  }
+  return out.sort((a, b) => a.at - b.at).map((w) => w.dir)
+}
+
+// The worktrees git knows of for the repository around dir, as real paths; null outside one.
+function listWorktrees(dir) {
+  const out = git(dir, ['worktree', 'list', '--porcelain'])
+  if (out == null) return null
+  return out.split('\n').filter((l) => l.startsWith('worktree ')).map((l) => realPath(l.slice('worktree '.length).trim()))
+}
+const realPath = (p) => { try { return fs.realpathSync(p) } catch { return path.resolve(p) } }
+
+// What a worktree changed against the commit the folder was on at dsh_send: committed and
+// uncommitted alike, from git rather than a copy of the whole checkout. With no such commit,
+// what is uncommitted in it. A git command that fails or times out marks the list incomplete.
+function worktreeChanges(abs, base) {
+  const created = [], modified = [], deleted = []
+  let incomplete = false
+  const run = (args) => { const out = git(abs, args); if (out == null) incomplete = true; return out ?? '' }
+  if (base) {
+    for (const line of run(['diff', '--name-status', '--no-renames', base]).split('\n')) {
+      const [st, p] = line.split('\t')
+      if (!p) continue
+      ;(st === 'A' ? created : st === 'D' ? deleted : modified).push(p)
+    }
+  } else {
+    for (const line of run(['status', '--porcelain=v1', '--untracked-files=no']).split('\n')) {
+      if (line.length < 4) continue
+      const code = line.slice(0, 2)
+      const p = line.slice(3).replace(/^.* -> /, '')
+      ;(code.includes('A') ? created : code.includes('D') ? deleted : modified).push(p)
+    }
+  }
+  for (const p of run(['ls-files', '--others', '--exclude-standard']).split('\n')) if (p && !created.includes(p)) created.push(p)
+  const commits = base ? Number.parseInt(git(abs, ['rev-list', '--count', `${base}..HEAD`]) ?? '', 10) : NaN
+  return {
+    path: abs,
+    branch: git(abs, ['rev-parse', '--abbrev-ref', 'HEAD'])?.trim() || null,
+    ...(base ? { base_commit: base } : {}),
+    ...(Number.isFinite(commits) ? { commits } : {}),
+    changes: { created: created.sort(), modified: modified.sort(), deleted: deleted.sort() },
+    ...(incomplete ? { incomplete: true } : {}),
+  }
+}
+
 // The files under dir, skipping dependency, build and cache folders: [{ rel, abs, m, s }].
 function walk(dir) {
   const out = []
@@ -100,7 +169,9 @@ export function prepare(home, { run_id, session_id = null, cwd, checks }) {
     const list = Array.isArray(checks) ? checks.filter((c) => typeof c === 'string' && c.trim()).slice(0, 10) : []
     const file = fileOf(home, run_id)
     fs.writeFileSync(beforeOf(file), JSON.stringify(snapshot(cwd)), { mode: 0o600 })
-    fs.writeFileSync(file, JSON.stringify({ cwd, session_id, checks: list, at: Date.now() }), { mode: 0o600 })
+    const head = git(cwd, ['rev-parse', 'HEAD'])?.trim()
+    const trees = listWorktrees(cwd)
+    fs.writeFileSync(file, JSON.stringify({ cwd, session_id, checks: list, at: Date.now(), ...(head ? { git_head: head } : {}), ...(trees ? { worktrees_before: trees } : {}) }), { mode: 0o600 })
     // Keep the folder small: the 50 newest runs (with their snapshots).
     const dir = path.join(home, 'evidence')
     const old = fs.readdirSync(dir).filter((n) => !isBefore(n)).map((n) => ({ n, t: fs.statSync(path.join(dir, n)).mtimeMs })).sort((a, b) => b.t - a.t).slice(50)
@@ -113,9 +184,14 @@ export function prepare(home, { run_id, session_id = null, cwd, checks }) {
 export function recheck(home, runId, budgetMs = CHECKS_TOTAL_MS) {
   let rec
   try { rec = JSON.parse(fs.readFileSync(fileOf(home, runId), 'utf8')) } catch { return null }
-  if (!rec.checks?.length || !fs.existsSync(rec.cwd)) return null
+  // The worktree the run moved into: from collect, or else the newest one git lists now that it
+  // did not at dsh_send (a goal followed to its end may recheck before any collect).
+  const listedBefore = Array.isArray(rec.worktrees_before) ? rec.worktrees_before : null
+  const moved = rec.checks_cwd ?? (listedBefore ? (listWorktrees(rec.cwd) ?? []).filter((p) => !listedBefore.includes(p)).at(-1) : undefined)
+  const dir = moved && fs.existsSync(moved) ? moved : rec.cwd
+  if (!rec.checks?.length || !fs.existsSync(dir)) return null
   const deadline = Date.now() + Math.min(budgetMs, CHECKS_TOTAL_MS)
-  return rec.checks.map((c) => { const left = deadline - Date.now(); return left > 1000 ? runCheck(c, rec.cwd, Math.min(CHECK_TIMEOUT_MS, left)) : { command: c, skipped: 'out of time' } })
+  return rec.checks.map((c) => { const left = deadline - Date.now(); return left > 1000 ? runCheck(c, dir, Math.min(CHECK_TIMEOUT_MS, left)) : { command: c, skipped: 'out of time' } })
 }
 
 function runCheck(command, cwd, timeout) {
@@ -176,6 +252,41 @@ export function collect(home, runId) {
     modified.push({ path: f.rel, lines_before: b.lines ?? null, lines_after: (now ?? read(f))?.lines ?? null })
   }
   for (const p of Object.keys(before)) if (!seen.has(p)) deleted.push(p)
+  // A worktree made during the run is a whole checkout: its files are not the run's work. Its
+  // changes come from git instead, and the checks run in the newest one, where the session went.
+  // Found two ways: a new ".git" file in the folder, and a new entry in git's own worktree list
+  // (one outside the folder, such as the repository root's .agents/worktrees when the work
+  // folder is a subfolder, or one past a folder snapshot that was cut off).
+  const inFolder = newWorktrees(rec.cwd, created).map((d) => realPath(path.join(rec.cwd, d)))
+  const listedBefore = Array.isArray(rec.worktrees_before) ? rec.worktrees_before : null
+  const listedNew = listedBefore ? (listWorktrees(rec.cwd) ?? []).filter((p) => !listedBefore.includes(p)) : []
+  const mtime = (p) => { try { return fs.statSync(path.join(p, '.git')).mtimeMs } catch { return 0 } }
+  const trees = [...new Set([...inFolder, ...listedNew])].sort((a, b) => mtime(a) - mtime(b))
+  let worktrees = []
+  if (trees.length) {
+    const root = realPath(rec.cwd)
+    const inside = trees.map((t) => path.relative(root, t)).filter((r) => r && !r.startsWith('..') && !path.isAbsolute(r)).map((r) => r.split(path.sep).join('/'))
+    // The .gitignore Harness writes in the folder that holds its worktrees goes with them.
+    const holders = new Set(inside.map((d) => path.posix.dirname(d)).filter((d) => /(^|\/)\.agents\/worktrees$/.test(d)))
+    const drop = (p) => inside.some((d) => p === d || p.startsWith(`${d}/`)) || (holders.has(path.posix.dirname(p)) && path.posix.basename(p) === '.gitignore')
+    for (const list of [created, modified]) list.splice(0, list.length, ...list.filter((f) => !drop(f.path)))
+    deleted.splice(0, deleted.length, ...deleted.filter((p) => !drop(p)))
+    // The commit the folder was on at dsh_send (a record from before 0.6.15 has none: the folder's
+    // HEAD now), and per worktree where it left that line, so its own commits count.
+    const main = rec.git_head ?? git(rec.cwd, ['rev-parse', 'HEAD'])?.trim()
+    worktrees = trees.map((abs) => worktreeChanges(abs, main ? (git(abs, ['merge-base', 'HEAD', main])?.trim() || main) : null))
+  }
+  // A later send to a session that already works in a worktree: the folder itself is that
+  // worktree, and its changes above are this run's. Said, so the client knows where they are.
+  if (!worktrees.length) {
+    try {
+      const text = fs.readFileSync(path.join(rec.cwd, '.git'), 'utf8')
+      if (text.startsWith('gitdir:') && WORKTREE_GITDIR.test(text)) {
+        worktrees = [{ path: rec.cwd, branch: git(rec.cwd, ['rev-parse', '--abbrev-ref', 'HEAD'])?.trim() || null, changes_in: 'changes' }]
+      }
+    } catch { /* not a worktree */ }
+  }
+  const checksCwd = worktrees.length ? worktrees.at(-1).path : rec.cwd
   created.sort((a, b) => a.path.localeCompare(b.path))
   modified.sort((a, b) => a.path.localeCompare(b.path))
   deleted.sort()
@@ -199,16 +310,17 @@ export function collect(home, runId) {
   const deadline = Date.now() + CHECKS_TOTAL_MS
   for (const c of rec.checks) {
     const left = deadline - Date.now()
-    checks.push(left > 1000 ? runCheck(c, rec.cwd, Math.min(CHECK_TIMEOUT_MS, left)) : { command: c, skipped: 'out of time' })
+    checks.push(left > 1000 ? runCheck(c, checksCwd, Math.min(CHECK_TIMEOUT_MS, left)) : { command: c, skipped: 'out of time' })
   }
   const result = {
     source: 'dsh-baton, not the Harness model',
     changes: { created, modified, deleted, ...(after.truncated || snap.truncated ? { truncated: true } : {}) },
+    ...(worktrees.length ? { worktrees, ...(checks.length ? { checks_folder: checksCwd } : {}) } : {}),
     ...(overlapping.length ? { same_folder_runs: overlapping } : {}),
     ...(checks.length ? { checks, all_checks_passed: checks.every((c) => c.passed) } : {}),
   }
   try {
-    fs.writeFileSync(file, JSON.stringify({ ...rec, before: undefined, result, ended_at: now }), { mode: 0o600 })
+    fs.writeFileSync(file, JSON.stringify({ ...rec, before: undefined, result, ended_at: now, ...(checksCwd !== rec.cwd ? { checks_cwd: checksCwd } : {}) }), { mode: 0o600 })
     fs.rmSync(beforeOf(file), { force: true })
   } catch { /* recomputed next time */ }
   return result

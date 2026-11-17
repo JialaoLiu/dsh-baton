@@ -1,21 +1,19 @@
 #!/usr/bin/env node
 // Live end-to-end check against a running DeepSeek Harness with the
-// dsh-baton-host plugin. It only touches the workspace folder you pass and the
-// sessions it creates there.
+// dsh-baton-host plugin. It only touches the workspace folder you pass (by default
+// ~/dsh-baton-live, the same one every time, so test runs do not pile up workspaces in the
+// sidebar) and the sessions it creates there.
 //
-//   node tests/live.mjs <workspace-folder>
+//   node tests/live.mjs [workspace-folder]
 //
 // Takes several minutes: it asks the agent to do real work, including sub-agents.
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { api, hostCall } from '../src/core.mjs'
 
-const dir = process.argv[2] && path.resolve(process.argv[2])
-if (!dir) {
-  console.error('usage: node tests/live.mjs <workspace-folder>')
-  process.exit(2)
-}
+const dir = path.resolve(process.argv[2] ?? path.join(os.homedir(), 'dsh-baton-live'))
 process.env.DSH_BATON_BACKEND = 'host'
 const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'host', 'package.json'), 'utf8'))
 const results = []
@@ -53,7 +51,7 @@ await check('create workspace (idempotent)', async () => {
 })
 
 await check('new session + wait', async () => {
-  const run = await api.send({ cwd: dir, message: 'Create live-1.txt in the current folder containing exactly the line: bridge live ok. Then reply with one short sentence.' })
+  const run = await api.send({ cwd: dir, message: 'Create live-1.txt in the current folder containing exactly one line, "bridge live ok" (no quotes, no full stop). Then reply with one short sentence.' })
   session = run.session_id
   const done = await wait(run)
   expect(done.state === 'completed', `state ${done.state}`)
@@ -66,7 +64,7 @@ await check('continue the same session (context kept)', async () => {
 })
 
 await check('steer mid-task + queued followup', async () => {
-  const long = await api.send({ session_id: session, message: 'Run three steps one after another. In each step run `sleep 15` with bash, then append the line "step N" (N = 1, 2, 3) to live-order.txt. Reply "steps done" at the end.' })
+  const long = await api.send({ session_id: session, message: 'Run three steps one after another, each as its own separate tool call (never several steps in one call or one script): in each step run `sleep 15` with bash, then append the line "step N" (N = 1, 2, 3) to live-order.txt. Reply "steps done" at the end.' })
   for (let i = 0; i < 60 && !(read('live-order.txt') ?? '').includes('step 1'); i++) await sleep(1000)
   const queued = await api.send({ session_id: session, message: 'Append the line "followup" to live-order.txt, then reply "followup done".' })
   const steer = await api.send({ session_id: session, mode: 'steer', message: 'Interjection: right now append the line "steer" to live-order.txt, then continue with the remaining steps.' })
@@ -105,6 +103,18 @@ await check('cancel stops sub-agents', async () => {
   for (let i = 0; i < 15 && busy; i++) { await sleep(2000); busy = (await api.activity({ session_id: session })).busy }
   expect(!busy, 'session still busy 30s after cancel')
   expect(!read('live-cancel-a.txt') && !read('live-cancel-b.txt'), 'a cancelled sub-agent still wrote its file')
+})
+
+await check('subfolder joins the conversation folder\'s workspace', async () => {
+  const sub = path.join(dir, 'live-sub')
+  fs.mkdirSync(sub, { recursive: true })
+  const run = await api.send({ cwd: sub, conversation_folder: dir, message: 'Reply with the single word: ok' })
+  const ws = (await api.workspaces()).find((w) => w.id === run.workspace?.id)
+  expect(ws?.path === fs.realpathSync(dir), `workspace ${ws?.path} is not ${dir}`)
+  expect(run.work_folder === fs.realpathSync(sub), `work_folder ${run.work_folder}`)
+  expect(!(await api.workspaces()).some((w) => w.path === fs.realpathSync(sub)), 'the subfolder got a workspace of its own')
+  const done = await wait(run)
+  expect(done.state === 'completed', `state ${done.state}`)
 })
 
 await check('rename session and workspace', async () => {

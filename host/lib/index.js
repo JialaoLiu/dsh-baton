@@ -56,6 +56,57 @@ function normalizePath(p) {
   try { return fs.realpathSync.native(abs) } catch { return abs }
 }
 
+// Where a new session goes. Harness keeps every session of a workspace in the workspace's own
+// folder, so a hand-over to a folder that is not a workspace would get a workspace of its own,
+// one more in the sidebar for each subfolder or throw-away folder. Instead it joins:
+// - the conversation's own folder (base), when the target is inside it: a Claude Code chat in
+//   Coding handing over Coding/app joins the Coding workspace;
+// - for folders clients make per conversation, one shared folder: Codex chats without a project
+//   (Documents/Codex/<date>/<chat>), Claude scratch folders (…/scratch-workspaces/…), Claude
+//   worktrees (<project>/.claude/worktrees/<name>, joined to the project) and Codex worktrees
+//   (~/.codex/worktrees/…).
+// The session then starts in that folder and the message names the target folder.
+const CASELESS = process.platform === 'win32' || process.platform === 'darwin'
+const same = (a, b) => (CASELESS ? a.toLowerCase() === b.toLowerCase() : a === b)
+function isInside(dir, parent) {
+  const r = path.relative(CASELESS ? parent.toLowerCase() : parent, CASELESS ? dir.toLowerCase() : dir)
+  return r !== '' && !r.startsWith('..') && !path.isAbsolute(r)
+}
+const DAY = /^\d{4}-\d{2}-\d{2}$/
+function sharedFolder(dir) {
+  const parts = dir.split(path.sep)
+  const upto = (i) => parts.slice(0, i).join(path.sep) || path.sep
+  for (let i = parts.length - 2; i >= 1; i--) {
+    const at = parts[i]
+    // Claude Code worktrees share the folder that holds them, never the project's main checkout.
+    if (same(at, 'worktrees') && i >= 2 && same(parts[i - 1], '.claude')) return { path: upto(i + 1), title: 'Claude worktrees' }
+    if (same(at, 'worktrees') && same(parts[i - 1], '.codex')) return { path: upto(i + 1), title: 'Codex worktrees' }
+    if (same(at, 'scratch-workspaces')) return { path: upto(i + 1), title: 'Claude scratch' }
+    if (same(at, 'Codex') && same(parts[i - 1], 'Documents') && DAY.test(parts[i + 1] ?? '')) return { path: upto(i + 1), title: 'Codex chats' }
+  }
+  return null
+}
+// A Git worktree (its .git is a file pointing into another repository's worktrees): a checkout
+// of its own, so a session for it must not open in the folder around it, which may be the main checkout.
+function isLinkedWorktree(dir) {
+  try {
+    const text = fs.readFileSync(path.join(dir, '.git'), 'utf8')
+    return text.startsWith('gitdir:') && /[\\/]worktrees[\\/]/.test(text)
+  } catch { return false }
+}
+function sessionHome(target, base) {
+  const usable = (dir) => dir && !same(dir, os.homedir()) && dir !== path.parse(dir).root && isDirectory(dir)
+  if (base && !isLinkedWorktree(target)) {
+    let b = normalizePath(base)
+    const shared = sharedFolder(b)
+    if (shared && isDirectory(shared.path)) b = shared.path
+    if (usable(b) && isInside(target, b)) return { path: b, ...(shared && same(b, shared.path) && shared.title ? { title: shared.title } : {}) }
+  }
+  const shared = sharedFolder(target)
+  if (shared && usable(shared.path)) return shared
+  return { path: target }
+}
+
 // Prepare the socket path without touching anything that is not ours: only our
 // own directory gets 0700, only a stale socket is removed, and a live host that
 // already answers there is left alone.
@@ -180,6 +231,7 @@ export function apply(ctx) {
     ...(run.waitingOn ? { waiting_on: run.waitingOn } : {}),
     ...(run.supersededBy ? { superseded_by: run.supersededBy } : {}),
     ...(run.humanInputs?.length ? { human_interjections: run.humanInputs } : {}),
+    ...(run.approvalsAllowed?.length ? { approvals_allowed: run.approvalsAllowed } : {}),
     ...(run.question ? { question: run.question } : {}),
     ...(tail ? { recent_events: run.events.slice(-tail) } : {}),
   })
@@ -314,9 +366,45 @@ export function apply(ctx) {
   // followup, or someone typing in the Harness UI); one after it is a steer.
   const turns = new Map() // sessionId -> { hasOutput }
 
+  // An approval asked inside a tool call (the run_code of Harness's PTC mode, for one) leaves the
+  // agent "running", so its status never says "waiting". The session log's approval/asked and
+  // approval/decided pair does: the run waits for the Harness UI from the first open approval
+  // to the last decision.
+  const openApprovals = new Map() // sessionId -> Map(approval id -> whether it waits for a person)
+  let approvalSeq = 0
+  const personApproval = (sessionId) => [...(openApprovals.get(sessionId)?.values() ?? [])].some(Boolean)
+  // What Harness's Auto review puts in the approval it asks for after turning a call down.
+  const AUTO_REVIEW_DENIAL = /^Auto review denied tool/
+  function onApproval(sessionId, type, data) {
+    const open = openApprovals.get(sessionId) ?? new Map()
+    if (type === 'approval/asked') {
+      // One this plugin answers itself (onApprovalRequest) is decided at once: no person to wait for.
+      const forPerson = !(approvalsMode() === 'allow' && outputReceiversFor(sessionId).length && !AUTO_REVIEW_DENIAL.test(String(data.reason ?? '')))
+      open.set(data.id ?? `asked-${++approvalSeq}`, forPerson)
+    } else if (data.id) open.delete(data.id)
+    else { const oldest = open.keys().next(); if (!oldest.done) open.delete(oldest.value) } // no id: the oldest one
+    if (open.size) openApprovals.set(sessionId, open)
+    else openApprovals.delete(sessionId)
+    // Any open approval that waits for a person, whatever else is open, puts the run in waiting.
+    if (personApproval(sessionId)) {
+      if (!waitingSessions.has(sessionId)) { uiEpisodes.set(sessionId, (uiEpisodes.get(sessionId) ?? 0) + 1); waitingSince.set(sessionId, Date.now()) }
+      waitingSessions.add(sessionId)
+      for (const run of outputReceiversFor(sessionId)) if (run.state !== 'waiting') needsPerson(run, 500)
+    } else if (type === 'approval/decided') {
+      waitingSessions.delete(sessionId)
+      waitingSince.delete(sessionId)
+      for (const run of outputReceiversFor(sessionId)) if (run.state === 'waiting' && !questions.has(sessionId)) { run.state = 'running'; persist(run) }
+    }
+    wakeFollowers(sessionId)
+  }
+
   ctx.on('session/event', guard('session/event', (session, event) => {
     const data = event.data ?? {}
     if (FOLLOW_EVENTS.has(event.type)) wakeFollowers(session.id)
+    if (event.type === 'approval/asked' || event.type === 'approval/decided') onApproval(session.id, event.type, data)
+    // Harness asks for approvals only inside a turn, so none is open after it: one whose
+    // decision never came is not left to hold the session's waiting state.
+    if (event.type === 'turn/end' && openApprovals.has(session.id)) { openApprovals.delete(session.id); onApproval(session.id, 'approval/decided', { id: null }) }
     // Turn state is kept only for a turn in progress and dropped at its end.
     if (event.type === 'turn/start') turns.set(session.id, { hasOutput: false })
     else if (event.type === 'assistant/message' && turns.has(session.id)) turns.get(session.id).hasOutput = true
@@ -471,13 +559,15 @@ export function apply(ctx) {
 
   ctx.on('agent/status', guard('agent/status', ({ agent, status }) => {
     if (!agent) return
+    // An approval asked inside a tool call keeps the run waiting though the agent says "running".
+    const approvalOpen = personApproval(agent.id)
     if (status === 'waiting') { if (!waitingSessions.has(agent.id)) { uiEpisodes.set(agent.id, (uiEpisodes.get(agent.id) ?? 0) + 1); waitingSince.set(agent.id, Date.now()) } waitingSessions.add(agent.id) }
-    else { waitingSessions.delete(agent.id); waitingSince.delete(agent.id) }
+    else if (!approvalOpen) { waitingSessions.delete(agent.id); waitingSince.delete(agent.id) }
     wakeFollowers(agent.id)
     const receivers = receiversFor(agent.id)
     if (status === 'running' && receivers.length) lastRunningAt.set(agent.id, Date.now())
     for (const run of outputReceiversFor(agent.id)) {
-      if (status === 'running') run.state = 'running'
+      if (status === 'running') { if (!approvalOpen) run.state = 'running' }
       // Needs a person: a question (see user-questions/request) or an approval in the
       // Harness UI. Waiters wake a moment later, so a question that comes with it is on the run.
       else if (status === 'waiting') { if (run.state !== 'waiting') needsPerson(run, 500) }
@@ -693,6 +783,28 @@ export function apply(ctx) {
   }
 
   ctx.on('user-questions/request', guardWaterfall(onQuestion), { global: true, prepend: true })
+
+  // Approvals in a hand-over run: allowed once here unless the plugin page says to leave them
+  // to the Harness UI (the user's choice, 2026-11-17: a hand-over must not stall on one). Only
+  // sessions with a run of this plugin in progress; every other approval goes on to Harness.
+  // Each one is listed on the run (approvals_allowed), so the client sees what was let through.
+  const MAX_ALLOWED = 20
+  function onApprovalRequest(request, next) {
+    const sessionId = request?.agent?.id
+    const runs = sessionId ? outputReceiversFor(sessionId) : []
+    if (!runs.length || approvalsMode() !== 'allow' || request?.signal?.aborted) return next()
+    // A call Harness's own Auto review model turned down (it never lets a high-risk one, such as
+    // sending secrets out, through) stays with the user: allowing it here would undo that review.
+    if (AUTO_REVIEW_DENIAL.test(String(request.reason ?? ''))) return next()
+    const entry = { time: new Date().toISOString(), tool: String(request.toolName ?? 'tool'), ...(request.reason ? { reason: String(request.reason).slice(0, 300) } : {}) }
+    for (const run of runs) {
+      run.approvalsAllowed = [...(run.approvalsAllowed ?? []), entry].slice(-MAX_ALLOWED)
+      pushEvent(run, { type: 'approval_allowed', tool: entry.tool })
+      persist(run)
+    }
+    return 'allowed-once'
+  }
+  ctx.on('approval/request', guardWaterfall(onApprovalRequest), { global: true, prepend: true })
 
   // Harness's own "busy send" setting (Settings → sending while busy: queue or steer),
   // as a dsh-baton mode, or null when this Harness has no such setting to read.
@@ -1072,13 +1184,17 @@ export function apply(ctx) {
 
   // One model, or an error naming what is there: never a near miss in its place.
   // "provider/model" picks between providers that offer the same model.
-  function matchModel(c, asked) {
+  function modelHits(c, asked) {
     const slash = String(asked).lastIndexOf('/')
     const provider = slash > 0 ? modelKey(String(asked).slice(0, slash)) : null
     const want = modelKey(slash > 0 ? String(asked).slice(slash + 1) : asked)
-    const hits = c.groups.flatMap((g) => (provider && modelKey(g.id) !== provider ? [] : g.models
+    const hits = want ? c.groups.flatMap((g) => (provider && modelKey(g.id) !== provider ? [] : g.models
       .filter((m) => modelKey(m.id) === want || modelKey(m.name) === want)
-      .map((m) => ({ provider: g.id, entry: m }))))
+      .map((m) => ({ provider: g.id, entry: m })))) : []
+    return { want, hits }
+  }
+  function matchModel(c, asked) {
+    const { want, hits } = modelHits(c, asked)
     if (!want || !hits.length) throw new Error(`No model in Harness matches ${JSON.stringify(asked)}. Available: ${listed(c)}.`)
     if (hits.length > 1) throw new Error(`${JSON.stringify(asked)} matches several models: ${hits.map((h) => `${h.provider}/${h.entry.id}`).join(', ')}. Pass one of them as provider/model.`)
     return hits[0]
@@ -1127,15 +1243,40 @@ export function apply(ctx) {
 
   // Work out the model a send asks for before anything is created, so a name that
   // matches nothing (or several) fails the send with the list of what is there.
-  async function planModel(sessionId, { model, reasoning_effort }) {
-    if (model == null && reasoning_effort == null) return null
+  // `hit` is a catalog entry already found exactly (a hand-over default): it is used as it
+  // is, never matched again by name.
+  async function planModel(sessionId, { model, reasoning_effort, hit: exact }) {
+    if (model == null && reasoning_effort == null && !exact) return null
     if (!canSelect()) throw new Error(MODELS_UNSUPPORTED)
     const c = await catalog()
     let hit
-    if (model != null) hit = matchModel(c, model)
-    else {
-      // Effort alone: the model the session runs with now (a new one: Harness's default).
-      const current = (sessionId && (await sessionModel(sessionId))) || c.default
+    if (exact) hit = exact
+    else if (model != null) {
+      hit = exactModel(c, String(model))
+      if (!hit) {
+        // A name several providers share: the hand-over default on the plugin page decides
+        // when it is one of them (issue #1, "DeepSeek-V4.1-Flash" from three providers).
+        const { hits } = modelHits(c, model)
+        const pin = hits.length > 1 ? handoverDefaults() : null
+        const pinned = pin?.model && !pin.unreadable ? exactModel(c, pin.model) : null
+        const chosen = pinned && hits.find((h) => h.provider === pinned.provider && h.entry.id === pinned.entry.id)
+        if (chosen) {
+          const plan = { provider: chosen.provider, model: chosen.entry.id, ...(reasoning_effort != null ? { reasoningEffort: matchEffort(chosen, reasoning_effort) } : {}) }
+          return { ...plan, note: `${JSON.stringify(model)} matches several models (${hits.map((h) => `${h.provider}/${h.entry.id}`).join(', ')}); it ran on ${chosen.provider}/${chosen.entry.id}, the hand-over default set on ${PAGE}.` }
+        }
+        hit = matchModel(c, model)
+      }
+    } else if (!sessionId) {
+      // Effort alone on a new session: Harness's default model, read inside the pick queue
+      // (applyModel), so a pick running for another send cannot stand in for it. Checked
+      // here against the default as it is now, so a wrong effort fails before anything is made.
+      const entry = defaultHit(c)
+      if (!entry) throw new Error(`The model ${c.default?.provider}/${c.default?.model} is not in Harness's catalog now; pass model too. Available: ${listed(c)}.`)
+      matchEffort({ provider: c.default.provider, entry }, reasoning_effort)
+      return { followDefault: true, reasoningEffort: reasoning_effort, catalog: c }
+    } else {
+      // Effort alone: the model the session runs with now.
+      const current = (await sessionModel(sessionId)) || c.default
       const entry = c.groups.find((g) => g.id === current?.provider)?.models.find((m) => m.id === current?.model)
       if (!entry) throw new Error(`The model ${current?.provider}/${current?.model} is not in Harness's catalog now; pass model too. Available: ${listed(c)}.`)
       hit = { provider: current.provider, entry }
@@ -1143,13 +1284,209 @@ export function apply(ctx) {
     return { provider: hit.provider, model: hit.entry.id, ...(reasoning_effort != null ? { reasoningEffort: matchEffort(hit, reasoning_effort) } : {}) }
   }
 
+  // --- hand-over defaults (Plugins page) ------------------------------------------
+  // The model and reasoning effort a new hand-over session starts on when the send names
+  // none, chosen on the plugin's page. Unset, a new session follows Harness's default model,
+  // and that default moves whenever a model is picked in Harness's model menu. Kept in
+  // settings.json in the dsh-baton home, with the last Harness default a hand-over followed,
+  // so a change of that default is said in the reply instead of passing unnoticed.
+  // A setting never fails a send: one that cannot be used is skipped and said in model_note.
+  const SETTINGS_FILE = path.join(batonHome(), 'settings.json')
+  const pause = (ms) => { try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms) } catch { /* no wait */ } }
+  // { data } or { data: {}, error, corrupt? }. A missing file is no settings; a file another
+  // process holds (Windows antivirus or indexer) is read again once; one that is not JSON
+  // is reported, never taken for "nothing set".
+  function loadSettings() {
+    let text
+    for (let attempt = 0; ; attempt++) {
+      try { text = fs.readFileSync(SETTINGS_FILE, 'utf8'); break } catch (error) {
+        if (error?.code === 'ENOENT') return { data: {} }
+        if (attempt >= 1) return { data: {}, error: error?.code ?? String(error?.message ?? error) }
+        pause(50)
+      }
+    }
+    try {
+      const s = JSON.parse(text.replace(/^﻿/, ''))
+      if (s && typeof s === 'object' && !Array.isArray(s)) return { data: s }
+    } catch { /* below */ }
+    return { data: {}, error: 'not valid JSON', corrupt: true }
+  }
+  // Merge a change into the file. An unreadable file is never overwritten from scratch:
+  // only a save from the page replaces a broken one, after keeping it as settings.json.bad-<time>.
+  function writeSettings(change, { replaceBroken = false } = {}) {
+    const now = loadSettings()
+    if (now.error && !(replaceBroken && now.corrupt)) throw new Error(`${SETTINGS_FILE} could not be read (${now.error}), so it was left as it is`)
+    if (now.corrupt) fs.renameSync(SETTINGS_FILE, `${SETTINGS_FILE}.bad-${Date.now()}`)
+    const next = { ...now.data, ...change }
+    const body = JSON.stringify(next, null, 2) + '\n'
+    fs.mkdirSync(path.dirname(SETTINGS_FILE), { recursive: true })
+    const tmp = `${SETTINGS_FILE}.${process.pid}.tmp`
+    fs.writeFileSync(tmp, body)
+    // Windows refuses the rename while another process has the file open: try again shortly.
+    for (let attempt = 0; ; attempt++) {
+      try { fs.renameSync(tmp, SETTINGS_FILE); return next } catch (error) {
+        if (attempt >= 5) { fs.rmSync(tmp, { force: true }); throw error }
+        pause(40)
+      }
+    }
+  }
+  const filled = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null)
+  // How approvals in a hand-over run are answered: 'allow' (the default) or 'ask' (the Harness UI).
+  // Fails closed: a settings file that cannot be read, or a value other than the two, is 'ask'.
+  function approvalsMode() {
+    const { data, error } = loadSettings()
+    if (error) return 'ask'
+    return data.approvals == null || data.approvals === 'allow' ? 'allow' : 'ask'
+  }
+  function handoverDefaults() {
+    const { data, error } = loadSettings()
+    const h = data.handover && typeof data.handover === 'object' ? data.handover : {}
+    return { model: filled(h.model), reasoning_effort: filled(h.reasoning_effort), ...(error ? { unreadable: error } : {}) }
+  }
+  // A saved "provider/model" names one catalog entry exactly; nothing else stands in for it.
+  // Model ids may hold slashes themselves (openrouter/deepseek/deepseek-v4-pro).
+  function exactModel(c, saved) {
+    for (const g of c.groups) {
+      if (!saved.startsWith(`${g.id}/`)) continue
+      const entry = g.models.find((m) => m.id === saved.slice(g.id.length + 1))
+      if (entry) return { provider: g.id, entry }
+    }
+    return null
+  }
+  const efforts = (hit) => (hit?.entry.reasoning?.efforts ?? []).map((e) => e.id)
+  const hasEffort = (hit, asked) => { try { matchEffort(hit, asked); return true } catch { return false } }
+  const defaultHit = (c) => c.groups.find((g) => g.id === c.default?.provider)?.models.find((m) => m.id === c.default?.model)
+  // Choosing a model for a session needs Harness's default-model service as well, to put
+  // the default back after the pick (keepingDefault).
+  const canKeepDefault = () => {
+    const dm = defaultModel()
+    return typeof dm?.currentSelection === 'function' && typeof dm?.saveSelection === 'function'
+  }
+  const PAGE = 'the dsh-baton plugin page in Harness'
+
+  // What a new session's send asks for once the hand-over defaults fill in what it left out.
+  async function withHandoverDefaults({ model, reasoning_effort }) {
+    const out = { model, reasoning_effort, hit: null, used: { model: false, reasoning_effort: false }, notes: [] }
+    const pin = handoverDefaults()
+    if (pin.unreadable) {
+      out.notes.push(`The hand-over defaults on ${PAGE} could not be read (${pin.unreadable}), so they were not used. Choose them on that page again if this goes on.`)
+      return out
+    }
+    const wantModel = model == null && pin.model
+    const wantEffort = reasoning_effort == null && pin.reasoning_effort
+    if (!wantModel && !wantEffort) return out
+    if (!canSelect() || !canKeepDefault()) {
+      out.notes.push(`The hand-over defaults on ${PAGE} were not used: this DeepSeek Harness cannot choose a model per session.`)
+      return out
+    }
+    let c
+    try { c = await catalog() } catch (error) {
+      out.notes.push(`Harness's model list could not be read (${error?.message ?? error}), so the hand-over defaults on ${PAGE} were not used.`)
+      return out
+    }
+    let target = null
+    if (wantModel) {
+      const hit = exactModel(c, pin.model)
+      if (!hit) out.notes.push(`The hand-over default model ${pin.model} (set on ${PAGE}) is not in Harness's model list now, so this session uses Harness's default model instead.`)
+      else if (reasoning_effort != null && !hasEffort(hit, reasoning_effort)) out.notes.push(`The hand-over default model ${pin.model} (set on ${PAGE}) has no reasoning effort ${reasoning_effort}, so this session uses Harness's default model with that effort.`)
+      else { out.hit = hit; out.used.model = true; target = hit }
+    }
+    if (wantEffort) {
+      if (!target && model != null) { try { target = exactModel(c, String(model)) ?? matchModel(c, model) } catch { target = null } }
+      if (!target && model == null) { const entry = defaultHit(c); target = entry ? { provider: c.default.provider, entry } : null }
+      if (target && efforts(target).includes(pin.reasoning_effort)) { out.reasoning_effort = pin.reasoning_effort; out.used.reasoning_effort = true }
+      else if (target) out.notes.push(`${target.provider}/${target.entry.id} has no reasoning effort ${pin.reasoning_effort} (the hand-over default on ${PAGE}), so it runs with its own default effort.`)
+    }
+    return out
+  }
+
+  // A new session that followed Harness's default: if that default is not the one the last
+  // such hand-over ran on, say so, since nothing else shows it moved. The new default is
+  // recorded only once the message is in (rememberDefault), so a refused send does not use
+  // up the note.
+  function defaultDrift(selected) {
+    const now = selected ? `${selected.provider}/${selected.model}` : null
+    if (!now) return null
+    const saved = loadSettings()
+    if (saved.error) return null
+    const before = filled(saved.data.lastDefaultModel)
+    if (before === now) return null
+    return { now, note: before ? `Harness's default model changed since the last new hand-over (${before} then, ${now} now), so this session runs on ${now}. Picking a model in Harness's model menu changes that default. To keep new hand-overs on one model, choose a hand-over default model on ${PAGE}.` : null }
+  }
+  function rememberDefault(now) {
+    try { writeSettings({ lastDefaultModel: now }) } catch (error) { logError('save last default model', error) }
+  }
+
+  // The plugin page reads and saves the defaults through these.
+  async function handoverView() {
+    const pin = handoverDefaults()
+    const view = { model: pin.model, reasoning_effort: pin.reasoning_effort, approvals: approvalsMode(), ...(pin.unreadable ? { unreadable: pin.unreadable } : {}) }
+    if (!canSelect() || !canKeepDefault()) return { ...view, supported: false }
+    const c = await catalog()
+    return {
+      ...view,
+      supported: true,
+      default: shownModel(c.default),
+      models: c.groups.flatMap((g) => g.models.map((m) => ({
+        provider: g.id, provider_name: g.name ?? g.id, model: m.id, name: m.name ?? m.id,
+        reasoning_efforts: (m.reasoning?.efforts ?? []).map((e) => ({ id: e.id, name: e.name ?? e.id })),
+      }))),
+      ...(pin.model && !exactModel(c, pin.model) ? { missing: true } : {}),
+    }
+  }
+  // A field left out of the body keeps its saved value; null clears it. A saved model that
+  // left Harness's list may be kept as it is (the provider may come back), but not chosen anew.
+  async function saveHandover(body) {
+    if ('approvals' in body && !['allow', 'ask'].includes(body.approvals)) throw new Error(`approvals is "allow" or "ask", not ${JSON.stringify(body.approvals)}.`)
+    const touchesModel = 'model' in body || 'reasoning_effort' in body
+    let model = null
+    let reasoning_effort = null
+    if (touchesModel) {
+      const pin = handoverDefaults()
+      model = 'model' in body ? filled(body.model) : pin.model
+      reasoning_effort = 'reasoning_effort' in body ? filled(body.reasoning_effort) : pin.reasoning_effort
+      if (model != null || reasoning_effort != null) {
+        if (!canSelect() || !canKeepDefault()) throw new Error(MODELS_UNSUPPORTED)
+        const c = await catalog()
+        const hit = model != null ? exactModel(c, model) : null
+        if (model != null && !hit && model !== pin.model) throw new Error(`No model ${model} in Harness's model list.`)
+        const allowed = hit ? efforts(hit) : [...new Set(c.groups.flatMap((g) => g.models.flatMap((m) => efforts({ entry: m }))))]
+        if (reasoning_effort != null && !allowed.includes(reasoning_effort)) throw new Error(`No reasoning effort ${reasoning_effort}${hit ? ` for ${model}` : ''}; there is ${allowed.join(', ') || 'none'}.`)
+      }
+    }
+    // Only what this save names is written. A field it left out is read again now, after the
+    // catalogue wait, so a save from another page in the meantime is not undone.
+    const change = {}
+    if (touchesModel) {
+      const latest = handoverDefaults()
+      change.handover = { model: 'model' in body ? model : latest.model, reasoning_effort: 'reasoning_effort' in body ? reasoning_effort : latest.reasoning_effort }
+    }
+    if ('approvals' in body) change.approvals = body.approvals
+    // A broken file that is replaced: the approvals choice in it is unknown, so the safe one.
+    else if (loadSettings().corrupt) change.approvals = 'ask'
+    writeSettings(change, { replaceBroken: true })
+    return handoverView()
+  }
+
   // Put the session on its model before the prompt goes in. Without a plan, a new session
   // is pinned to the default as it stands, so a pick running for another send cannot leak
   // into it (Harness reads the default only when the first request is built); an existing
   // one keeps its own. The pin is best effort: if it fails, the session just uses the default.
   async function applyModel(sessionId, plan, isNew) {
+    if (plan?.followDefault) {
+      // Effort alone on a new session: the default as it stands inside the queue, with that effort if it has it.
+      let dropped = null
+      const { selected } = await keepingDefault((kept) => {
+        const entry = plan.catalog.groups.find((g) => g.id === kept?.provider)?.models.find((m) => m.id === kept?.model)
+        const effort = entry && hasEffort({ provider: kept.provider, entry }, plan.reasoningEffort) ? matchEffort({ provider: kept.provider, entry }, plan.reasoningEffort) : null
+        if (!effort) dropped = plan.reasoningEffort
+        return controller.selectModel({ sessionId, ...kept, ...(effort ? { reasoningEffort: effort } : {}) })
+      })
+      return { model: shownModel(selected), source: 'requested', ...(dropped ? { droppedEffort: dropped } : {}) }
+    }
     if (plan) {
-      const { selected } = await keepingDefault(() => controller.selectModel({ sessionId, ...plan }))
+      const { note: _note, ...pick } = plan // the note is for the reply, not for Harness
+      const { selected } = await keepingDefault(() => controller.selectModel({ sessionId, ...pick }))
       return { model: shownModel(selected), source: 'requested' }
     }
     if (isNew && canSelect() && defaultModel()) {
@@ -1205,7 +1542,7 @@ export function apply(ctx) {
     await teamsService.setEnabled(agent, enabled)
   }
 
-  async function send({ message, session_id, cwd, workspace_id, mode: asked, sender, model, reasoning_effort, team }) {
+  async function send({ message, session_id, cwd, workspace_id, conversation_folder, mode: asked, sender, model, reasoning_effort, team }) {
     if (!message || !message.trim()) throw new Error('message is required')
     if (asked != null && asked !== 'followup' && asked !== 'steer') throw new Error('mode must be followup or steer')
     if (team != null && typeof team !== 'boolean') throw new Error('team must be true or false')
@@ -1218,6 +1555,7 @@ export function apply(ctx) {
     if (sender != null && !SENDER_RE.test(sender)) throw new Error('sender must be 1-32 characters of a-z, 0-9 or -')
     let sessionId = session_id
     let workspace = null
+    let workFolder = null
     // Harness never runs a prompt sent to an archived session: the run would stay queued forever.
     if (sessionId && isArchived(sessionId)) {
       throw new Error(`Session ${sessionId} is archived. Unarchive it in Harness, or start a new session with cwd or workspace_id.`)
@@ -1238,17 +1576,69 @@ export function apply(ctx) {
       const busy = activeRunsFor(sessionId).length > 0 || (await sessionActivity(sessionId).catch(() => [])).length > 0
       if (busy) throw new Error(`No message was sent: the session is busy, and Agent Teams apply to the whole session, so turning them ${team ? 'on' : 'off'} now would change the running turn too. Send it again once the session is idle, or without team.`)
     }
-    const plan = await planModel(sessionId, { model, reasoning_effort })
     const isNew = !sessionId
+    // A new session takes the plugin page's hand-over defaults for what the send leaves out;
+    // a session that exists keeps its own model.
+    const want = isNew ? await withHandoverDefaults({ model, reasoning_effort }) : { model, reasoning_effort, hit: null, used: {}, notes: [] }
+    const fromPage = () => want.used.model || want.used.reasoning_effort
+    // A send fails only over what it asked for itself: if the plan fails because of a
+    // hand-over default, the send is planned again without the defaults.
+    const dropDefaults = (error, what) => {
+      want.notes.push(`The hand-over defaults on ${PAGE} could not be used (${what}: ${error?.message ?? error}), so this session uses ${model != null ? 'the model asked for' : "Harness's default model"}.`)
+      want.used = { model: false, reasoning_effort: false }
+      want.hit = null
+    }
+    let plan
+    try { plan = await planModel(sessionId, want) } catch (error) {
+      if (!fromPage()) throw error
+      dropDefaults(error, 'planning')
+      plan = await planModel(sessionId, { model, reasoning_effort })
+    }
     if (isNew) {
       // A folder that is not a workspace yet is registered first, so the new session shows in the sidebar.
-      workspace = workspace_id ? { id: workspace_id } : await createWorkspace({ path: cwd, create_dir: false })
+      if (workspace_id) workspace = { id: workspace_id }
+      else {
+        const target = normalizePath(cwd)
+        // A folder that is a workspace already (sessions from before 0.6.15) keeps it.
+        const own = await registry.resolveByPath(target).catch(() => undefined)
+        const home = own ? { path: target } : sessionHome(target, conversation_folder)
+        workspace = await createWorkspace({ path: home.path, title: home.title, create_dir: false })
+        if (!same(home.path, target)) {
+          workFolder = target
+          // First, not last: a message saying "the current directory" otherwise ran in the parent
+          // (Windows, 2 of 3 runs). A leading /command (/goal) stays first.
+          const note = `(Working folder for this task: ${target}. Run every command there: set each shell command's working directory to ${target}, or cd into it first. "The current directory", "here" and relative paths below all mean ${target}; this session opened in ${home.path}, a folder that contains it.)`
+          // A command such as /goal, not a path such as /Users/me/app/x.js.
+          const slash = /^(\/[A-Za-z][\w-]*)(\s+|$)/.exec(message)
+          message = slash ? `${slash[1]} ${note}\n\n${message.slice(slash[0].length)}` : `${note}\n\n${message}`
+        }
+      }
       sessionId = (await controller.create({ workspaceId: workspace.id })).sessionId
     }
     // A model that cannot be set fails the send before the prompt goes in.
-    const chosen = await applyModel(sessionId, plan, isNew).catch((error) => {
-      throw new Error(`${isNew ? `Session ${sessionId} was created, but no message was sent: ` : 'No message was sent: '}the model could not be set (${error?.message ?? error})`)
-    })
+    const notSet = (error) => new Error(`${isNew ? `Session ${sessionId} was created, but no message was sent: ` : 'No message was sent: '}the model could not be set (${error?.message ?? error})`)
+    let chosen
+    try { chosen = await applyModel(sessionId, plan, isNew) } catch (error) {
+      if (!fromPage()) throw notSet(error)
+      // A default Harness would not take (a provider signed out since): the send's own request instead.
+      logError('apply hand-over default', error)
+      dropDefaults(error, 'setting the model')
+      try { chosen = await applyModel(sessionId, await planModel(sessionId, { model, reasoning_effort }), isNew) } catch (again) { throw notSet(again) }
+    }
+    let modelSource = chosen.source
+    if (want.used.model) modelSource = 'handover_default'
+    else if (want.used.reasoning_effort && model == null) modelSource = 'default' // Harness's default model, the effort set on the page
+    const modelNotes = [...want.notes]
+    if (plan?.note) modelNotes.push(plan.note)
+    if (chosen.droppedEffort) modelNotes.push(`${chosen.model?.provider}/${chosen.model?.model} has no reasoning effort ${chosen.droppedEffort}, so it runs with its own default effort.`)
+    let drift = null
+    if (isNew && modelSource === 'default') {
+      let followed = chosen.model
+      if (!followed) try { followed = shownModel(defaultModel()?.currentSelection?.()) } catch { /* unknown */ }
+      drift = defaultDrift(followed)
+      if (drift?.note) modelNotes.push(drift.note)
+    }
+    const pagePart = [...(want.used.model ? ['model'] : []), ...(want.used.reasoning_effort ? ['reasoning_effort'] : [])]
     // A session that never picked a model runs on Harness's default.
     let provider = chosen.model?.provider
     if (!provider) try { provider = defaultModel()?.currentSelection?.()?.provider } catch { /* unknown: no check */ }
@@ -1278,6 +1668,7 @@ export function apply(ctx) {
     try {
       await controller.prompt({ sessionId, requestId: run.requestId, content: [{ type: 'text', text: message }], mode }, signal())
       run.admitted = true // in Harness's queue (or conversation) now
+      if (drift) rememberDefault(drift.now)
     } catch (error) {
       settle(run, 'failed', { error: String(error?.message ?? error) })
     }
@@ -1286,11 +1677,14 @@ export function apply(ctx) {
       mode,
       mode_source: modeSource,
       model: chosen.model,
-      model_source: chosen.source,
+      model_source: modelSource,
+      ...(pagePart.length ? { handover_default: pagePart } : {}),
+      ...(modelNotes.length ? { model_note: modelNotes.join(' ') } : {}),
       ...(team != null ? { team } : {}),
       ...(ahead.length ? { other_active_runs: ahead } : {}),
       ...(queuedBehind ? { queued_behind: true } : {}),
       ...(workspace ? { workspace } : {}),
+      ...(workFolder ? { work_folder: workFolder } : {}),
     }
   }
 
@@ -1479,6 +1873,65 @@ export function apply(ctx) {
   }
 
 
+  // --- hand-over defaults route -----------------------------------------------
+  // GET /dsh-baton/handover: the saved defaults and Harness's model list, for the plugin page.
+  // POST (JSON): save new ones. Only the plugin page itself may save. Its request carries the
+  // header x-dsh-baton: handover and a JSON body, which a page on another site can only send
+  // after a CORS preflight that this route never answers. The Host must be an address or a
+  // localhost name, never another name, so a site that rebinds its own name to this machine
+  // is refused too. The desktop app's window (dsh-app://app) reaches the web server through a
+  // proxy that drops Origin, so a missing Origin is allowed; one that is there must be the
+  // app's own or match the Host (dsh web in a browser).
+  function localHost(hostname) {
+    const bare = hostname.replace(/^\[|\]$/g, '')
+    return bare === 'localhost' || bare.endsWith('.localhost') || net.isIP(bare) !== 0
+  }
+  // The peer of the connection: on this computer only, whatever the Host says (a Harness web
+  // server bound to the network would otherwise take a save from another machine).
+  const LOOPBACK = /^(?:127\.\d+\.\d+\.\d+|::1|::ffff:127\.\d+\.\d+\.\d+)$/
+  function fromHarnessPage(request) {
+    const headers = request.headers ?? {}
+    const peer = request.socket?.remoteAddress
+    if (peer != null && !LOOPBACK.test(peer)) return false
+    if (headers['x-dsh-baton'] !== 'handover') return false
+    if (!String(headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) return false
+    let host
+    try { host = new URL(`http://${headers.host}`) } catch { return false }
+    if (!localHost(host.hostname)) return false
+    if (headers.origin == null) return true
+    let origin
+    try { origin = new URL(headers.origin) } catch { return false }
+    return origin.protocol === 'dsh-app:' || origin.host === host.host
+  }
+  function readBody(request, limit = 16 * 1024) {
+    return new Promise((resolve, reject) => {
+      const chunks = []
+      let size = 0
+      request.on('data', (chunk) => {
+        size += chunk.length
+        if (size > limit) { reject(new Error('request body too large')); request.destroy() } else chunks.push(chunk)
+      })
+      request.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+      request.on('error', reject)
+    })
+  }
+  function replyJson(response, code, body) {
+    response.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+    response.end(JSON.stringify(body))
+  }
+  async function serveHandover(request, response) {
+    try {
+      if (request.method === 'GET') return replyJson(response, 200, await handoverView())
+      if (request.method !== 'POST') return replyJson(response, 405, { error: 'GET or POST only' })
+      if (!fromHarnessPage(request)) return replyJson(response, 403, { error: 'These settings can only be saved from the Harness window on this computer.' })
+      const raw = await readBody(request)
+      const body = raw.trim() ? JSON.parse(raw) : {}
+      replyJson(response, 200, await saveHandover(body && typeof body === 'object' && !Array.isArray(body) ? body : {}))
+    } catch (error) {
+      replyJson(response, 400, { error: String(error?.message ?? error) })
+    }
+  }
+
   // --- MCP registration -----------------------------------------------------
   // Switching the plugin on registers the dsh-baton MCP server for Claude Code, Codex and Antigravity,
   // the same entries `dsh-baton setup` writes, so adding the plugin is the whole install.
@@ -1536,6 +1989,15 @@ export function apply(ctx) {
           response.end(JSON.stringify({ version: VERSION, registration: { state, ok, error, version, runtime, clients: clients.map(({ id, label, state, error, file }) => ({ id, label, state, ...(error === 'bad-json' ? { error, file } : {}) })) } }))
         },
       }), 'dsh-baton-host status route')
+      web.effect(() => web.webServer.register({
+        kind: 'exact',
+        path: '/dsh-baton/handover',
+        // The promise goes back to the web server, and nothing in the last resort can throw.
+        handler: (request, response) => serveHandover(request, response).catch((error) => {
+          logError('hand-over route', error)
+          try { replyJson(response, 500, { error: String(error?.message ?? error) }) } catch { try { response.destroy() } catch { /* gone */ } }
+        }),
+      }), 'dsh-baton-host hand-over route')
     })
   }
 

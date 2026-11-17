@@ -1,3 +1,5 @@
+<p align="center"><img src="./assets/logo/dsh-baton.svg" width="96" alt="dsh-baton logo"></p>
+
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/zh/hero-dark.gif"><img src="./assets/readme/zh/hero.gif" width="100%" alt="dsh-baton：让 Claude Code 或 Codex 把接力棒交给 DeepSeek Harness，界面实时可见，跑完那一刻就交回给你"></picture>
 </p>
@@ -189,7 +191,13 @@ Codex 占 ChatGPT Plus 5 小时额度的比例，以及主 Agent 自己的花费
 
 **指定模型**：直接说用哪个就行，比如「交给 DeepSeek，用 V4 Pro」。`dsh_send` 会把它作为 `model`（以及 `reasoning_effort`）传过去，按 Harness 自己的模型列表匹配，所以 Harness 以后新加的模型一出现就能用。只对这个对话生效，Harness 的默认模型保持不变。`dsh_list_models` 可以看有哪些模型。
 
+**转交默认模型**：新开的转交对话如果没点名模型，就跟随 Harness 的默认模型，而在 Harness 的模型菜单里选一次模型，默认就会跟着变。想让转交固定用一个模型，在 Harness 的 dsh-baton 插件页（插件 → dsh-baton）的**转交默认模型**里选好，推理强度也可以一起设。设一次就对 Claude Code、Codex 和 Antigravity 都生效，下一次转交就用上，不用重启。对话里点名的模型仍然优先，续接的对话保持它自己的模型。点名的名字对得上好几个供应商的模型时（比如 DeepSeek 和 WorkBuddy 插件都有 DeepSeek-V4.1-Flash），就用这里选好的那个，回复里会说明。没设的话，Harness 的默认模型和上一次新开转交时不一样时，回复里会说一句。
+
 **智能体团队**：直接说要用就行，比如「交给 DeepSeek，用智能体团队做」。`dsh_send` 会传 `team: true`，这个对话就开着 Harness 的智能体团队协作跑（需要 Harness 0.2.2-rc.2 及以上）：lead 和队友在共享任务板上分工，都做完了才交回。`team: false` 可以再关掉。
+
+**审批**：经 dsh-baton 转交的任务已经由 Claude Code、Codex 或 Antigravity 交代过，所以转交过程中 Harness 弹出的审批会直接放行，回复里会逐条列出放行了什么（`approvals_allowed`）。Harness「自动审查」模式拒掉的调用不会这样放行，仍在 Harness 里等你处理；设置文件读不了时，所有审批也都等你处理。插件页的**转交会话里的审批**选**交给我在 Harness 里处理**后，所有审批都等你点，回复会说这个转交在等你。
+
+**Git 工作树**：会话切到新的 Git 工作树时（Harness 的「Git 工作树」插件），证据里的 `worktrees` 会列出这个工作树的分支、提交和改动文件，检查也在那里跑。要不要合并分支由你决定。
 
 **回答 Harness 的提问**：主 Agent 按任务真正需要的答案来回答，不会在几个都不合适的选项里挑一个凑合。细节见[完整工具说明](#工具)里的 `dsh_answer`。
 
@@ -242,7 +250,7 @@ Codex 占 ChatGPT Plus 5 小时额度的比例，以及主 Agent 自己的花费
 | `dsh_list_sessions` | 列出对话（最新在前），带标题、目录、是否在跑和 `model`（下一次请求用的模型）；可按目录或关键字过滤。已归档的对话不会列出 |
 | `dsh_list_models` | 列出 Harness 能用的模型（provider、id、名称、推理强度）和它的默认模型 |
 | `dsh_read_session` | 读某个对话最近的消息和回复（含用到的工具名）；已归档的对话会带 `archived: true` |
-| `dsh_send` | 发消息。带 `session_id` 续接那个对话；否则新开对话，建在 `cwd` 或 `workspace_id` 指定的位置，都不带时建在当前对话所在的文件夹（`cwd` 还不是工作区时会先登记；指定的 `cwd` 在当前对话文件夹之外也可以，结果里的 `folder_note` 会提醒）。`checks`：运行结束后 dsh-baton 自己跑的测试命令（见[转交之后怎么验收](#转交之后怎么验收)）。立即返回 `run_id`。Harness 里这条消息会标注「由 Claude / ChatGPT 从另一个聊天发送」。已归档的对话会被拒绝：先在 Harness 里取消归档，或新开对话。对话正忙时，`mode` 为 `followup` 会排在当前回合之后，`steer` 会插进正在跑的回合；不传时跟随 Harness 自己的设置（设置 → 繁忙时的发送行为：排队发送或插话发送），读不到设置时按 `followup`。返回里的 `mode_source` 说明用的是哪种。`model` 只在用户点名模型时传（如“DeepSeek-V4 Pro”“v4-pro”；`reasoning_effort` 同理）：按 Harness 自己的模型列表匹配，不分大小写，忽略空格、连字符和开头的 DeepSeek，所以 Harness 以后上线的模型（如 V4.1 Pro）一出现在列表里就能用；匹配不到或匹配到多个时，发送直接失败、什么都不创建，并列出可用模型（用 `provider/model` 指定其一）。模型在消息发出前设到该对话上，Harness 的默认模型会恢复原样（Harness 会把对话里选的模型同时存成默认）。不传时，续接的对话沿用它自己的模型，新对话用 Harness 默认模型。返回值的 `model` 和 `model_source` 写明用的是哪个。`team`（需要 Harness 0.2.2-rc.2 及以上）：`true` 在消息发出前为该对话打开智能体团队协作，`false` 关闭；Harness 版本太旧或传的是子智能体的对话时，直接拒绝、什么都不发 |
+| `dsh_send` | 发消息。带 `session_id` 续接那个对话；否则新开对话，建在 `cwd` 或 `workspace_id` 指定的位置，都不带时建在当前对话所在的文件夹（`cwd` 还不是工作区时会先登记；指定的 `cwd` 在当前对话文件夹之外也可以，结果里的 `folder_note` 会提醒）。`cwd` 在当前对话文件夹里面时，不再单独建工作区，而是进当前对话文件夹的工作区：对话开在那个文件夹，消息里写明要在哪个子文件夹工作（`work_folder`），`checks` 也在子文件夹里跑。客户端给每个对话单独建的文件夹各自共用一个工作区：Codex 没选项目的对话（Codex chats）、Claude 的 scratch 文件夹（Claude scratch）、Codex 的 worktree（Codex worktrees）、同一项目的 Claude worktree（Claude worktrees）。本来就是工作区的文件夹，或者 Git worktree，仍用它自己的工作区。`checks`：运行结束后 dsh-baton 自己跑的测试命令（见[转交之后怎么验收](#转交之后怎么验收)）。立即返回 `run_id`。Harness 里这条消息会标注「由 Claude / ChatGPT 从另一个聊天发送」。已归档的对话会被拒绝：先在 Harness 里取消归档，或新开对话。对话正忙时，`mode` 为 `followup` 会排在当前回合之后，`steer` 会插进正在跑的回合；不传时跟随 Harness 自己的设置（设置 → 繁忙时的发送行为：排队发送或插话发送），读不到设置时按 `followup`。返回里的 `mode_source` 说明用的是哪种。`model` 只在用户点名模型时传（如“DeepSeek-V4 Pro”“v4-pro”；`reasoning_effort` 同理）：按 Harness 自己的模型列表匹配，不分大小写，忽略空格、连字符和开头的 DeepSeek，所以 Harness 以后上线的模型（如 V4.1 Pro）一出现在列表里就能用；匹配不到或匹配到多个时，发送直接失败、什么都不创建，并列出可用模型（用 `provider/model` 指定其一）。模型在消息发出前设到该对话上，Harness 的默认模型会恢复原样（Harness 会把对话里选的模型同时存成默认）。不传时，续接的对话沿用它自己的模型，新对话用插件页的转交默认模型，没设就用 Harness 默认模型。返回值的 `model` 和 `model_source`（`requested`、`handover_default`、`default` 或 `session`）写明用的是哪个；转交默认模型用不上，或 Harness 的默认模型和上一次新开转交时不一样时，`model_note` 会说明。`team`（需要 Harness 0.2.2-rc.2 及以上）：`true` 在消息发出前为该对话打开智能体团队协作，`false` 关闭；Harness 版本太旧或传的是子智能体的对话时，直接拒绝、什么都不发 |
 | `dsh_status` | 查看运行进度：状态、最近的文字和工具调用、最终回复；回合结束但子智能体/后台任务还在跑时给出 `waiting_on`；中途有人在 Harness 界面里发消息时给出 `human_interjections`；被 Harness 重启打断的任务状态为 `interrupted`；以及这次运行发送时用的 `model`。用 `session_id` 代替 `run_id` 时：会话正在做什么、它的 Harness 目标，以及上一回合的回复 |
 | `dsh_wait` | 等运行结束；发消息时带了 `checks` 的，结束后会附上 `evidence`（改了哪些文件、测试结果）（或者等到它停下来问人，见 `dsh_answer`）：Codex 每次最多等 3540 秒（它对 dsh-baton 的工具超时减 60 秒；没设时 270 秒），其他客户端 50 秒。没做完会带 `timed_out`，只返回状态，再调用一次即可。能在后台等待的客户端改用 `dsh_send` 返回的 `wait_command`。`dsh_status` 只用来看一眼，不用来等待。发到带 Harness 目标的会话的任务会一直等到目标停下（要汇报进度时用 `until` 为 `turn` 和 `every_minutes`）。用 `session_id` 代替 `run_id` 时，不发任何消息，跟进这个会话的 Harness 目标（`until`、`cursor`、`every_minutes`；见“各客户端怎么等待”）。用 `run_ids` 时同时等多个任务，任何一个做完或提问就返回（`ended`、`still_running`） |
 | `dsh_answer` | 回答运行中途提出的问题（Harness 的 ask_user_question）：每道题可以填选项编号或选项文字、自由填写，或者跳过；单选题填了文字就以文字为准。运行一提问，`dsh_wait` 和 `wait_command` 就立刻返回，带上题目（`needs_input`、`question`；Harness 模型推荐的选项在 `harness_suggested`）和转给你时用的排版（`relay`、`question_tool`）。你让主 Agent 自己决定时，选项照原文正好合适它才选，否则用自己的话回答；要替你选某个选项时，第一次调用不会发出，它得先不看选项写出你想要的答案，两者一致才发。没让它决定时，它把题目转给你，开头先写它的建议，建议可以不在选项里；你选了这条建议，就只发这条答案。你也可以直接在 Harness 窗口里回答，谁先答就算谁的 |

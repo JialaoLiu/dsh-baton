@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="10 9 180 180" role="img" aria-labelledby="t">
+  <title id="t">dsh-baton</title>
+  <style>
+    .front { stroke: #2D2F33; }
+    .back { stroke: #9A9DA4; }
+    @media (prefers-color-scheme: dark) {
+      .front { stroke: #F4F4F5; }
+      .back { stroke: #6B6E75; }
+    }
+  </style>
+  <defs>
+    <!-- the back window hides behind the front one, and both frames open where the baton passes -->
+    <mask id="behind" maskUnits="userSpaceOnUse" x="0" y="0" width="200" height="200">
+      <rect width="200" height="200" fill="#fff"/>
+      <rect x="20" y="46" width="102" height="84" rx="19" fill="#000"/>
+      <rect x="62.5" y="92.5" width="79" height="24" rx="12" fill="#000"/>
+    </mask>
+    <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="200" height="200">
+      <rect width="200" height="200" fill="#fff"/>
+      <rect x="62.5" y="92.5" width="79" height="24" rx="12" fill="#000"/>
+    </mask>
+  </defs>
+  <rect class="back" x="92" y="80" width="84" height="68" rx="15" fill="none" stroke-width="8" mask="url(#behind)"/>
+  <rect class="front" x="24" y="50" width="94" height="76" rx="15" fill="none" stroke-width="8" mask="url(#cut)"/>
+  <path class="front" d="M42 76 L56 90 L42 104" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="66" y="96" width="72" height="17" rx="8.5" fill="#FF8A3D"/>
+</svg>

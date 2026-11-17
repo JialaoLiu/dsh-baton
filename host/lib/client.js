@@ -18,7 +18,7 @@ window.__ModuleLoader__.load({
   id: 'dsh-baton-host',
   factory: (require) => {
     const module = { exports: {} }
-    const { createElement: h, useState, useEffect } = require('react')
+    const { createElement: h, useState, useEffect, useRef } = require('react')
     // Harness's dialog and button; without them (an older or newer Harness), plain elements.
     let ui = null
     try { ui = require('@deepseek-ai/dsh-client-ui-primitives') } catch { /* fall back */ }
@@ -57,6 +57,28 @@ window.__ModuleLoader__.load({
       notRegistered: '未注册',
       and: '和',
       comma: '、',
+      handoverTitle: '转交默认模型',
+      handoverModel: '模型',
+      handoverEffort: '推理强度',
+      approvalsLabel: '转交会话里的审批',
+      approvalsAllow: '自动允许',
+      approvalsAsk: '交给我在 Harness 里处理',
+      followDefaultPlain: '跟随默认',
+      effortDefault: '跟随模型默认',
+      missingOption: '{model}（已不在 Harness 里）',
+      searchModels: '搜索模型…',
+      noMatch: '没有匹配的模型',
+      handoverMissing: '{model} 已不在 Harness 的模型列表里，转交会改用 Harness 默认。',
+      handoverUnsupported: '这个版本的 Harness 不能按会话选模型，这里没法设置。',
+      handoverLoadFailed: '没能读取模型列表。',
+      handoverUnreadable: '设置文件读不出来（{error}），转交暂时不用这里的设置。重新选一次就会写好。',
+      saved: '已保存',
+      saveFailed: '没能保存：{error}',
+      effortOff: '关',
+      effortLow: '低',
+      effortMedium: '中',
+      effortHigh: '高',
+      effortMax: '最高',
     }
     const en = {
       sentFrom: 'Sent by {name} from another chat',
@@ -80,6 +102,28 @@ window.__ModuleLoader__.load({
       notRegistered: 'not registered',
       and: 'and',
       comma: ', ',
+      handoverTitle: 'Default model for hand-overs',
+      handoverModel: 'Model',
+      handoverEffort: 'Reasoning effort',
+      approvalsLabel: 'Hand-over approvals',
+      approvalsAllow: 'Allow automatically',
+      approvalsAsk: 'Leave them to me in Harness',
+      followDefaultPlain: 'Harness default',
+      effortDefault: "The model's default",
+      missingOption: '{model} (no longer in Harness)',
+      searchModels: 'Search models…',
+      noMatch: 'No model matches',
+      handoverMissing: "{model} is no longer in Harness's model list, so hand-overs use Harness's default.",
+      handoverUnsupported: 'This Harness cannot choose a model per session, so this cannot be set here.',
+      handoverLoadFailed: 'The model list could not be read.',
+      handoverUnreadable: 'The settings file could not be read ({error}), so hand-overs do not use these settings for now. Choosing again writes it afresh.',
+      saved: 'Saved',
+      saveFailed: 'Not saved: {error}',
+      effortOff: 'Off',
+      effortLow: 'Low',
+      effortMedium: 'Medium',
+      effortHigh: 'High',
+      effortMax: 'Max',
     }
 
     // --- Plugins page ------------------------------------------------------------
@@ -150,18 +194,237 @@ window.__ModuleLoader__.load({
       }
     }
 
-    // The plugin's detail page: one line per client.
+    // The model and reasoning effort new hand-over sessions start on (host: /dsh-baton/handover).
+    // A change is saved at once; the host checks it against Harness's model list.
+    const handoverUrl = () => new URL('dsh-baton/handover', document.baseURI).pathname
+    const EFFORT_KEYS = { off: 'effortOff', low: 'effortLow', medium: 'effortMedium', high: 'effortHigh', max: 'effortMax' }
+    const FIELD = { display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 420 }
+    // The detail page's sections as Harness's own settings cards: rows with the name on the
+    // left and the value or control on the right, so nothing stretches across the page.
+    const STROKE = 'var(--dsw-alias-settings-card-stroke, var(--dsw-alias-border-l2))'
+    const CARD = { display: 'flex', flexDirection: 'column', maxWidth: 560, borderRadius: 'var(--dsw-radius-lg, 10px)', border: `0.5px solid ${STROKE}`, background: 'var(--dsw-alias-settings-card-fill, transparent)' }
+    // A row of a card; an optional first child that is a plain style object adjusts the row.
+    const cardRow = (key, first, ...children) => {
+      const own = children[0] && typeof children[0] === 'object' && !children[0].$$typeof && !Array.isArray(children[0]) && children[0] !== null && !('props' in children[0]) ? children.shift() : {}
+      return h('div', { key, style: { display: 'flex', alignItems: 'center', gap: 12, minHeight: 48, padding: '8px 14px', boxSizing: 'border-box', ...(first ? {} : { borderTop: `0.5px solid ${STROKE}` }), ...own } }, ...children)
+    }
+    const SECTION = { display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 560 }
+    const HEADING = { color: 'var(--dsw-alias-label-primary)', fontWeight: 600 }
+    const ROW_NAME = { flex: '1 1 auto', minWidth: 0, color: 'var(--dsw-alias-label-primary)', fontSize: 13 }
+    // A dropdown in the style of Harness's own model menu (its theme tokens): a quiet trigger,
+    // an elevated card with group headings, a search box for long lists, a check on the choice
+    // and the detail (a price multiplier, a provider) muted on the right. Keyboard: arrows, Enter, Escape.
+    const CHEVRON = h('svg', { width: 12, height: 12, viewBox: '0 0 12 12', 'aria-hidden': true, style: { flex: '0 0 auto', color: 'var(--dsw-alias-label-caption)' } },
+      h('path', { d: 'M3 4.5 6 7.5 9 4.5', fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round', strokeLinejoin: 'round' }))
+    const CHECK = h('svg', { width: 14, height: 14, viewBox: '0 0 14 14', 'aria-hidden': true, style: { flex: '0 0 auto', color: 'var(--dsw-alias-state-business-primary)' } },
+      h('path', { d: 'M3 7.2 5.8 10 11 4.5', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' }))
+    const MUTED = { color: 'var(--dsw-alias-label-caption)', whiteSpace: 'nowrap', flex: '0 0 auto' }
+    const CLIP = { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+    function Picker({ label, value, items, disabled, onPick, searchable, placeholder, empty, chosenDetail }) {
+      const [open, setOpen] = useState(false)
+      const [query, setQuery] = useState('')
+      const [active, setActive] = useState(-1)
+      const root = useRef(null)
+      const chosen = items.find((i) => i.value === value) ?? items[0]
+      const q = query.trim().toLowerCase()
+      const shown = items.filter((i) => !q || `${i.label} ${i.detail ?? ''} ${i.group ?? ''}`.toLowerCase().includes(q))
+      const pickable = shown.filter((i) => !i.disabled)
+      useEffect(() => {
+        if (!open) return
+        const away = (e) => { if (root.current && !root.current.contains(e.target)) setOpen(false) }
+        document.addEventListener('mousedown', away)
+        return () => document.removeEventListener('mousedown', away)
+      }, [open])
+      useEffect(() => { if (!open) { setQuery(''); setActive(-1) } }, [open])
+      const pick = (i) => { setOpen(false); if (!i.disabled && i.value !== value) onPick(i.value) }
+      const onKey = (e) => {
+        if (e.key === 'Escape') { if (open) { e.preventDefault(); setOpen(false) } return }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault()
+          if (!open) return setOpen(true)
+          const n = pickable.length
+          if (n) setActive((a) => (e.key === 'ArrowDown' ? (a + 1) % n : (a - 1 + n) % n))
+          return
+        }
+        if (e.key === 'Enter' && open && pickable[active]) { e.preventDefault(); pick(pickable[active]) }
+      }
+      const trigger = h('button', {
+        type: 'button', disabled, 'aria-haspopup': 'listbox', 'aria-expanded': open, 'aria-label': label,
+        onClick: () => setOpen((o) => !o), onKeyDown: onKey,
+        style: {
+          display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 34, padding: '0 10px', boxSizing: 'border-box',
+          border: '0.5px solid var(--dsw-alias-border-l3)', borderRadius: 'var(--dsw-radius-md, 8px)',
+          background: open ? 'var(--dsw-alias-interactive-bg-hover)' : 'transparent', color: disabled ? 'var(--dsw-alias-label-dimmed)' : 'var(--dsw-alias-label-primary)',
+          font: 'inherit', fontSize: 13, textAlign: 'left', cursor: disabled ? 'default' : 'pointer',
+        },
+      },
+      h('span', { style: { ...CLIP, flex: '1 1 auto' } }, chosen?.label ?? ''),
+      (chosenDetail ?? chosen?.detail) ? h('span', { style: { ...MUTED, fontSize: 12 } }, chosenDetail ?? chosen.detail) : null,
+      CHEVRON)
+      let lastGroup
+      const rows = []
+      for (const i of shown) {
+        if (i.group && i.group !== lastGroup) {
+          lastGroup = i.group
+          rows.push(h('div', { key: `g:${i.group}`, role: 'presentation', style: { padding: '8px 8px 4px', fontSize: 12, color: 'var(--dsw-alias-label-tertiary)' } }, i.group))
+        }
+        const on = i.value === value
+        const hot = pickable[active] === i
+        rows.push(h('div', {
+          key: `o:${i.value}`, role: 'option', 'aria-selected': on, 'aria-disabled': i.disabled || undefined,
+          onMouseDown: (e) => e.preventDefault(), onClick: () => pick(i), onMouseEnter: () => setActive(pickable.indexOf(i)),
+          style: {
+            display: 'flex', alignItems: 'center', gap: 8, minHeight: 32, padding: '5px 8px', borderRadius: 'var(--dsw-radius-md, 8px)',
+            background: hot ? 'var(--dsw-alias-interactive-bg-hover)' : 'transparent', cursor: i.disabled ? 'default' : 'pointer', fontSize: 13,
+            color: i.disabled ? 'var(--dsw-alias-label-dimmed)' : 'var(--dsw-alias-label-primary)',
+          },
+        },
+        h('span', { style: { ...CLIP, flex: '1 1 auto', fontWeight: on ? 600 : 400 } }, i.label),
+        i.detail ? h('span', { style: { ...MUTED, fontSize: 12 } }, i.detail) : null,
+        h('span', { style: { width: 14, display: 'inline-flex' } }, on ? CHECK : null)))
+      }
+      const card = open ? h('div', {
+        role: 'listbox', 'aria-label': label,
+        style: {
+          position: 'absolute', top: 'calc(100% + 4px)', right: 0, minWidth: '100%', width: 'max-content', maxWidth: 360, zIndex: 1100, display: 'flex', flexDirection: 'column',
+          maxHeight: 360, padding: 4, boxSizing: 'border-box', borderRadius: 'var(--dsw-radius-lg, 10px)',
+          background: 'var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-base))', boxShadow: 'var(--dsw-elevation-prominent, 0 8px 24px rgba(0,0,0,.25))',
+          border: '0.5px solid var(--dsw-alias-border-l2)', color: 'var(--dsw-alias-label-primary)',
+        },
+      },
+      searchable ? h('input', {
+        autoFocus: true, value: query, placeholder, onKeyDown: onKey,
+        onChange: (e) => { setQuery(e.target.value); setActive(0) },
+        style: { margin: '2px 0 4px', padding: '6px 8px', border: 'none', borderBottom: '0.5px solid var(--dsw-alias-border-l2)', outline: 'none', background: 'transparent', color: 'inherit', font: 'inherit', fontSize: 12 },
+      }) : null,
+      h('div', { style: { overflowY: 'auto', minHeight: 0 } },
+        ...(rows.length ? rows : [h('div', { key: 'none', style: { padding: 8, fontSize: 12, color: 'var(--dsw-alias-label-tertiary)' } }, empty)]))) : null
+      return h('div', { ref: root, style: { position: 'relative' } }, trigger, card)
+    }
+    // "Fast · x0.34" (a WorkBuddy plugin puts the price in the name): the name, and the price apart.
+    const splitName = (name) => { const m = /^(.*\S)\s+·\s+(x\d+(?:\.\d+)?)$/.exec(String(name ?? '')); return m ? [m[1], m[2]] : [String(name ?? ''), null] }
+    function HandoverSettings({ t }) {
+      const [view, setView] = useState(null)
+      const [note, setNote] = useState(null)
+      const [busy, setBusy] = useState(false)
+      // Right after "Enable now" the host may not serve the route yet: ask again for a while.
+      useEffect(() => {
+        let stopped = false
+        let tries = 0
+        const load = async () => {
+          let next = null
+          try {
+            const res = await fetch(handoverUrl(), { cache: 'no-store' })
+            if (res.ok) next = await res.json()
+          } catch { /* not served yet */ }
+          if (stopped) return
+          if (next) return setView(next)
+          if (++tries >= 15) return setView({ failed: true })
+          setTimeout(load, 700)
+        }
+        load()
+        return () => { stopped = true }
+      }, [])
+      const title = h('span', { style: HEADING }, t('handoverTitle'))
+      if (!view) return null
+      if (view.failed) return h('div', { style: FIELD }, title, h('span', null, t('handoverLoadFailed')))
+      // A Harness that cannot choose a model per session still has the approvals choice.
+      const modelsOk = view.supported !== false
+      const key = (m) => `${m.provider}/${m.model}`
+      const models = view.models ?? []
+      const current = models.find((m) => key(m) === view.model)
+      const def = view.default ? models.find((m) => m.provider === view.default.provider && m.model === view.default.model) : null
+      // Efforts come as { id, name }; ours are translated, any other shows Harness's name.
+      const effortList = (m) => (m ? m.reasoning_efforts ?? [] : def?.reasoning_efforts ?? []).map((e) => (typeof e === 'string' ? { id: e, name: e } : e))
+      const effortsOf = (m) => effortList(m).map((e) => e.id)
+      const efforts = effortsOf(current)
+      const effortName = (id) => (EFFORT_KEYS[id] ? t(EFFORT_KEYS[id]) : effortList(current).find((e) => e.id === id)?.name ?? id)
+      async function save(next) {
+        setBusy(true)
+        setNote(null)
+        try {
+          const res = await fetch(handoverUrl(), { method: 'POST', headers: { 'content-type': 'application/json', 'x-dsh-baton': 'handover' }, body: JSON.stringify(next) })
+          const body = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
+          setView(body)
+          setNote(t('saved'))
+        } catch (error) {
+          setNote(t('saveFailed', { error: error?.message ?? String(error) }))
+        } finally {
+          setBusy(false)
+        }
+      }
+      function pickModel(value) {
+        const m = models.find((x) => key(x) === value)
+        // An effort the new model does not have goes back to the model's own default.
+        const keep = view.reasoning_effort && effortsOf(m).includes(view.reasoning_effort) ? view.reasoning_effort : null
+        save({ model: value || null, reasoning_effort: keep })
+      }
+      const providerName = (p) => models.find((m) => m.provider === p)?.provider_name ?? p
+      const modelItems = [
+        // Short in the narrow trigger: the model Harness defaults to now goes on the right, muted.
+        { value: '', label: t('followDefaultPlain'), ...(def ? { detail: def.name } : {}) },
+        ...(view.model && !current ? [{ value: view.model, label: t('missingOption', { model: view.model }), disabled: true }] : []),
+        // One group per provider, in Harness's order, as in Harness's own model menu.
+        ...models.map((m) => { const [name, price] = splitName(m.name); return { value: key(m), label: name, detail: price, group: providerName(m.provider) } }),
+      ]
+      // The closed trigger shows the provider too: names repeat across providers.
+      const chosenItem = modelItems.find((i) => i.value === (view.model ?? ''))
+      const chosenDetail = chosenItem?.group ? [chosenItem.detail, chosenItem.group].filter(Boolean).join(' · ') : undefined
+      const effortItems = [
+        { value: '', label: t('effortDefault') },
+        ...(view.reasoning_effort && !efforts.includes(view.reasoning_effort) ? [{ value: view.reasoning_effort, label: effortName(view.reasoning_effort), disabled: true }] : []),
+        ...efforts.map((e) => ({ value: e, label: effortName(e) })),
+      ]
+      const row = (key, label, control, first = false) => cardRow(key, first, h('span', { style: ROW_NAME }, label), h('div', { style: { flex: '0 0 260px', width: 260 } }, control))
+      return h('div', { style: { ...SECTION, maxWidth: 440 }, 'data-dsh-baton-handover': '' },
+        title,
+        modelsOk ? null : h('span', { style: { fontSize: 12 } }, t('handoverUnsupported')),
+        h('div', { style: { ...CARD, maxWidth: 440 } },
+        modelsOk && row('model', t('handoverModel'), h(Picker, {
+          label: t('handoverModel'), value: view.model ?? '', items: modelItems, chosenDetail, disabled: busy, onPick: pickModel,
+          searchable: models.length > 8, placeholder: t('searchModels'), empty: t('noMatch'),
+        }), true),
+        modelsOk && row('effort', t('handoverEffort'), h(Picker, {
+          label: t('handoverEffort'), value: view.reasoning_effort ?? '', items: effortItems, disabled: busy || (!efforts.length && !view.reasoning_effort),
+          onPick: (v) => save({ model: view.model ?? null, reasoning_effort: v || null }), empty: t('noMatch'),
+        })),
+        row('approvals', t('approvalsLabel'), h(Picker, {
+          label: t('approvalsLabel'), value: view.approvals ?? 'allow', disabled: busy,
+          items: [{ value: 'allow', label: t('approvalsAllow') }, { value: 'ask', label: t('approvalsAsk') }],
+          onPick: (v) => save({ approvals: v }), empty: t('noMatch'),
+        }), !modelsOk)),
+        view.missing ? h('span', null, t('handoverMissing', { model: view.model })) : null,
+        view.unreadable ? h('span', null, t('handoverUnreadable', { error: view.unreadable })) : null,
+        note ? h('span', { role: 'status', style: { fontSize: 12 } }, note) : null)
+    }
+
+    // The plugin's detail page: one line per client, then the hand-over defaults.
     function wrapDetails(t) {
       return function DshBatonStatus({ view }) {
         const reg = useRegistration()
         if (view === 'summary') return null
         const [, text] = describe(reg, t)
-        const word = (s) => (REGISTERED.includes(s) ? t('registered') : s === 'not-installed' ? t('notInstalled') : t('notRegistered'))
-        const rows = (reg?.clients ?? []).map((c) => `${c.label}: ${word(c.state)}`)
-        return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 4, color: 'var(--dsw-alias-label-secondary)' } },
-          h('strong', { style: { color: 'var(--dsw-alias-label-primary)' } }, t('status')),
-          rows.length ? h('span', null, rows.join(' · ')) : null,
-          h('span', null, text))
+        // One row per client: its mark and name, and its state as a dot and a word on the right.
+        const state = (s) => (REGISTERED.includes(s)
+          ? [t('registered'), 'var(--dsw-alias-state-success-primary, #2ea44f)']
+          : s === 'not-installed' ? [t('notInstalled'), 'var(--dsw-alias-label-dimmed, #8b949e)'] : [t('notRegistered'), 'var(--dsw-alias-state-warn-primary, #d29922)'])
+        const clients = reg?.clients ?? []
+        const clientRow = (c, i) => {
+          const [word, colour] = state(c.state)
+          const mark = MARKS[c.id]
+          return cardRow(c.id, i === 0, { minHeight: 40 },
+            mark ? h('svg', { width: 18, height: 18, viewBox: mark.viewBox, 'aria-hidden': true, style: { flex: '0 0 auto', color: 'var(--dsw-alias-label-primary)' } }, h('path', { d: mark.d, fill: 'currentColor' })) : null,
+            h('span', { style: { ...ROW_NAME, fontWeight: 500 } }, c.label),
+            h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--dsw-alias-label-secondary)' } },
+              h('span', { 'aria-hidden': true, style: { width: 7, height: 7, borderRadius: '50%', background: colour } }), word))
+        }
+        return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 20, color: 'var(--dsw-alias-label-secondary)' } },
+          h('div', { style: { ...SECTION, maxWidth: 380 } },
+            h('span', { style: HEADING }, t('status')),
+            clients.length ? h('div', { style: { ...CARD, maxWidth: 380 } }, ...clients.map(clientRow)) : null,
+            h('span', { style: { fontSize: 12 } }, text)),
+          h(HandoverSettings, { t }))
       }
     }
 

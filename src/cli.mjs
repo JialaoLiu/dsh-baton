@@ -119,6 +119,8 @@ async function main() {
         ...(st.goal ? { goal: st.goal, ...(st.goal.phase === 'active' ? { follow_command: self(`follow ${st.session_id}`) } : {}) } : {}),
         // The hint points at evidence: it goes with it (files changed, checks run, other runs in the folder).
         ...(st.evidence ? { evidence: st.evidence } : {}),
+        // Approvals this plugin allowed during the run (the plugin page's default): the client says what was let through.
+        ...(st.approvals_allowed?.length ? { approvals_allowed: st.approvals_allowed } : {}),
         ...(st.state === 'completed' && !st.decided_for_user ? { hint: core.endedHint(st) } : {}),
         // Stopped by the user, cancelled, or cut off by a Harness restart: say so, or the client
         // takes it for a failure in the work and sends it again.

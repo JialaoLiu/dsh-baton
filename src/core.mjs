@@ -567,9 +567,15 @@ const ENV_HINT = ' A failed check whose output says a command or module was not 
 const SHARED_HINT = (runs) => ` Other runs (${runs.join(', ')}) worked in this folder at the same time, so evidence.changes may include their files: never delete or revert a file because this run was not asked for it.`
 // A folder too big to look at whole: a file missing from evidence.changes proves nothing.
 const TRUNCATED_HINT = ' The folder has more files than dsh-baton looks at, so evidence.changes may miss some: do not take a file missing from it as not written.'
+// Approvals dsh-baton allowed during the run (the plugin page default): said, not hidden.
+const APPROVALS_HINT = (list) => ` dsh-baton allowed ${list.length} approval(s) Harness asked for during this run (approvals_allowed; the plugin page sets this): mention them to the user in one line.`
+// Harness's Git worktree plugin: the session worked in a checkout of its own.
+const WORKTREE_HINT = (trees) => (trees.every((w) => w.changes_in === 'changes')
+  ? ` The session works in a Git worktree (${trees.map((w) => `${w.path}${w.branch ? `, branch ${w.branch}` : ''}`).join('; ')}): evidence.changes and the checks are from that worktree. Merging that branch is the user's call.`
+  : ` The session worked in a new Git worktree (${trees.map((w) => `${w.path}${w.branch ? `, branch ${w.branch}` : ''}`).join('; ')}): its changes are in evidence.worktrees, not evidence.changes, and checks ran in the last one. Merging that branch is the user's call.${trees.some((w) => w.incomplete) ? ' git could not list every change in a worktree marked incomplete: a file missing from its list proves nothing.' : ''}`)
 export function endedHint(st) {
   const checks = st?.evidence?.checks
-  const shared = (st?.evidence?.same_folder_runs?.length ? SHARED_HINT(st.evidence.same_folder_runs) : '') + (st?.evidence?.changes?.truncated ? TRUNCATED_HINT : '')
+  const shared = (st?.evidence?.same_folder_runs?.length ? SHARED_HINT(st.evidence.same_folder_runs) : '') + (st?.evidence?.changes?.truncated ? TRUNCATED_HINT : '') + (st?.evidence?.worktrees?.length ? WORKTREE_HINT(st.evidence.worktrees) : '') + (st?.approvals_allowed?.length ? APPROVALS_HINT(st.approvals_allowed) : '')
   const hint = !checks?.length ? NO_CHECKS_HINT + shared : ENDED_HINT + (checks.some((c) => !c.passed && MISSING_TOOL.test(c.output_tail ?? '')) ? ENV_HINT : '') + shared
   return st?.goal ? `${goalHint(st.goal, st.session_id)} ${hint}` : hint
 }
@@ -784,8 +790,26 @@ const shaped = (st) => {
 }
 
 // The folder a run works in: given with dsh_send, or that of its workspace or session.
+// A session that opened in a folder containing its work folder (host: sessionHome) runs its
+// checks in the work folder, on later sends too: kept per session, newest 200.
+const workFoldersFile = () => path.join(config.batonHome, 'work-folders.json')
+function rememberWorkFolder(sessionId, folder) {
+  try {
+    const all = readJson(workFoldersFile()) ?? {}
+    delete all[sessionId]
+    all[sessionId] = folder
+    const keys = Object.keys(all)
+    for (const k of keys.slice(0, Math.max(0, keys.length - 200))) delete all[k]
+    fs.mkdirSync(config.batonHome, { recursive: true })
+    writeJson(workFoldersFile(), all)
+  } catch { /* checks then run in the session's own folder */ }
+}
 async function runFolder(a, st) {
+  if (st?.work_folder && fs.existsSync(st.work_folder)) return st.work_folder
   if (a.cwd) return path.resolve(a.cwd.replace(/^~(?=$|[\\/])/, os.homedir()))
+  // A kept folder that is gone (deleted, a drive not connected): the session's own folder instead.
+  const kept = a.session_id ? readJson(workFoldersFile())?.[a.session_id] : undefined
+  if (typeof kept === 'string' && fs.existsSync(kept)) return kept
   if (st?.cwd) return st.cwd
   try {
     if (a.workspace_id) return (await api.workspaces()).find((w) => w.id === a.workspace_id)?.path
@@ -797,6 +821,9 @@ async function runFolder(a, st) {
 const withEvidence = (st) => {
   if (!st || !ENDED.has(st.state) || !st.run_id) return st
   const ev = evidence.collect(config.batonHome, st.run_id)
+  // The session moved into a worktree: later sends to it check that worktree too.
+  const moved = ev?.worktrees?.at(-1)?.path
+  if (moved && st.session_id) rememberWorkFolder(st.session_id, moved)
   return ev ? { ...st, evidence: ev } : st
 }
 
@@ -896,6 +923,7 @@ export const api = {
     // is wrong is that Harness is not running, not that a CLI is missing.
     if (!host) { try { dshBin() } catch { throw new Error('DeepSeek Harness is not running, or its dsh-baton-host plugin is switched off: open Harness (Plugins → dsh-baton-host on) and send again.') } }
     const st = host ? tag('host', await hostCall('send', a)) : tag('headless', await waitForSessionId(startRun(a)))
+    if (st.work_folder && st.session_id) rememberWorkFolder(st.session_id, st.work_folder)
     evidence.prepare(config.batonHome, { run_id: st.run_id, session_id: st.session_id, cwd: await runFolder(a, st), checks })
     return st
   },
@@ -920,7 +948,9 @@ export const api = {
     }
     if (st.timed_out) return st
     if (st.state === 'no_goal' || !st.cwd) return st
-    const changed = evidence.changedSince(st.cwd, Date.parse(st.since) || 0)
+    // A session that opened in a folder around its work folder: the work folder's files only.
+    const kept = readJson(workFoldersFile())?.[session_id]
+    const changed = evidence.changedSince(typeof kept === 'string' ? kept : st.cwd, Date.parse(st.since) || 0)
     return changed ? { ...st, changed_files: changed } : st
   },
   async wait({ run_id, timeout_s = 300 }) {

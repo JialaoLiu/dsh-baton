@@ -323,3 +323,18 @@ test('a question comes hint first, laid out as a message (relay) and as a questi
   assert.match(f.hint, /then call dsh_wait again with the same session_id, until and this cursor\.$/)
   assert.equal(core.questionTool(undefined), undefined)
 })
+
+test('a run that worked in a Git worktree says its changes are in evidence.worktrees and that merging is the user\'s call', () => {
+  const hint = core.endedHint({ evidence: { changes: { created: [], modified: [], deleted: [] }, worktrees: [{ path: '/p/.agents/worktrees/wt', branch: 'wt' }], checks: [{ command: 'npm test', passed: true }] } })
+  assert.match(hint, /new Git worktree \(\/p\/\.agents\/worktrees\/wt, branch wt\): its changes are in evidence\.worktrees, not evidence\.changes, and checks ran in the last one\. Merging that branch is the user's call\./)
+  assert.doesNotMatch(core.endedHint({ evidence: { changes: {} } }), /worktree/)
+})
+
+test('a run with approvals dsh-baton allowed says so in its hint', () => {
+  assert.match(core.endedHint({ approvals_allowed: [{ tool: 'bash' }], evidence: { changes: {} } }), /dsh-baton allowed 1 approval\(s\) Harness asked for during this run \(approvals_allowed; the plugin page sets this\): mention them to the user in one line\./)
+})
+
+test('a run in a session already working in a worktree says the changes and checks are from that worktree', () => {
+  const hint = core.endedHint({ evidence: { changes: { created: [], modified: [{ path: 'a.js' }], deleted: [] }, worktrees: [{ path: '/p/.agents/worktrees/wt', branch: 'wt', changes_in: 'changes' }] } })
+  assert.match(hint, /works in a Git worktree \(\/p\/\.agents\/worktrees\/wt, branch wt\): evidence\.changes and the checks are from that worktree\. Merging that branch is the user's call\./)
+})

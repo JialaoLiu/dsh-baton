@@ -66,8 +66,12 @@ test('Claude Code: no cwd means the project folder the server runs in', async ()
   assert.match(other.reply.folder_note, /This conversation works in/)
   const inside = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'hi', cwd: path.join(project, 'sub') } })
   assert.equal(inside.reply.folder_note, undefined)
+  // The conversation folder goes along, so the plugin can put a subfolder in its workspace.
+  assert.equal(host.conversation_folder, project)
+  assert.equal(inside.host.conversation_folder, project)
   const cont = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'hi', session_id: 's1' } })
   assert.equal(cont.host.cwd, undefined, 'continuing a session adds no folder')
+  assert.equal(cont.host.conversation_folder, undefined)
   rm(project)
 })
 
@@ -227,4 +231,39 @@ test('team as the string "true" or "false" (a client with a tool list from befor
   const off = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'hi', team: 'False' } })
   assert.equal(off.host.team, false)
   rm(project)
+})
+
+test('checks run in the work folder of a session that opened in a folder containing it, on later sends too', async () => {
+  const { socketEndpoint } = await import('../host/lib/socket.js')
+  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
+  const sub = path.join(project, 'app')
+  fs.mkdirSync(sub)
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-f-'))
+  const sock = path.join(dir, 'h.sock')
+  let n = 0
+  const server = net.createServer((c) => c.on('data', (d) => {
+    const req = JSON.parse(String(d).split('\n')[0])
+    if (req.method === 'ping') return c.end(JSON.stringify({ id: req.id, result: { name: 'dsh-baton-host', features: ['team'] } }) + '\n')
+    const first = req.method === 'send' && !req.params.session_id
+    c.end(JSON.stringify({ id: req.id, result: { run_id: `hrun-${++n}`, session_id: 'sx', state: 'queued', mode: 'followup', ...(first ? { work_folder: sub } : {}) } }) + '\n')
+  }))
+  await new Promise((r) => server.listen(socketEndpoint(sock), r))
+  const { DSH_BATON_SENDER, ...base } = process.env
+  const child = spawn(process.execPath, [SERVER], { cwd: project, env: { ...base, DSH_BATON_BACKEND: 'host', DSH_BATON_SOCKET: sock, DSH_BATON_HOME: dir } })
+  let out = ''
+  child.stdout.on('data', (d) => { out += d })
+  const until = (id) => new Promise((resolve) => { const tick = setInterval(() => { if (out.includes(`"id":${id}`)) { clearInterval(tick); resolve() } }, 50) })
+  const call = (id, args) => child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'dsh_send', arguments: args } }) + '\n')
+  child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: 'claude-code', version: '1' } } }) + '\n')
+  call(2, { message: 'hi', cwd: sub, checks: ['npm test'] })
+  await until(2)
+  call(3, { message: 'more', session_id: 'sx', checks: ['npm test'] })
+  await until(3)
+  const exited = new Promise((r) => child.on('close', r))
+  child.stdin.end(); server.close()
+  await exited
+  const cwdOf = (run) => JSON.parse(fs.readFileSync(path.join(dir, 'evidence', `${run}.json`), 'utf8')).cwd
+  assert.equal(cwdOf('hrun-1'), sub)
+  assert.equal(cwdOf('hrun-2'), sub)
+  rm(dir); rm(project)
 })

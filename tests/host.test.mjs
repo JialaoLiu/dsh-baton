@@ -7,6 +7,7 @@ import fs from 'node:fs'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
+import { Readable } from 'node:stream'
 import { apply } from '../host/lib/index.js'
 import { socketEndpoint } from '../host/lib/socket.js'
 
@@ -24,7 +25,8 @@ process.env.DSH_BATON_AUTO_REGISTER = '0'
 function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web, settings, queue = false, recheckMs = 300, models, account, goal, log, goals, agents, agentTeams } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-'))
   // Run records go to the bridge home: keep them out of the real ~/.dsh-baton.
-  process.env.DSH_BATON_HOME = home ?? path.join(dir, 'bridge')
+  const homeDir = home ?? path.join(dir, 'bridge')
+  process.env.DSH_BATON_HOME = homeDir
   const sock = sockPath ?? path.join(dir, 'h.sock')
   const endpoint = socketEndpoint(sock) // where the host listens: the path itself, or a named pipe on Windows
   const logs = []
@@ -130,7 +132,9 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
   })
   const ready = new Promise((r) => setTimeout(r, 50))
   const close = () => { disposers.forEach((d) => d?.()); fs.rmSync(dir, { recursive: true, force: true }) }
-  return { ctx, emit, ask, call, calls, ready, close, ws, logs, sock, inbox: pending }
+  // Harness asking for an approval: the approval/request waterfall, the Harness UI as `next`.
+  const approve = (sessionId, toolName = 'bash', ui = async () => 'rejected', reason = 'write outside the workspace') => handlers['approval/request'][0]({ agent: { id: sessionId }, toolName, reason }, () => ui())
+  return { ctx, emit, ask, approve, call, calls, ready, close, ws, logs, sock, inbox: pending, home: homeDir }
 }
 
 // Harness event helpers for one session.
@@ -159,10 +163,11 @@ test('switched on, the plugin registers the MCP server and serves the outcome to
   fs.mkdirSync(path.join(dir, '.claude'))
   fs.mkdirSync(path.join(dir, '.codex'))
   Object.assign(process.env, { HOME: dir, USERPROFILE: dir, CLAUDE_CONFIG_DIR: dir, CODEX_HOME: path.join(dir, '.codex'), DSH_BATON_AUTO_REGISTER: '1' })
-  let route = null
-  const h = startHost({ home: path.join(dir, '.dsh-baton'), web: { register: (r) => { route = r; return () => { route = null } } } })
+  const routes = {}
+  const h = startHost({ home: path.join(dir, '.dsh-baton'), web: { register: (r) => { routes[r.path] = r; return () => { delete routes[r.path] } } } })
   t.after(h.close)
-  assert.equal(route.path, '/dsh-baton/status')
+  assert.ok(routes['/dsh-baton/status'] && routes['/dsh-baton/handover'], Object.keys(routes).join(', '))
+  const route = routes['/dsh-baton/status']
   const status = async () => {
     let body = ''
     const res = { writeHead: () => {}, end: (b) => { body = b } }
@@ -207,6 +212,91 @@ test('send with cwd registers the folder as a workspace before creating the sess
   assert.deepEqual(h.calls.create, [{ workspaceId: 'w1' }])
   assert.equal(r.session_id, 'new-1')
   assert.equal(r.workspace.created, true)
+})
+
+test('a hand-over to a folder inside the conversation folder joins its workspace', async (t) => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-home-')))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const coding = path.join(root, 'Coding')
+  const app = path.join(coding, 'app')
+  const other = path.join(root, 'Other')
+  for (const d of [app, other]) fs.mkdirSync(d, { recursive: true })
+  const h = startHost({ workspaces: [{ id: 'w1', path: coding, title: 'Coding' }] }); t.after(h.close); await h.ready
+  const r = await h.call('send', { cwd: app, conversation_folder: coding, message: 'hi' })
+  assert.deepEqual(h.calls.create[0], { workspaceId: 'w1' })
+  assert.equal(r.workspace.created, false)
+  assert.equal(r.work_folder, app)
+  const esc = (p) => p.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
+  assert.match(h.calls.prompt[0].content[0].text, new RegExp(`^\\(Working folder for this task: ${esc(app)}\\. Run every command there[^]*\\)\\n\\nhi$`))
+  // A leading /goal stays first; the note goes into the goal text.
+  await h.call('send', { cwd: app, conversation_folder: coding, message: '/goal make it pass' })
+  assert.match(h.calls.prompt[1].content[0].text, new RegExp(`^/goal \\(Working folder for this task: ${esc(app)}\\.[^]*\\)\\n\\nmake it pass$`))
+  // The conversation folder itself: as before, no note.
+  const same = await h.call('send', { cwd: coding, conversation_folder: coding, message: 'hi' })
+  assert.equal(same.work_folder, undefined)
+  assert.equal(h.calls.prompt[2].content[0].text, 'hi')
+  // Outside the conversation folder, or no conversation folder (an older MCP server): its own workspace.
+  const out = await h.call('send', { cwd: other, conversation_folder: coding, message: 'hi' })
+  assert.equal(out.workspace.path, other)
+  assert.equal(out.work_folder, undefined)
+  const old = await h.call('send', { cwd: app, message: 'hi' })
+  assert.equal(old.workspace.path, app)
+})
+
+test('folders made per conversation share one workspace', async (t) => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-home-')))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const chat = path.join(root, 'Documents', 'Codex', '2026-11-17', 'new-chat')
+  const scratch = path.join(root, 'Claude', 'scratch-workspaces', 'a1', 'b2', 'scratch-2026-11-17-ab12cd')
+  const proj = path.join(root, 'proj')
+  const tree = path.join(proj, '.claude', 'worktrees', 'fix-x')
+  const codexTree = path.join(root, '.codex', 'worktrees', '1a2b', 'proj')
+  for (const d of [chat, scratch, tree, codexTree]) fs.mkdirSync(d, { recursive: true })
+  const h = startHost(); t.after(h.close); await h.ready
+  const a = await h.call('send', { cwd: chat, conversation_folder: chat, message: 'hi' })
+  assert.equal(a.workspace.path, path.join(root, 'Documents', 'Codex'))
+  assert.equal(a.workspace.title, 'Codex chats')
+  assert.equal(a.work_folder, chat)
+  // A second chat joins the same workspace.
+  const chat2 = path.join(root, 'Documents', 'Codex', '2026-11-18', 'new-chat-2')
+  fs.mkdirSync(chat2, { recursive: true })
+  const b = await h.call('send', { cwd: chat2, conversation_folder: chat2, message: 'hi' })
+  assert.equal(b.workspace.id, a.workspace.id)
+  assert.equal(b.workspace.created, false)
+  const c = await h.call('send', { cwd: scratch, message: 'hi' })
+  assert.equal(c.workspace.path, path.join(root, 'Claude', 'scratch-workspaces'))
+  assert.equal(c.workspace.title, 'Claude scratch')
+  const d = await h.call('send', { cwd: tree, conversation_folder: tree, message: 'hi' })
+  assert.equal(d.workspace.path, path.join(proj, '.claude', 'worktrees'), 'the folder holding the worktrees, never the main checkout')
+  assert.equal(d.workspace.title, 'Claude worktrees')
+  assert.equal(d.work_folder, tree)
+  const e = await h.call('send', { cwd: codexTree, conversation_folder: codexTree, message: 'hi' })
+  assert.equal(e.workspace.path, path.join(root, '.codex', 'worktrees'))
+  // A Codex chat handing over a real project elsewhere: the project's own workspace, no note.
+  const f = await h.call('send', { cwd: proj, conversation_folder: chat, message: 'hi' })
+  assert.equal(f.workspace.path, proj)
+  assert.equal(f.work_folder, undefined)
+})
+
+test('a linked Git worktree inside the conversation folder, or a folder that is a workspace already, is not grouped into the parent', async (t) => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-group-')))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const wt = path.join(root, 'wt')
+  const app = path.join(root, 'app')
+  fs.mkdirSync(wt, { recursive: true }); fs.mkdirSync(app, { recursive: true })
+  fs.writeFileSync(path.join(wt, '.git'), `gitdir: ${path.join(root, 'main', '.git', 'worktrees', 'wt')}\n`)
+  const h = startHost({ workspaces: [{ id: 'w-app', path: app, title: 'app' }] }); t.after(h.close); await h.ready
+  const a = await h.call('send', { cwd: wt, conversation_folder: root, message: 'hi' })
+  assert.equal(a.workspace.path, wt, 'a worktree is a checkout of its own')
+  assert.equal(a.work_folder, undefined)
+  const b = await h.call('send', { cwd: app, conversation_folder: root, message: 'hi' })
+  assert.equal(b.workspace.id, 'w-app', 'a workspace from before keeps its sessions')
+  assert.equal(b.work_folder, undefined)
+  // A message starting with a path is not a /command: the note goes before it, whole.
+  const sub = path.join(root, 'sub'); fs.mkdirSync(sub)
+  const c = await h.call('send', { cwd: sub, conversation_folder: root, message: '/Users/me/x.js has a bug' })
+  assert.equal(c.work_folder, sub)
+  assert.match(h.calls.prompt.at(-1).content[0].text, /^\(Working folder for this task: [^]*\)\n\n\/Users\/me\/x\.js has a bug$/)
 })
 
 test('send to a folder that does not exist says so plainly, and creates nothing', async (t) => {
@@ -698,6 +788,39 @@ test('an approval wait (no question) also ends the wait once, and dsh_answer say
   await assert.rejects(h.call('answer', { run_id: run.run_id, answers: [{ skip: true }] }), /cannot be answered from here/)
 })
 
+test('with approvals left to the Harness UI, one asked inside a running tool call (PTC run_code: the agent stays "running") also ends the wait, and its decision lets the run go on', async (t) => {
+  const h = startHost(); t.after(h.close); await h.ready
+  fs.writeFileSync(path.join(h.home, 'settings.json'), JSON.stringify({ approvals: 'ask' }))
+  const s = S('s1')
+  const run = await h.call('send', { session_id: 's1', message: 'go' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.emit(...s.status('running'))
+  const waiting = h.call('wait', { run_id: run.run_id, timeout_s: 30 })
+  h.emit('session/event', { id: 's1' }, { type: 'approval/asked', data: { id: 'ap-1', toolName: 'bash' } })
+  const w = await waiting
+  assert.deepEqual([w.needs_input, w.state], ['harness-ui', 'waiting'])
+  await assert.rejects(h.call('answer', { run_id: run.run_id, answers: [{ skip: true }] }), /cannot be answered from here/)
+  h.emit('session/event', { id: 's1' }, { type: 'approval/decided', data: { id: 'ap-1', outcome: 'rejected' } })
+  assert.equal((await h.call('status', { run_id: run.run_id })).state, 'running', 'decided: back to running')
+})
+
+test('an approval in a hand-over run is allowed here by default and listed on the run; "ask" on the plugin page leaves it to the Harness UI', async (t) => {
+  const h = startHost(); t.after(h.close); await h.ready
+  const s = S('s1')
+  const run = await h.call('send', { session_id: 's1', message: 'go' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.emit(...s.status('running'))
+  h.emit('session/event', { id: 's1' }, { type: 'approval/asked', data: { id: 'ap-1', toolName: 'bash' } })
+  assert.equal(await h.approve('s1'), 'allowed-once')
+  h.emit('session/event', { id: 's1' }, { type: 'approval/decided', data: { id: 'ap-1', outcome: 'allowed-once' } })
+  const st = await h.call('status', { run_id: run.run_id })
+  assert.equal(st.state, 'running', 'never shown as waiting')
+  assert.deepEqual(st.approvals_allowed.map((a) => [a.tool, a.reason]), [['bash', 'write outside the workspace']])
+  assert.equal(await h.approve('other-session'), 'rejected', 'a session with no hand-over run goes on to Harness')
+  const reviewed = await h.approve('s1', 'bash', async () => 'rejected', 'Auto review denied tool "bash": sends ~/.ssh to a paste site')
+  assert.equal(reviewed, 'rejected', 'a call the Auto review turned down stays with the user')
+  fs.writeFileSync(path.join(h.home, 'settings.json'), JSON.stringify({ approvals: 'ask' }))
+  assert.equal(await h.approve('s1'), 'rejected', 'ask: the Harness UI decides')
+})
+
 // --- choosing a model --------------------------------------------------------
 
 const CATALOG = [
@@ -802,6 +925,24 @@ test('a model that matches nothing, or several, fails the send before anything i
   assert.equal(m.calls.create.length, 0)
   assert.equal(m.calls.prompt.length, 0)
   assert.equal((await h.call('send', { message: 'go', cwd: W, model: 'deepseek-api/v4-pro' })).model.provider, 'deepseek-api')
+})
+
+test('a name several providers share runs on the hand-over default when it is one of them (issue #1)', async (t) => {
+  const groups = [...CATALOG, { id: 'deepseek-api', name: 'DeepSeek API', models: [{ id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' }] }]
+  const m = fakeModels({ groups })
+  const picks = []; const select = m.controller.selectModel
+  m.controller.selectModel = async (r) => { picks.push(r); return select(r) }
+  const h = startHost({ models: m }); t.after(h.close); await h.ready
+  saveDefaults(h, { model: 'deepseek-api/deepseek-v4-pro' })
+  for (const session_id of [undefined, 's1']) {
+    const r = await h.call('send', { message: 'go', model: 'V4 Pro', ...(session_id ? { session_id } : { cwd: W }) })
+    assert.equal(r.model.provider, 'deepseek-api', session_id ?? 'new')
+    assert.equal(r.model_source, 'requested')
+    assert.match(r.model_note, /"V4 Pro" matches several models \(deepseek-account\/deepseek-v4-pro, deepseek-api\/deepseek-v4-pro\); it ran on deepseek-api\/deepseek-v4-pro, the hand-over default/)
+  }
+  assert.ok(picks.length >= 2 && picks.every((c) => !('note' in c)), 'the note never reaches Harness')
+  saveDefaults(h, { model: 'deepseek-account/deepseek-v4.1-flash' })
+  await assert.rejects(h.call('send', { message: 'go', cwd: W, model: 'V4 Pro' }), /matches several models/, 'a default outside the matches decides nothing')
 })
 
 test('the model is set on the session before its prompt, and Harness\'s default model is left as it was', async (t) => {
@@ -911,6 +1052,302 @@ test('Harness\'s default-model service is taken through inject, as Harness requi
   assert.equal(r.state, 'queued')
   assert.equal(r.model_source, 'default')
   assert.equal(none.state.order.length, 0)
+})
+
+// --- hand-over defaults (plugin page) -----------------------------------------------
+
+const PRO = { provider: 'deepseek-account', model: 'deepseek-v4-pro' }
+const saveDefaults = (h, handover, extra = {}) => {
+  fs.mkdirSync(h.home, { recursive: true })
+  fs.writeFileSync(path.join(h.home, 'settings.json'), JSON.stringify({ handover, ...extra }))
+}
+
+test('a new hand-over session starts on the model and effort set on the plugin page; an explicit model wins and an existing session keeps its own', async (t) => {
+  const m = fakeModels()
+  const h = startHost({ models: m }); t.after(h.close); await h.ready
+  const original = { ...m.state.default }
+  saveDefaults(h, { model: 'deepseek-account/deepseek-v4-pro', reasoning_effort: 'low' })
+  const r = await h.call('send', { message: 'go', cwd: W })
+  assert.deepEqual(r.model, { ...PRO, reasoning_effort: 'low' })
+  assert.equal(r.model_source, 'handover_default')
+  assert.equal(r.model_note, undefined)
+  // Effort alone in the send: the page's model, the send's effort.
+  const e = await h.call('send', { message: 'go', cwd: W, reasoning_effort: 'high' })
+  assert.deepEqual(e.model, { ...PRO, reasoning_effort: 'high' })
+  assert.equal(e.model_source, 'handover_default')
+  // A model named in the send comes first; the page's effort still fills in.
+  const x = await h.call('send', { message: 'go', cwd: W, model: 'V4.1 Flash' })
+  assert.deepEqual(x.model, { provider: 'deepseek-account', model: 'deepseek-v4.1-flash', reasoning_effort: 'low' })
+  assert.equal(x.model_source, 'requested')
+  // A session that exists keeps its own model.
+  m.state.sessions.s9 = { provider: 'deepseek-account', model: 'deepseek-v4.1-flash', reasoningEffort: 'high' }
+  const keep = await h.call('send', { message: 'more', session_id: 's9' })
+  assert.equal(keep.model.model, 'deepseek-v4.1-flash')
+  assert.equal(keep.model_source, 'session')
+  await m.settled()
+  assert.deepEqual(m.state.default, original, "Harness's default is left as it was")
+})
+
+test('a hand-over default that no longer fits is skipped with a note, never failing the send', async (t) => {
+  const m = fakeModels({ groups: [...CATALOG, { id: 'workbuddy', name: 'WorkBuddy', models: [{ id: 'glm-flash', name: 'GLM Flash' }] }] })
+  const h = startHost({ models: m }); t.after(h.close); await h.ready
+  saveDefaults(h, { model: 'zro/deepseek-v4.1-flash' })
+  const gone = await h.call('send', { message: 'go', cwd: W })
+  assert.equal(gone.state, 'queued')
+  assert.equal(gone.model.model, 'deepseek-v4.1-flash')
+  assert.equal(gone.model_source, 'default')
+  assert.match(gone.model_note, /zro\/deepseek-v4\.1-flash \(set on the dsh-baton plugin page in Harness\) is not in Harness's model list now/)
+  // A saved model is matched exactly, never by a similar name.
+  saveDefaults(h, { model: 'deepseek-account/V4 Pro' })
+  assert.match((await h.call('send', { message: 'go', cwd: W })).model_note, /is not in Harness's model list now/)
+  // An effort the model does not have: its own default effort, said in the note.
+  saveDefaults(h, { model: 'workbuddy/glm-flash', reasoning_effort: 'low' })
+  const glm = await h.call('send', { message: 'go', cwd: W })
+  assert.deepEqual(glm.model, { provider: 'workbuddy', model: 'glm-flash', reasoning_effort: null })
+  assert.equal(glm.model_source, 'handover_default')
+  assert.match(glm.model_note, /workbuddy\/glm-flash has no reasoning effort low/, 'a skipped effort is always said')
+  saveDefaults(h, { model: 'deepseek-account/deepseek-v4-pro', reasoning_effort: 'max' })
+  const pro = await h.call('send', { message: 'go', cwd: W })
+  assert.deepEqual(pro.model, { ...PRO, reasoning_effort: 'high' })
+  assert.match(pro.model_note, /has no reasoning effort max/)
+  // A broken settings file is the same as no setting.
+  fs.writeFileSync(path.join(h.home, 'settings.json'), '{ not json')
+  const plain = await h.call('send', { message: 'go', cwd: W })
+  assert.equal(plain.model_source, 'default')
+})
+
+test("a new hand-over that follows Harness's default says when that default changed since the last one", async (t) => {
+  const m = fakeModels()
+  const h = startHost({ models: m }); t.after(h.close); await h.ready
+  const first = await h.call('send', { message: 'a', cwd: W })
+  assert.equal(first.model_source, 'default')
+  assert.equal(first.model_note, undefined, 'nothing to compare with yet')
+  await m.settled()
+  assert.equal((await h.call('send', { message: 'b', cwd: W })).model_note, undefined, 'same default: no note')
+  await m.settled()
+  // The user picks V4 Pro in Harness's model menu: it becomes the default.
+  m.state.default = { ...PRO, reasoningEffort: 'high' }
+  const moved = await h.call('send', { message: 'c', cwd: W })
+  assert.equal(moved.model.model, 'deepseek-v4-pro')
+  assert.match(moved.model_note, /Harness's default model changed since the last new hand-over \(deepseek-account\/deepseek-v4\.1-flash then, deepseek-account\/deepseek-v4-pro now\)/)
+  assert.match(moved.model_note, /choose a hand-over default model on the dsh-baton plugin page/)
+  await m.settled()
+  assert.equal((await h.call('send', { message: 'd', cwd: W })).model_note, undefined, 'said once')
+  // Continuing a session or naming a model never says it.
+  assert.equal((await h.call('send', { message: 'e', session_id: moved.session_id })).model_note, undefined)
+})
+
+test('the plugin page reads and saves the hand-over defaults; only the Harness page itself may save', async (t) => {
+  const m = fakeModels()
+  const routes = {}
+  const web = { register: (r) => { routes[r.path] = r; return () => { delete routes[r.path] } } }
+  const h = startHost({ models: m, web }); t.after(h.close); await h.ready
+  const route = routes['/dsh-baton/handover']
+  const PAGE = { host: '127.0.0.1:2007', 'content-type': 'application/json', 'x-dsh-baton': 'handover' }
+  const request = (method, body, headers = PAGE) => new Promise((resolve) => {
+    const req = Object.assign(Readable.from(body == null ? [] : [Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))]), { method, headers })
+    let code = 0
+    route.handler(req, { writeHead: (c) => { code = c }, end: (b) => resolve({ code, body: JSON.parse(b) }) })
+  })
+  const got = await request('GET')
+  assert.equal(got.code, 200)
+  assert.deepEqual([got.body.model, got.body.reasoning_effort, got.body.supported], [null, null, true])
+  assert.deepEqual(got.body.default, { provider: 'deepseek-account', model: 'deepseek-v4.1-flash', reasoning_effort: 'high' })
+  const effortsOf = (x) => x.reasoning_efforts.map((e) => `${e.id}:${e.name}`)
+  assert.deepEqual(got.body.models.map((x) => [x.provider_name, x.name, effortsOf(x)]), [['DeepSeek', 'DeepSeek-V4.1-Flash', ['low:Low', 'high:High']], ['DeepSeek', 'DeepSeek-V4-Pro', ['low:Low', 'high:High']]])
+
+  const saved = await request('POST', { model: 'deepseek-account/deepseek-v4-pro', reasoning_effort: 'low' })
+  assert.equal(saved.code, 200)
+  assert.deepEqual([saved.body.model, saved.body.reasoning_effort], ['deepseek-account/deepseek-v4-pro', 'low'])
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(h.home, 'settings.json'), 'utf8')).handover, { model: 'deepseek-account/deepseek-v4-pro', reasoning_effort: 'low' })
+  assert.equal((await h.call('send', { message: 'go', cwd: W })).model_source, 'handover_default')
+
+  // Checked against Harness's list: an unknown model or effort is refused and nothing changes.
+  assert.match((await request('POST', { model: 'deepseek-account/V4 Pro' })).body.error, /No model deepseek-account\/V4 Pro/)
+  assert.match((await request('POST', { model: 'deepseek-account/deepseek-v4-pro', reasoning_effort: 'max' })).body.error, /No reasoning effort max for deepseek-account\/deepseek-v4-pro; there is low, high/)
+  assert.equal((await request('POST', '{ broken')).code, 400)
+  assert.equal(JSON.parse(fs.readFileSync(path.join(h.home, 'settings.json'), 'utf8')).handover.reasoning_effort, 'low')
+
+  // Not the plugin page: no page header, another site, a form post, or a name rebound to loopback.
+  for (const headers of [
+    { host: '127.0.0.1:2007', 'content-type': 'application/json' },
+    { host: '127.0.0.1:2007', origin: 'http://127.0.0.1:2007', 'content-type': 'application/json' },
+    { ...PAGE, origin: 'https://evil.example' },
+    { ...PAGE, 'content-type': 'text/plain' },
+    { ...PAGE, host: 'rebind.example:2007' },
+    { ...PAGE, host: 'rebind.example:2007', origin: 'http://rebind.example:2007' },
+    { ...PAGE, origin: 'null' },
+  ]) {
+    const r = await request('POST', { model: null }, headers)
+    assert.equal(r.code, 403, JSON.stringify(headers))
+  }
+  assert.equal(JSON.parse(fs.readFileSync(path.join(h.home, 'settings.json'), 'utf8')).handover.model, 'deepseek-account/deepseek-v4-pro')
+  // The desktop window (no Origin through its proxy, or dsh-app://app) and dsh web in a browser (same origin).
+  assert.equal((await request('POST', { model: 'deepseek-account/deepseek-v4-pro' }, { ...PAGE, origin: 'dsh-app://app' })).code, 200)
+  assert.equal((await request('POST', { model: 'deepseek-account/deepseek-v4-pro' }, { ...PAGE, host: 'localhost:2007', origin: 'http://localhost:2007' })).code, 200)
+  assert.equal((await request('POST', { model: null, reasoning_effort: null }, { ...PAGE, host: '[::1]:2007', 'content-type': 'application/json; charset=utf-8' })).code, 200)
+  assert.equal((await request('GET')).body.model, null, 'back to following Harness')
+  assert.equal((await request('PUT', {})).code, 405)
+})
+
+// The plugin page's route, called the way Harness's web server calls it.
+function handoverRoute(t, opts = {}) {
+  const routes = {}
+  const web = { register: (r) => { routes[r.path] = r; return () => { delete routes[r.path] } } }
+  const h = startHost({ ...opts, web }); t.after(h.close)
+  const PAGE = { host: '127.0.0.1:2007', 'content-type': 'application/json', 'x-dsh-baton': 'handover' }
+  const request = (method, body, headers = PAGE, extra = {}) => new Promise((resolve) => {
+    const req = Object.assign(Readable.from(body == null ? [] : [Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))]), { method, headers, ...extra })
+    let code = 0
+    let ret = null
+    ret = routes['/dsh-baton/handover'].handler(req, { writeHead: (c) => { code = c }, end: (b) => { const at = code; queueMicrotask(() => resolve({ code: at, body: JSON.parse(b), returned: ret })) } })
+  })
+  return { h, request, PAGE }
+}
+const settingsOf = (h) => JSON.parse(fs.readFileSync(path.join(h.home, 'settings.json'), 'utf8'))
+
+test('a saved default is used exactly as saved: a provider id with "deepseek" in it, a model id with slashes, a near-duplicate id', async (t) => {
+  const groups = [...CATALOG,
+    { id: 'deepseek', name: 'DeepSeek API', models: [{ id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' }, { id: 'v4-pro', name: 'V4 Pro alias' }] },
+    { id: 'openrouter', name: 'OpenRouter', models: [{ id: 'deepseek/deepseek-v4-pro', name: 'DeepSeek V4 Pro' }] },
+  ]
+  const m = fakeModels({ groups })
+  const { h, request } = handoverRoute(t, { models: m }); await h.ready
+  for (const saved of ['deepseek/deepseek-v4-pro', 'deepseek/v4-pro', 'openrouter/deepseek/deepseek-v4-pro']) {
+    assert.equal((await request('POST', { model: saved })).code, 200, saved)
+    const r = await h.call('send', { message: 'go', cwd: W })
+    assert.equal(`${r.model.provider}/${r.model.model}`, saved)
+    assert.equal(r.model_source, 'handover_default')
+    assert.deepEqual(r.handover_default, ['model'])
+  }
+  // Named in a send, a model id with slashes is found too.
+  assert.equal((await h.call('send', { message: 'go', cwd: W, model: 'openrouter/deepseek/deepseek-v4-pro' })).model.provider, 'openrouter')
+})
+
+test('a saved default Harness cannot use never fails the send: no default-model service, a model Harness refuses, an unreadable catalog', async (t) => {
+  // No default-model service: the page says it cannot be set, and a send skips the setting.
+  const noService = fakeModels({ defaultService: false })
+  const a = handoverRoute(t, { models: noService }); await a.h.ready
+  assert.equal((await a.request('GET')).body.supported, false)
+  saveDefaults(a.h, { model: 'deepseek-account/deepseek-v4-pro', reasoning_effort: 'low' })
+  const r = await a.h.call('send', { message: 'go', cwd: W })
+  assert.equal(r.state, 'queued')
+  assert.match(r.model_note, /were not used: this DeepSeek Harness cannot choose a model per session/)
+  assert.equal(noService.calls.prompt.length, 1)
+
+  // Harness lists the model but refuses to select it (its provider signed out since).
+  const refusing = fakeModels({ groups: [...CATALOG, { id: 'gone', name: 'Gone', models: [{ id: 'm1', name: 'M1' }] }] })
+  const select = refusing.controller.selectModel
+  refusing.controller.selectModel = async (q) => { if (q.provider === 'gone') throw new Error('session/model-unavailable'); return select(q) }
+  const b = startHost({ models: refusing }); t.after(b.close); await b.ready
+  saveDefaults(b, { model: 'gone/m1' })
+  const s = await b.call('send', { message: 'go', cwd: W })
+  assert.equal(s.state, 'queued')
+  assert.equal(s.model.model, 'deepseek-v4.1-flash')
+  assert.equal(s.model_source, 'default')
+  assert.match(s.model_note, /could not be used \(setting the model: session\/model-unavailable\), so this session uses Harness's default model/)
+  assert.equal(refusing.calls.prompt.length, 1)
+  assert.equal(refusing.calls.create.length, 1, 'one session, not an empty one left behind')
+
+  // The catalog cannot be read: the send goes on as if nothing were set.
+  const flaky = fakeModels()
+  const c = startHost({ models: flaky }); t.after(c.close); await c.ready
+  saveDefaults(c, { model: 'deepseek-account/deepseek-v4-pro' })
+  c.ctx.sessionController.modelCatalog = async () => { throw new Error('catalog offline') }
+  const f = await c.call('send', { message: 'go', cwd: W })
+  assert.equal(f.state, 'queued')
+  assert.match(f.model_note, /model list could not be read \(catalog offline\)/)
+})
+
+test('an effort named in the send that the saved model lacks skips the saved model, with a note', async (t) => {
+  const m = fakeModels({ groups: [...CATALOG, { id: 'workbuddy', name: 'WorkBuddy', models: [{ id: 'glm-flash', name: 'GLM Flash' }] }] })
+  const h = startHost({ models: m }); t.after(h.close); await h.ready
+  saveDefaults(h, { model: 'workbuddy/glm-flash' })
+  const r = await h.call('send', { message: 'go', cwd: W, reasoning_effort: 'high' })
+  assert.deepEqual(r.model, { provider: 'deepseek-account', model: 'deepseek-v4.1-flash', reasoning_effort: 'high' })
+  assert.match(r.model_note, /workbuddy\/glm-flash \(set on the dsh-baton plugin page in Harness\) has no reasoning effort high/)
+})
+
+test('with only an effort saved, a new hand-over reads the default inside the pick queue: another send\'s pick never leaks in', async (t) => {
+  const m = fakeModels({ saveMs: () => 60 })
+  const h = startHost({ models: m }); t.after(h.close); await h.ready
+  saveDefaults(h, { model: null, reasoning_effort: 'low' }, { lastDefaultModel: 'deepseek-account/deepseek-v4.1-flash' })
+  const a = h.call('send', { message: 'a', session_id: 's1', model: 'V4 Pro' })
+  await sleep(20)
+  const b = await h.call('send', { message: 'b', cwd: W })
+  await a
+  assert.deepEqual(b.model, { provider: 'deepseek-account', model: 'deepseek-v4.1-flash', reasoning_effort: 'low' })
+  assert.equal(b.model_source, 'default')
+  assert.deepEqual(b.handover_default, ['reasoning_effort'])
+  assert.equal(b.model_note, undefined, 'no false "default changed" note')
+  await m.settled()
+  assert.equal(m.state.default.model, 'deepseek-v4.1-flash')
+  assert.equal((await h.call('send', { message: 'c', cwd: W })).model_note, undefined)
+})
+
+test('a send refused after the drift check does not use up the "default changed" note', async (t) => {
+  const m = fakeModels()
+  let balance = { status: 'ready', value: [{ currency: 'CNY', balance: '5.00' }], bonusWallets: [] }
+  const h = startHost({ models: m, account: { getBalance: async () => balance } }); t.after(h.close); await h.ready
+  await h.call('send', { message: 'a', cwd: W })
+  await m.settled()
+  m.state.default = { ...PRO, reasoningEffort: 'high' }
+  balance = { status: 'ready', value: [{ currency: 'CNY', balance: '0.00' }], bonusWallets: [] }
+  await sleep(10)
+  // The balance seen a minute ago is trusted: this send goes through and says it.
+  const said = await h.call('send', { message: 'b', cwd: W })
+  assert.match(said.model_note, /default model changed/)
+  await m.settled()
+  m.state.default = { provider: 'deepseek-account', model: 'deepseek-v4.1-flash', reasoningEffort: 'high' }
+  // A prompt Harness refuses: the run fails, and the next send still says the default moved.
+  const prompt = m.controller.prompt
+  h.ctx.sessionController.prompt = async () => { throw new Error('harness busy') }
+  const failed = await h.call('send', { message: 'c', cwd: W })
+  assert.equal(failed.state, 'failed')
+  h.ctx.sessionController.prompt = prompt ?? (async (r) => { h.calls.prompt.push(r); return { accepted: true } })
+  await m.settled()
+  const next = await h.call('send', { message: 'd', cwd: W })
+  assert.match(next.model_note, /deepseek-v4-pro then, deepseek-account\/deepseek-v4\.1-flash now/)
+})
+
+test('a settings file that cannot be read is reported, never taken for "nothing set" or overwritten by a send', async (t) => {
+  const m = fakeModels()
+  const { h, request } = handoverRoute(t, { models: m }); await h.ready
+  fs.mkdirSync(h.home, { recursive: true })
+  const torn = '{"handover":{"model":"deepseek-account/deepseek-v4-pro"},"lastDefaultModel":"x/y"'
+  fs.writeFileSync(path.join(h.home, 'settings.json'), torn)
+  const r = await h.call('send', { message: 'go', cwd: W })
+  assert.equal(r.state, 'queued')
+  assert.match(r.model_note, /could not be read \(not valid JSON\)/)
+  assert.equal(fs.readFileSync(path.join(h.home, 'settings.json'), 'utf8'), torn, 'left as it was')
+  assert.equal((await request('GET')).body.unreadable, 'not valid JSON')
+  // A save from the page replaces it and keeps the broken one aside.
+  assert.equal((await request('POST', { model: 'deepseek-account/deepseek-v4-pro' })).code, 200)
+  assert.equal(settingsOf(h).handover.model, 'deepseek-account/deepseek-v4-pro')
+  assert.ok(fs.readdirSync(h.home).some((f) => f.startsWith('settings.json.bad-')))
+})
+
+test('the page route: a field left out keeps its value, a saved model that left Harness can keep a new effort, any address or localhost name may save', async (t) => {
+  const m = fakeModels()
+  const { h, request, PAGE } = handoverRoute(t, { models: m }); await h.ready
+  assert.equal((await request('POST', { model: 'deepseek-account/deepseek-v4-pro', reasoning_effort: 'low' })).code, 200)
+  assert.equal((await request('POST', { reasoning_effort: 'high' })).code, 200)
+  assert.deepEqual(settingsOf(h).handover, { model: 'deepseek-account/deepseek-v4-pro', reasoning_effort: 'high' })
+  assert.equal((await request('POST', { model: null })).code, 200)
+  assert.deepEqual(settingsOf(h).handover, { model: null, reasoning_effort: 'high' })
+  // The saved model leaves Harness's list: the effort can still be changed, the model kept.
+  saveDefaults(h, { model: 'gone/pro-v1', reasoning_effort: 'low' })
+  const kept = await request('POST', { model: 'gone/pro-v1', reasoning_effort: 'high' })
+  assert.equal(kept.code, 200, JSON.stringify(kept.body))
+  assert.equal(kept.body.missing, true)
+  assert.match((await request('POST', { model: 'other/gone' })).body.error, /No model other\/gone/)
+  for (const host of ['127.0.0.2:2007', '198.51.100.20:2007', '[::ffff:127.0.0.1]:2007', 'harness.localhost:2007']) {
+    assert.equal((await request('POST', { model: null }, { ...PAGE, host, origin: `http://${host}` })).code, 200, host)
+  }
+  assert.equal((await request('POST', { model: null }, { ...PAGE, host: 'evil.example:2007' })).code, 403)
+  // The handler hands its promise back to the web server.
+  assert.equal(typeof (await request('GET')).returned?.then, 'function')
+  assert.equal((await request('POST', [1, 2])).code, 200, 'an array body changes nothing')
 })
 
 // --- Harness goals ---------------------------------------------------------------
@@ -1316,4 +1753,50 @@ test('team: Harness\'s own refusal (not the root session) comes back and nothing
   t.after(h.close); await h.ready
   await assert.rejects(h.call('send', { message: 'x', session_id: 'child-1', team: true }), /No message was sent: Agent Teams could not be turned on \(change Team mode from the root Session\)/)
   assert.equal(h.calls.prompt.length, 0)
+})
+
+test('approvals after review: a broken or odd setting means ask, an approval for a person waits whatever else is open, "running" does not clear it, an id-less decision closes one', async (t) => {
+  const h = startHost(); t.after(h.close); await h.ready
+  const s = S('s1')
+  const run = await h.call('send', { session_id: 's1', message: 'go' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.emit(...s.status('running'))
+  for (const bad of ['{ not json', JSON.stringify({ approvals: 'Ask' }), JSON.stringify({ approvals: 'never' })]) {
+    fs.writeFileSync(path.join(h.home, 'settings.json'), bad)
+    assert.equal(await h.approve('s1'), 'rejected', `${bad}: left to the Harness UI`)
+  }
+  fs.writeFileSync(path.join(h.home, 'settings.json'), '{}')
+  // A is allowed here and still open when B, turned down by Auto review, asks the user.
+  h.emit('session/event', { id: 's1' }, { type: 'approval/asked', data: { id: 'A', toolName: 'bash' } })
+  const waiting = h.call('wait', { run_id: run.run_id, timeout_s: 30 })
+  h.emit('session/event', { id: 's1' }, { type: 'approval/asked', data: { id: 'B', toolName: 'bash', reason: 'Auto review denied tool "bash": x' } })
+  const w = await waiting
+  assert.deepEqual([w.needs_input, w.state], ['harness-ui', 'waiting'])
+  h.emit('session/event', { id: 's1' }, { type: 'approval/decided', data: { id: 'A', outcome: 'allowed-once' } })
+  h.emit(...s.status('running'))
+  assert.equal((await h.call('status', { run_id: run.run_id })).state, 'waiting', 'B is still open: "running" and A\'s decision leave the wait')
+  h.emit('session/event', { id: 's1' }, { type: 'approval/decided', data: { outcome: 'rejected' } })
+  assert.equal((await h.call('status', { run_id: run.run_id })).state, 'running', 'the id-less decision closes the one open approval')
+})
+
+test('the settings route after review: a save from another machine is refused, a save names only its own fields, approvals save without model support, a broken file replaced keeps ask', async (t) => {
+  const m = fakeModels()
+  const { h, request, PAGE } = handoverRoute(t, { models: m }); await h.ready
+  assert.equal((await request('POST', { approvals: 'ask' }, PAGE, { socket: { remoteAddress: '198.51.100.20' } })).code, 403, 'another machine on the network')
+  assert.equal((await request('POST', { approvals: 'allow' }, PAGE, { socket: { remoteAddress: '::ffff:127.0.0.1' } })).code, 200)
+  // Two saves at once: a model save waiting on the catalogue must not undo an approvals save.
+  const slow = request('POST', { model: 'deepseek-account/deepseek-v4-pro' })
+  const quick = request('POST', { approvals: 'ask' })
+  await Promise.all([slow, quick])
+  assert.deepEqual([settingsOf(h).handover.model, settingsOf(h).approvals], ['deepseek-account/deepseek-v4-pro', 'ask'])
+  const effortOnly = await request('POST', { reasoning_effort: 'low' })
+  assert.equal(effortOnly.code, 200)
+  assert.equal(settingsOf(h).approvals, 'ask', 'a model or effort save leaves approvals alone')
+  fs.writeFileSync(path.join(h.home, 'settings.json'), '{ broken')
+  assert.equal((await request('POST', { model: null })).code, 200)
+  assert.equal(settingsOf(h).approvals, 'ask', 'a broken file replaced: its approvals choice is unknown, so ask')
+  assert.equal((await request('POST', { approvals: 'sometimes' })).code, 400)
+  // A Harness that cannot choose a model per session: approvals still save, and show.
+  const old = handoverRoute(t, { models: fakeModels({ selectModel: false }) }); await old.h.ready
+  const saved = await old.request('POST', { approvals: 'ask' })
+  assert.deepEqual([saved.code, saved.body.supported, saved.body.approvals], [200, false, 'ask'])
 })

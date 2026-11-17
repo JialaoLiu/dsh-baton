@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "dsh-baton",
+    "description": "Hand coding tasks from Claude Code, Codex or Antigravity to DeepSeek Harness: they run live in this window and come back with the changed files and test results.",
+    "detail": "docs/DETAIL.md"
+  }
+}
