@@ -356,3 +356,4 @@ test('dsh_status takes a session id; an older plugin that only knows runs is nam
   assert.equal(reply.isError, true)
   assert.match(reply.content[0].text, /too old to look at a session by its id/)
 })
+

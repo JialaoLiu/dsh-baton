@@ -62,7 +62,8 @@ function listWorktrees(dir) {
   if (out == null) return null
   return out.split('\n').filter((l) => l.startsWith('worktree ')).map((l) => realPath(l.slice('worktree '.length).trim()))
 }
-const realPath = (p) => { try { return fs.realpathSync(p) } catch { return path.resolve(p) } }
+// The native call, as git reports paths: on Windows it also expands 8.3 short names (RUNNER~1).
+const realPath = (p) => { try { return fs.realpathSync.native(p) } catch { return path.resolve(p) } }
 
 // What a worktree changed against the commit the folder was on at dsh_send: committed and
 // uncommitted alike, from git rather than a copy of the whole checkout. With no such commit,

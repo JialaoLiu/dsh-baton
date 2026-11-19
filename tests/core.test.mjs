@@ -75,7 +75,7 @@ test('session reader decodes appended frames and skips false frame starts', () =
 })
 
 test('normalizePath expands ~ and follows symlinks', () => {
-  assert.equal(core.normalizePath('~'), fs.realpathSync(os.homedir()))
+  assert.equal(core.normalizePath('~'), fs.realpathSync.native(os.homedir()))
   // .native, like normalizePath: it also expands Windows 8.3 short names (RUNNER~1 on CI).
   const real = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-n-')))
   fs.symlinkSync(real, `${real}-l`, IS_WIN ? 'junction' : undefined) // a junction needs no admin rights on Windows
@@ -178,47 +178,6 @@ test('a relayed question keeps the asker\'s pick apart from the option labels', 
   assert.equal(core.shapeQuestion(undefined), undefined)
 })
 
-test('answer keeps reason for the client and sends Harness only the answers', async () => {
-  let sent = null
-  process.env.DSH_BATON_SOCKET = path.join(home, `s${++servers}.sock`)
-  fs.rmSync(process.env.DSH_BATON_SOCKET, { force: true })
-  const server = net.createServer((c) => c.on('data', (d) => {
-    for (const line of String(d).split('\n').filter(Boolean)) {
-      const req = JSON.parse(line)
-      if (req.method === 'answer') sent = req.params
-      const result = req.method === 'answer'
-        ? { run_id: 'hrun-1', state: 'waiting', submitted: true, answers: [{ id: 'name', selected: ['csvmd (Recommended)'] }] }
-        : req.method === 'wait' ? { run_id: req.params.run_id, state: 'completed', final_text: 'GOT: csvmd' }
-          : { version: core.VERSION }
-      c.write(JSON.stringify({ id: req.id, result }) + '\n')
-    }
-  }))
-  await new Promise((r) => server.listen(core.hostSocket(), r))
-  try {
-    const looked = await core.api.answer({ run_id: 'hrun-1', answers: [{ choose: [1] }], reason: 'short' })
-    assert.equal(looked.submitted, false, 'an option chosen for the user gets a second look first')
-    assert.equal(sent, null)
-    const st = await core.api.answer({ run_id: 'hrun-1', answers: [{ choose: [1] }], reason: '  short and says what it does ' })
-    assert.deepEqual(sent, { run_id: 'hrun-1', answers: [{ choose: [1] }] })
-    assert.equal(st.reason, 'short and says what it does')
-    assert.deepEqual(st.answers[0].selected, ['csvmd'])
-    // The final wait carries the choice and reason, so the client tells the user then.
-    const done = await core.api.wait({ run_id: 'hrun-1', timeout_s: 5 })
-    assert.deepEqual(done.decided_for_user, { answers: [{ id: 'name', selected: ['csvmd'] }], reason: 'short and says what it does' })
-    const bare = await core.api.answer({ run_id: 'hrun-2', answers: [{ choose: [1] }] })
-    assert.equal(bare.reason, undefined)
-    assert.equal((await core.api.wait({ run_id: 'hrun-2', timeout_s: 5 })).decided_for_user, undefined)
-  } finally {
-    server.close()
-  }
-})
-
-test('relay lays the question out with the first line left for the client\'s own pick', () => {
-  const text = core.relayText(core.shapeQuestion({ questions: [{ id: 'n', question: 'Which name?', options: [{ number: 1, label: 'csvmd (Recommended)', description: 'short' }, { number: 2, label: 'tabula' }] }] }))
-  assert.equal(text, 'My recommendation: <an option, or your own answer>, because <your own reason>\n\nWhich name?\n  1. csvmd - short\n  2. tabula\n  (The model in Harness that asked would pick: csvmd)\n\nYou can also answer in your own words.')
-  assert.equal(core.relayText(undefined), undefined)
-})
-
 test('a run that ran out of DeepSeek balance says not to send again; other failures keep the usual hint', () => {
   const quota = { run_id: 'r1', state: 'failed', error: 'Insufficient Balance (request_id: x)', turn_end: { kind: 'error', error: { message: 'Insufficient Balance', code: 'ACCOUNT_QUOTA', status: 402 } } }
   assert.equal(core.waitResult(quota).hint, core.QUOTA_HINT)
@@ -263,65 +222,48 @@ test('the ended hint follows the checks: none sent, all passed, or one failed fo
   assert.match(core.waitResult(shared).hint, /never delete or revert a file because this run was not asked for it/)
 })
 
-test('a client allowed to decide may answer in its own words, and a relay may recommend outside the options', () => {
-  assert.match(core.ASKED, /decide as the task's owner: an option only if it fits as is, else your own words/)
-  assert.match(core.ASKED, /On a single choice, text replaces the option/)
-  assert.match(core.ASKED, /My recommendation: <an option, or your own answer>, because <reason>/)
-  assert.match(core.ASKED, /even outside the options/)
-  const st = core.waitResult({ run_id: 'r', state: 'waiting', needs_input: 'question', question: { count: 1, questions: [{ id: 'q', question: 'Which?', options: [{ number: 1, label: 'a' }] }] } })
-  assert.match(st.hint, /answer as the task's owner: an option only if it fits as is, else your own words \(text; on a single choice, text replaces the option\)/)
-  assert.match(st.hint, /the answer that best fits this task, checked against its file names and requirements \(an option, or your own answer when none fits\)/)
-  assert.match(st.hint, /Never "your choice"/)
-  assert.match(st.hint, /If they pick your recommendation, submit the answer alone, without "Recommended" or the reason/)
-  assert.match(st.hint, /An option that needs a note, a fix or an explanation to work for this task does not fit/)
-})
-
-test('an option chosen for the user gets a second look before it is sent; own words and the user\'s own answers go at once', () => {
-  const a = { run_id: 'oc-1', answers: [{ id: 'q', choose: [2] }] }
-  const first = core.optionCheck(a, 'fits')
-  assert.equal(first.submitted, false)
-  assert.equal(first.hint, core.OPTION_CHECK_HINT)
-  assert.match(first.hint, /without looking at the options, write down the answer this user would want/)
-  assert.deepEqual(first.check, [{ id: 'q', choose: [2] }])
-  assert.equal(core.optionCheck(a, 'fits'), null, 'the same answers again go through')
-  assert.equal(core.optionCheck(a, 'fits'), null, 'and again after that: a retry after a failed send shows its real error')
-  // Each question is looked at once: a later question with the same pick gets its own look.
-  assert.notEqual(core.optionCheck(a, 'fits', 'question-2'), null, 'a later question asks again')
-  assert.equal(core.optionCheck(a, 'fits', 'question-2'), null)
-  assert.equal(core.optionCheck({ run_id: 'oc-2', answers: [{ id: 'q', text: 'plain .md' }] }, 'fits'), null)
-  assert.equal(core.optionCheck({ run_id: 'oc-3', answers: [{ id: 'q', choose: [1] }] }), null)
-  assert.notEqual(core.optionCheck({ run_id: 'oc-1', answers: [{ id: 'q', choose: [1] }] }, 'fits'), null, 'another option is looked at anew')
-})
-
-test('a stopped run that answered a question for the user keeps the sentence to say so', () => {
-  const decided_for_user = { answers: [{ id: 'q', selected: ['a'] }], reason: 'fits' }
-  for (const st of [{ state: 'failed', turn_end: { kind: 'aborted', reason: { kind: 'user' } } }, { state: 'interrupted' }, { state: 'cancelled' }]) {
-    const hint = core.stopHint({ ...st, decided_for_user }).hint
-    assert.match(hint, /^You answered a question for the user during this run/)
-    assert.doesNotMatch(core.stopHint(st).hint, /You answered a question/)
-    assert.equal(core.waitResult({ run_id: 'r', ...st, decided_for_user }).hint, hint)
+test('answer sends Harness only the answers, at once; reason and recommend from older clients are dropped', async () => {
+  const sent = []
+  process.env.DSH_BATON_SOCKET = path.join(home, `s${++servers}.sock`)
+  fs.rmSync(process.env.DSH_BATON_SOCKET, { force: true })
+  const server = net.createServer((c) => c.on('data', (d) => {
+    for (const line of String(d).split('\n').filter(Boolean)) {
+      const req = JSON.parse(line)
+      if (req.method === 'answer') sent.push(req.params)
+      const result = req.method === 'answer'
+        ? { run_id: 'hrun-1', state: 'waiting', submitted: true, answers: [{ id: 'name', selected: ['csvmd (Recommended)'] }] }
+        : req.method === 'wait' ? { run_id: req.params.run_id, state: 'completed', final_text: 'GOT: csvmd' }
+          : { version: core.VERSION }
+      c.write(JSON.stringify({ id: req.id, result }) + '\n')
+    }
+  }))
+  await new Promise((r) => server.listen(core.hostSocket(), r))
+  try {
+    const st = await core.api.answer({ run_id: 'hrun-1', answers: [{ choose: [1] }], reason: 'short', recommend: true })
+    assert.deepEqual(sent, [{ run_id: 'hrun-1', answers: [{ choose: [1] }] }])
+    assert.equal(st.submitted, true)
+    assert.equal(st.reason, undefined)
+    assert.deepEqual(st.answers[0].selected, ['csvmd'])
+    assert.equal((await core.api.wait({ run_id: 'hrun-1', timeout_s: 5 })).decided_for_user, undefined)
+  } finally {
+    server.close()
   }
 })
 
-test('a question comes hint first, laid out as a message (relay) and as a question tool call with the recommendation as its first option', () => {
+test('a question comes hint first: ask the user, then submit their answer', () => {
   const question = { count: 2, questions: [
     { id: 'q', question: 'Which?', options: [{ number: 1, label: 'a (Recommended)' }, { number: 2, label: 'b' }] },
     { id: 'm', question: 'Which parts?', multi_select: true, options: [{ number: 1, label: 'x' }] },
   ] }
   const st = core.waitResult({ run_id: 'r', state: 'waiting', needs_input: 'question', question: core.shapeQuestion(question), hint: 'old' })
-  assert.deepEqual(Object.keys(st).slice(0, 3), ['hint', 'relay', 'question_tool'])
-  assert.match(st.hint, /^Harness asks the user 2 question\(s\)\./)
-  assert.match(st.hint, /first option of question_tool \(in a question tool such as request_user_input\)/)
-  assert.deepEqual(st.question_tool, [
-    { title: 'Which?', options: ['Recommended: <an option, or your own answer>, because <your own reason>', 'a', 'b'] },
-    { title: 'Which parts? (several can be chosen)', options: ['Recommended: <an option, or your own answer>, because <your own reason>', 'x'] },
-  ])
+  assert.equal(Object.keys(st)[0], 'hint')
+  assert.match(st.hint, /^Harness asks the user 2 question\(s\)\. Ask the user \(your own question tool, or a message\), your recommendation first if you have one, and submit their answer with dsh_answer/)
+  for (const k of ['recommend_call', 'answer_call', 'question_tool', 'relay']) assert.equal(st[k], undefined, k)
   assert.equal(st.run_id, 'r')
   const f = core.followResult({ state: 'needs_input', session_id: 's', question: { count: 1, questions: [{ id: 'q', question: 'Which?', options: [] }] } })
   assert.equal(Object.keys(f)[0], 'hint')
-  assert.match(f.hint, /with dsh_answer and session_id s \(no run_id\) and a one-sentence reason/)
-  assert.match(f.hint, /then call dsh_wait again with the same session_id, until and this cursor\.$/)
-  assert.equal(core.questionTool(undefined), undefined)
+  assert.match(f.hint, /with dsh_answer and session_id s \(no run_id\)/)
+  assert.match(f.hint, /Then call dsh_wait again with the same session_id, until and this cursor\.$/)
 })
 
 test('a run that worked in a Git worktree says its changes are in evidence.worktrees and that merging is the user\'s call', () => {
@@ -338,3 +280,10 @@ test('a run in a session already working in a worktree says the changes and chec
   const hint = core.endedHint({ evidence: { changes: { created: [], modified: [{ path: 'a.js' }], deleted: [] }, worktrees: [{ path: '/p/.agents/worktrees/wt', branch: 'wt', changes_in: 'changes' }] } })
   assert.match(hint, /works in a Git worktree \(\/p\/\.agents\/worktrees\/wt, branch wt\): evidence\.changes and the checks are from that worktree\. Merging that branch is the user's call\./)
 })
+
+test('a mark inside other brackets is cleaned ("Markdown（.md，推荐）") and becomes the asker\'s pick', () => {
+  const q = core.shapeQuestion({ count: 1, questions: [{ id: 'f', question: '格式？', options: [{ number: 1, label: '纯文本（.txt）' }, { number: 2, label: 'Markdown（.md，推荐）' }, { number: 3, label: 'JSON (recommended, structured)' }] }] })
+  assert.deepEqual(q.questions[0].options.map((o) => o.label), ['纯文本（.txt）', 'Markdown（.md）', 'JSON (structured)'])
+  assert.deepEqual(q.questions[0].harness_suggested, { number: 2, label: 'Markdown（.md）' })
+})
+

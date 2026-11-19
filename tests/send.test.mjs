@@ -57,7 +57,7 @@ async function sendFrom({ clientName, cwd, args, meta, env = {}, oldHost = false
 }
 
 test('Claude Code: no cwd means the project folder the server runs in', async () => {
-  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
+  const project = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
   const { host, reply } = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'hi' } })
   assert.equal(host.cwd, project)
   assert.equal(reply.cwd, project)
@@ -138,7 +138,7 @@ test('Antigravity folder lookup: a damaged database or an unknown id gives undef
 })
 
 test('Antigravity: no cwd means the conversation\'s project folder; without a project it asks', async () => {
-  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-agproj-')))
+  const project = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-agproj-')))
   const ag = antigravityData([
     ['c-proj', JSON.stringify([pathToFileURL(project).href]), 'p1'],
     ['c-none', '', 'outside-of-project'],
@@ -173,7 +173,7 @@ test('Antigravity: no cwd means the conversation\'s project folder; without a pr
 })
 
 test('a followup into a session says how to change it while it waits in the queue', async () => {
-  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
+  const project = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
   try {
     const queued = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'next', session_id: 's1' } })
     // Claude Code lists dsh_update_queued; Codex reaches it only through dsh_call.
@@ -191,7 +191,7 @@ test('a followup into a session says how to change it while it waits in the queu
 })
 
 test('a hand-over with checks asks for a sub-agent review table in its language; a plain message is sent verbatim', async () => {
-  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
+  const project = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
   const handover = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'build it', checks: ['npm test'] } })
   assert.match(handover.host.message, /^build it\n\n---\nWhen the work is done, start a read-only sub-agent/)
   const zh = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: '做一个看板', checks: ['npm test'] } })
@@ -202,7 +202,7 @@ test('a hand-over with checks asks for a sub-agent review table in its language;
 })
 
 test('model goes to the plugin with the message; a plugin too old to choose one gets nothing', async () => {
-  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
+  const project = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
   const { host } = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'hi', model: 'V4 Pro', reasoning_effort: 'high' } })
   assert.equal(host.model, 'V4 Pro')
   assert.equal(host.reasoning_effort, 'high')
@@ -215,7 +215,7 @@ test('model goes to the plugin with the message; a plugin too old to choose one 
 })
 
 test('team goes to the plugin with the message; a plugin before 0.6.12 gets nothing', async () => {
-  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
+  const project = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
   const { host } = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'hi', team: true } })
   assert.equal(host.team, true)
   const old = await sendFrom({ clientName: 'claude-code', cwd: project, oldHost: true, args: { message: 'hi', team: true } })
@@ -225,7 +225,7 @@ test('team goes to the plugin with the message; a plugin before 0.6.12 gets noth
 })
 
 test('team as the string "true" or "false" (a client with a tool list from before team) goes as a boolean', async () => {
-  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
+  const project = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
   const on = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'hi', team: 'true' } })
   assert.equal(on.host.team, true)
   const off = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'hi', team: 'False' } })
@@ -235,7 +235,7 @@ test('team as the string "true" or "false" (a client with a tool list from befor
 
 test('checks run in the work folder of a session that opened in a folder containing it, on later sends too', async () => {
   const { socketEndpoint } = await import('../host/lib/socket.js')
-  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
+  const project = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
   const sub = path.join(project, 'app')
   fs.mkdirSync(sub)
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-f-'))

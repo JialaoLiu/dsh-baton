@@ -452,7 +452,7 @@ export function clients(env = process.env, home = os.homedir()) {
 // survives upgrades (Homebrew's /opt/homebrew/bin/node, not the versioned Cellar path
 // that process.execPath resolves to); otherwise the running binary itself.
 export function stableNodePath(env = process.env, execPath = process.execPath) {
-  const real = (p) => { try { return fs.realpathSync(p) } catch { return null } }
+  const real = (p) => { try { return fs.realpathSync.native(p) } catch { return null } }
   const target = real(execPath)
   const names = process.platform === 'win32' ? ['node.exe'] : ['node']
   for (const dir of (env.PATH ?? env.Path ?? '').split(path.delimiter).filter(Boolean)) {
@@ -483,7 +483,7 @@ export function findNode({ env = process.env, platform = process.platform, exclu
   } else {
     dirs.push('/opt/homebrew/bin', '/usr/local/bin', '/usr/bin')
   }
-  const real = (x) => { try { return fs.realpathSync(x) } catch { return x } }
+  const real = (x) => { try { return fs.realpathSync.native(x) } catch { return x } }
   const fold = (s) => (platform === 'win32' ? s.toLowerCase() : s)
   const skip = exclude.filter(Boolean).map((x) => fold(real(x)))
   const seen = new Set()

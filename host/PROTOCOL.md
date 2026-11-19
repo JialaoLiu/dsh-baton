@@ -12,7 +12,7 @@ Newline-delimited JSON: request `{"id", "method", "params"}`, reply `{"id", "res
 | `list_sessions` | `cwd?`, `query?`, `limit?` |
 | `read_session` | `session_id`, `last?` |
 | `models` | — |
-| `send` | `message`, and `session_id` or `cwd` or `workspace_id`; `mode?` (`followup` \| `steer`; left out, Harness's busy-send setting, else `followup`); `sender?`, `model?`, `reasoning_effort?`, `team?` (`true` \| `false`), `conversation_folder?` (the client conversation's folder: a `cwd` inside it joins its workspace; the reply then has `work_folder`) |
+| `send` | `message`, and `session_id` or `cwd` or `workspace_id`; `mode?` (`followup` \| `steer`; left out, Harness's busy-send setting, else `followup`); `sender?`, `model?`, `reasoning_effort?`, `team?` (`true` \| `false`), `conversation_folder?` (the client conversation's folder: a `cwd` inside it joins its workspace; the reply then has `work_folder`). The reply waits at most 10 s for Harness to take the message in (`DSH_BATON_ADMIT_WAIT_MS`); past that it comes back with `admission_pending: true`, and a refusal later fails the run |
 | `status` | `run_id` and `tail?`, or `session_id` |
 | `wait` | `run_id`, `timeout_s?` |
 | `follow` | `session_id`, `until?` (`goal` \| `turn`), `cursor?`, `since_ms?`, `every_s?`, `timeout_s?` |

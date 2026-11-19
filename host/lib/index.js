@@ -19,11 +19,15 @@ export const inject = ['sessionController', 'workspaceRegistry']
 
 const VERSION = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
 const MAX_EVENTS = 200
+const admitWaitMs = () => Number(process.env.DSH_BATON_ADMIT_WAIT_MS) || 10_000
 const MAX_RUNS = 100
 const QUIET_CONFIRM_MS = 2000
 const CANCEL_ATTEMPTS = 3
 const CANCEL_SETTLE_MS = 6000
 const ACTIVITY_MAX_ERRORS = 10
+// A run taken up after a plugin reload whose message Harness had not admitted yet.
+const TAKE_UP_RETRY_MS = 3000
+const takeUpAdmitMs = () => Number(process.env.DSH_BATON_TAKE_UP_ADMIT_MS) || 5 * 60_000
 const MAX_REQUEST_BYTES = 4 * 1024 * 1024
 const MAX_WAIT_S = 24 * 3600
 const MAX_HUMAN_INPUTS = 10
@@ -333,8 +337,10 @@ export function apply(ctx) {
     if (again.size) store.timer = setTimeout(guard('persist runs', flushRuns), PERSIST_DELAY_MS)
   }
 
-  // Load earlier records. A run that was active when Harness went away cannot
-  // finish any more (Harness ends the turn on restart), so it is marked interrupted.
+  // Load earlier records. A run that was active when the plugin went away is taken up again
+  // when its session is still at work: the plugin was reloaded (switched off and on, or
+  // updated) while Harness kept running. Otherwise it cannot finish any more (Harness ends the
+  // turn on restart), so it is marked interrupted.
   function enableStore() {
     fs.mkdirSync(store.dir, { recursive: true, mode: 0o700 })
     if (!IS_WIN) fs.chmodSync(store.dir, 0o700)
@@ -350,15 +356,53 @@ export function apply(ctx) {
     loaded.sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)))
     for (const old of loaded.splice(0, Math.max(0, loaded.length - MAX_RUNS))) fs.rmSync(path.join(store.dir, `${old.id}.json`), { force: true })
     store.enabled = true
+    const resumable = []
     for (const run of loaded) {
       if (runs.has(run.id)) continue
       run.events ??= []
       runs.set(run.id, run)
-      if (isActive(run)) {
-        Object.assign(run, { state: 'interrupted', endedAt: new Date().toISOString(), error: 'Harness restarted while this run was active; its turn was stopped.' })
-        persist(run)
+      if (isActive(run)) resumable.push(run)
+    }
+    for (const run of resumable) guard('take up runs', takeUp)(run)
+  }
+  async function takeUp(run, tries = 0) {
+    const items = run.sessionId ? await sessionActivity(run.sessionId).catch(() => null) : []
+    if (!isActive(run)) return
+    // A message that reached the conversation while no plugin listened: the run is in it.
+    if (!run.sawPrompt && run.sessionId) {
+      const log = await sessionLog(run.sessionId).catch(() => null)
+      // Ended meanwhile (a late refusal of the prompt, a cancel): left as it is.
+      if (!isActive(run)) return
+      if (Array.isArray(log?.events) && log.events.some((e) => e.type === 'user/message' && e.data?.source?.rpcId === run.requestId)) {
+        Object.assign(run, { sawPrompt: true, state: 'running', admitted: true })
       }
     }
+    // Unknown is not idle (Harness may not answer yet right after the reload): look again a few
+    // times. A message Harness had not taken in yet may still arrive: a cold start took 2 min 35 s
+    // to admit one (Mac, 2026-11-18), so that is looked for up to takeUpAdmitMs().
+    const notYetIn = !run.admitted && !run.sawPrompt
+    const again = items === null ? tries < ACTIVITY_MAX_ERRORS : notYetIn && !items?.length && (tries + 1) * TAKE_UP_RETRY_MS < takeUpAdmitMs()
+    if (again) {
+      setTimeout(guard('take up runs', () => takeUp(run, tries + 1)), TAKE_UP_RETRY_MS)
+      return
+    }
+    if (Array.isArray(items) && items.length) {
+      // Its turn may have ended while no plugin listened: with no turn left, only background
+      // work (sub-agents, jobs), the run ends once that is done, as after a seen turn end.
+      if (run.sawPrompt && !items.some((g) => g.kind === 'turn')) run.idleSeen = true
+      // A question asked through the plugin that went away cannot be answered from here any more
+      // (its request belonged to the old plugin): the wait says to answer it in the Harness window.
+      if (run.question && !questions.has(run.sessionId)) {
+        delete run.question
+        if (run.state === 'waiting') run.waitNoticed = false
+      }
+      pushEvent(run, { type: 'plugin_reloaded' })
+      persist(run)
+      scheduleQuietCheck(run.sessionId, 1000)
+      return
+    }
+    // settle, so a wait that began since the reload wakes now.
+    settle(run, 'interrupted', { error: notYetIn ? 'The plugin reloaded before Harness took the message in, and it never arrived; send it again if it is still wanted.' : 'Harness restarted while this run was active; its turn was stopped.' })
   }
 
   // Per-session turn state: whether the current turn has produced assistant
@@ -745,11 +789,11 @@ export function apply(ctx) {
     const run = run_id ? getRun(run_id) : null
     const entry = questions.get(run?.sessionId ?? session_id)
     if (run && (!isActive(run) || !entry || run.question?.question_id !== entry.id)) {
-      if (run.state === 'waiting') throw new Error(`Run ${run.id} is waiting for something in the Harness UI (an approval, for example) that cannot be answered from here; tell the user.`)
+      if (run.state === 'waiting') throw new Error(`Run ${run.id} is waiting for something in the Harness UI (an approval, or a question left open when the plugin reloaded) that cannot be answered from here; tell the user to answer it in the Harness window.`)
       throw new Error(`Run ${run.id} is ${run.state} and has no open question to answer.`)
     }
     if (!entry) {
-      if (waitingSessions.has(session_id)) throw new Error(`Session ${session_id} is waiting for something in the Harness UI (an approval, for example) that cannot be answered from here; tell the user.`)
+      if (waitingSessions.has(session_id)) throw new Error(`Session ${session_id} is waiting for something in the Harness UI (an approval, or a question left open when the plugin reloaded) that cannot be answered from here; tell the user to answer it in the Harness window.`)
       throw new Error(`Session ${session_id} has no open question to answer.`)
     }
     const shown = run ? publicRun(run, 0) : { session_id }
@@ -761,7 +805,13 @@ export function apply(ctx) {
       const options = q.options ?? []
       const chosen = (a.choose ?? []).map((c) => {
         const byNumber = typeof c === 'number' || /^\d+$/.test(String(c)) ? options[Number(c) - 1] : undefined
-        const option = byNumber ?? options.find((o) => o.label === c) ?? options.find((o) => o.label.toLowerCase().replace(RECOMMENDED, '').trim() === String(c).toLowerCase().replace(RECOMMENDED, '').trim())
+        // Labels compared on letters and digits, the asker's mark left out: "Markdown（.md，推荐）" and "Markdown (.md)" are one option.
+        const bareLabel = (v) => String(v).toLowerCase().replace(/\(recommended\)|recommended|推荐/g, '').replace(/[^\p{L}\p{N}]+/gu, '')
+        const option = byNumber ?? options.find((o) => o.label === c) ?? options.find((o) => o.label.toLowerCase().replace(RECOMMENDED, '').trim() === String(c).toLowerCase().replace(RECOMMENDED, '').trim()) ?? (bareLabel(c) ? options.find((o) => bareLabel(o.label) === bareLabel(c)) : undefined) ?? (() => {
+          // The label's head: "md" for "md (Markdown)", when only one option starts that way.
+          const heads = bareLabel(c) ? options.filter((o) => bareLabel(String(o.label).split(/[(（]/)[0]) === bareLabel(c)) : []
+          return heads.length === 1 ? heads[0] : undefined
+        })()
         if (!option) throw new Error(`Question ${q.id} has no option ${JSON.stringify(c)}; options: ${options.map((o, i) => `${i + 1}. ${o.label}`).join('; ')}`)
         return option.label
       })
@@ -864,25 +914,46 @@ export function apply(ctx) {
   // A session's whole event log and its folder. Harness up to 0.2.1 has sessionController.inspect;
   // 0.2.2 replaced it with paged history (events): the newest page first, beforeSeq walks back,
   // throughSeq pins every page to the same cut. The folder then comes from the session list.
+  // A log read before (the last few sessions) is kept, so a later read walks back only to the
+  // last event it has instead of reading the whole log again (a follow reads it each round). A
+  // log that no longer holds that event, or has fewer events, is read whole.
+  const logCache = new Map()
   async function sessionLog(sessionId) {
     if (typeof controller.inspect === 'function') return controller.inspect(sessionId, signal())
     if (typeof controller.events !== 'function') throw new Error('This DeepSeek Harness version cannot read a session log.')
+    const events = await pagedLog(sessionId, logCache.get(sessionId))
+    const { items } = await controller.list({}, signal())
+    return { meta: { cwd: items.find((it) => it.sessionId === sessionId)?.cwd ?? null }, events }
+  }
+  async function pagedLog(sessionId, known) {
     const address = { kind: 'session', sessionId }
     const pages = []
     let throughSeq
     let beforeSeq
+    let joined = false
     for (;;) {
       const page = await controller.events({ address, maxMessages: 500, ...(throughSeq === undefined ? {} : { throughSeq }), ...(beforeSeq === undefined ? {} : { beforeSeq }) }, signal())
       throughSeq ??= page.cursor
       const events = (page.records ?? []).filter((r) => r?.type === 'event' && r.event).map((r) => r.event)
       pages.unshift(events)
+      if (known && events.length && events[0].seq <= known.lastSeq) { joined = true; break }
       if (!page.hasMore || !events.length || events[0].seq === beforeSeq) break
       beforeSeq = events[0].seq
     }
     const seen = new Set()
-    const events = pages.flat().filter((e) => (seen.has(e.seq) ? false : (seen.add(e.seq), true)))
-    const { items } = await controller.list({}, signal())
-    return { meta: { cwd: items.find((it) => it.sessionId === sessionId)?.cwd ?? null }, events }
+    let events = pages.flat().filter((e) => (seen.has(e.seq) ? false : (seen.add(e.seq), true)))
+    if (joined) {
+      if (!events.some((e) => e.seq === known.lastSeq)) return pagedLog(sessionId, null)
+      events = [...known.events, ...events.filter((e) => e.seq > known.lastSeq)]
+    }
+    const lastSeq = events.at(-1)?.seq
+    logCache.delete(sessionId)
+    // Read-only for callers; a very long log is not kept (memory).
+    if (Number.isFinite(lastSeq) && events.length <= 50_000 && events.every((e, i) => i === 0 || e.seq > events[i - 1].seq)) {
+      logCache.set(sessionId, { events, lastSeq })
+      if (logCache.size > 8) logCache.delete(logCache.keys().next().value)
+    }
+    return events
   }
 
   async function readSession({ session_id, last = 10 }) {
@@ -1665,14 +1736,25 @@ export function apply(ctx) {
       ...(chosen.model ? { model: chosen.model } : {}),
     }
     remember(run)
-    try {
-      await controller.prompt({ sessionId, requestId: run.requestId, content: [{ type: 'text', text: message }], mode }, signal())
-      run.admitted = true // in Harness's queue (or conversation) now
-      if (drift) rememberDefault(drift.now)
-    } catch (error) {
-      settle(run, 'failed', { error: String(error?.message ?? error) })
-    }
+    // Harness answers the prompt once it has taken the message in; on a cold start (the first
+    // session after a restart) that took 2 min 35 s, and the client sat in dsh_send all along
+    // (Mac, 2026-11-18). So the reply waits at most admitWaitMs() (10 s); Harness's answer still settles
+    // the run when it comes (a refusal fails it, and dsh_wait says so).
+    const admitted = controller.prompt({ sessionId, requestId: run.requestId, content: [{ type: 'text', text: message }], mode }, signal())
+      .then(() => {
+        run.admitted = true // in Harness's queue (or conversation) now
+        if (drift) rememberDefault(drift.now)
+        return true
+      }, (error) => {
+        settle(run, 'failed', { error: String(error?.message ?? error) })
+        return true
+      })
+    let timer
+    const answered = await Promise.race([admitted, new Promise((r) => { timer = setTimeout(() => r(false), admitWaitMs()) })])
+    clearTimeout(timer)
+    if (!answered) pushEvent(run, { type: 'admission_pending' })
     return {
+      ...(answered ? {} : { admission_pending: true }),
       ...publicRun(run),
       mode,
       mode_source: modeSource,

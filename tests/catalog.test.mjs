@@ -46,6 +46,7 @@ test('Codex lists 10 tools (its catalog limit); Claude Code and Antigravity list
     const listed = Object.keys((await listTools(client)).tools)
     for (const name of HIDDEN) assert.ok(listed.includes(name), `${client}: ${name}`)
     assert.equal(listed.length, 16, client)
+    assert.ok(!listed.includes('dsh_recommend'), client)
   }
   // A client not known here keeps the short list, as before.
   assert.equal(Object.keys((await listTools('some-other-client')).tools).length, 10)
@@ -62,10 +63,10 @@ test('the rules that left the instructions are in the tools that need them', asy
     assert.match(send, /hint saying how to wait/)
     assert.match(tools.dsh_send.inputSchema.properties.checks.description, /project's own test commands.*never check scripts you write yourself/)
     const answer = tools.dsh_answer.description
-    assert.match(answer, /If the user told you to decide such questions yourself/)
-    assert.match(answer, /My recommendation: <an option, or your own answer>, because <reason>/)
-    assert.match(answer, /text \(your own answer, complete on its own\)/)
-    assert.match(answer, /Never answer on the user's behalf without that permission/)
+    assert.match(answer, /^Submit the user's answer/)
+    assert.match(answer, /Ask the user \(your own question tool, or a message\), your recommendation first if you have one, and submit their answer\./)
+    assert.match(answer, /text \(an answer in words\)/)
+    assert.deepEqual(Object.keys(tools.dsh_answer.inputSchema.properties), ['run_id', 'session_id', 'answers'])
     assert.match(tools.dsh_list_sessions.description, /archived or gone: do not look for them on disk/)
     // dsh_call names the tools left out of tools/list (a model searching its tools finds them
     // nowhere else), and still covers a tool an update added without a restart.

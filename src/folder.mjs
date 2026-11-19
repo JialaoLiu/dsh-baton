@@ -47,7 +47,7 @@ function codexThreadCwd(threadId) {
 function serverCwd() {
   const cwd = process.cwd()
   const home = os.homedir()
-  const real = (p) => { try { return fs.realpathSync(p) } catch { return p } }
+  const real = (p) => { try { return fs.realpathSync.native(p) } catch { return p } }
   const inside = (dir) => { const r = path.relative(real(dir), real(cwd)); return r === '' || (!r.startsWith('..') && !path.isAbsolute(r)) }
   if (norm(real(cwd)) === norm(real(home)) || cwd === path.parse(cwd).root) return undefined
   if (inside(codexHome()) || inside(path.join(home, '.claude'))) return undefined

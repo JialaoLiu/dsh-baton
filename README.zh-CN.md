@@ -26,7 +26,7 @@
 
 把 Claude Code、Codex 或 Antigravity 的编码任务交给本机的 DeepSeek Harness：任务在 Harness 界面里实时跑，跑完主 Agent 收到一次结果，带回改了哪些文件、项目自己的测试结果，以及逐条需求对照表。
 
-- **看得见、能插话**：任务在 Harness 界面里实时跑，你随时能插话；每条消息都标着“由 Claude / ChatGPT / Antigravity 从另一个聊天发送”。Harness 中途提问时，你让主 Agent 自己决定的，它直接回答；否则它带着自己的建议把问题转给你。
+- **看得见、能插话**：任务在 Harness 界面里实时跑，你随时能插话；每条消息都标着“由 Claude / ChatGPT / Antigravity 从另一个聊天发送”。Harness 中途提问时，主 Agent 把问题转给你。
 - **省额度**：Codex 长任务占 ChatGPT Plus 5 小时额度，从 86% 降到 16%（GPT-6 Astra，看板案例）。其他数字在 [Token 用量实测](#token-用量实测)。
 - **不用盯**：主 Agent 等着结果、不轮询，做完就交回；几个任务同时跑时，每个做完 1 秒内就拿到。
 
@@ -47,7 +47,7 @@ dsh-baton 是一个 MCP 服务器加一个 Harness 小插件。主 Agent 用一�
 | 能中途插话 | **能，在 Harness 里直接说，或由主 Agent 插队** | 能 | 通常不能 |
 | 消息标明是谁发的 | **每条都标着由 ChatGPT / Claude 发送** | 只有一方 | 不需要 |
 | 做完带回改动文件和测试结果 | **dsh-baton 自己列出改动文件、跑项目测试** | 没有交接这一步 | 子代理自己写的总结 |
-| 提问能转给你 | **能，主 Agent 带着建议转给你** | 直接问你 | 通常不能 |
+| 提问能转给你 | **能，经主 Agent 转给你** | 直接问你 | 通常不能 |
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/zh/divider-dark.svg"><img src="./assets/readme/zh/divider.svg" width="100%" alt=""></picture></p>
 
@@ -81,7 +81,7 @@ dsh-baton 是一个 MCP 服务器加一个 Harness 小插件。主 Agent 用一�
 
 就这些。要转交任务，在需求最后加一句“交给 DeepSeek Harness 去做”。更新、卸载、Windows，以及插件没能注册时怎么手动注册，在[后面](#安装细节)。
 
-**刚发版就安装？** 新版本发布后大约一天内，Harness 会装上一个版本，安装弹窗里会说明。打开插件详情页点 **更新到 x.y.z**，或者添加插件时带上版本号，比如 `dsh-baton-host@x.y.z`。
+**刚发版就安装？** 新版本发布后大约一天内，Harness 装的是上一个版本，安装弹窗里会说明。打开插件详情页点 **更新到 x.y.z**，或者添加插件时带上版本号，比如 `dsh-baton-host@x.y.z`。
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./assets/readme/zh/divider-dark.svg"><img src="./assets/readme/zh/divider.svg" width="100%" alt=""></picture></p>
 
@@ -197,9 +197,9 @@ Codex 占 ChatGPT Plus 5 小时额度的比例，以及主 Agent 自己的花费
 
 **审批**：经 dsh-baton 转交的任务已经由 Claude Code、Codex 或 Antigravity 交代过，所以转交过程中 Harness 弹出的审批会直接放行，回复里会逐条列出放行了什么（`approvals_allowed`）。Harness「自动审查」模式拒掉的调用不会这样放行，仍在 Harness 里等你处理；设置文件读不了时，所有审批也都等你处理。插件页的**转交会话里的审批**选**交给我在 Harness 里处理**后，所有审批都等你点，回复会说这个转交在等你。
 
-**Git 工作树**：会话切到新的 Git 工作树时（Harness 的「Git 工作树」插件），证据里的 `worktrees` 会列出这个工作树的分支、提交和改动文件，检查也在那里跑。要不要合并分支由你决定。
+**提问**：转交过程中 Harness 向你提问时，问题会回到主 Agent，由它用自己的方式问你（它自己的问题卡片或一条消息），再把你的回答发给 Harness。你也可以直接在 Harness 窗口里回答。
 
-**回答 Harness 的提问**：主 Agent 按任务真正需要的答案来回答，不会在几个都不合适的选项里挑一个凑合。细节见[完整工具说明](#工具)里的 `dsh_answer`。
+**Git 工作树**：会话切到新的 Git 工作树时（Harness 的「Git 工作树」插件），证据里的 `worktrees` 会列出这个工作树的分支、提交和改动文件，检查也在那里跑。要不要合并分支由你决定。
 
 **同时等多个任务**。一个任务拆给几个会话做时，主 Agent 全部发出去再一起等；哪个先做完就先拿到哪个，马上检查、发返修，其他的接着跑。
 
@@ -253,7 +253,7 @@ Codex 占 ChatGPT Plus 5 小时额度的比例，以及主 Agent 自己的花费
 | `dsh_send` | 发消息。带 `session_id` 续接那个对话；否则新开对话，建在 `cwd` 或 `workspace_id` 指定的位置，都不带时建在当前对话所在的文件夹（`cwd` 还不是工作区时会先登记；指定的 `cwd` 在当前对话文件夹之外也可以，结果里的 `folder_note` 会提醒）。`cwd` 在当前对话文件夹里面时，不再单独建工作区，而是进当前对话文件夹的工作区：对话开在那个文件夹，消息里写明要在哪个子文件夹工作（`work_folder`），`checks` 也在子文件夹里跑。客户端给每个对话单独建的文件夹各自共用一个工作区：Codex 没选项目的对话（Codex chats）、Claude 的 scratch 文件夹（Claude scratch）、Codex 的 worktree（Codex worktrees）、同一项目的 Claude worktree（Claude worktrees）。本来就是工作区的文件夹，或者 Git worktree，仍用它自己的工作区。`checks`：运行结束后 dsh-baton 自己跑的测试命令（见[转交之后怎么验收](#转交之后怎么验收)）。立即返回 `run_id`。Harness 里这条消息会标注「由 Claude / ChatGPT 从另一个聊天发送」。已归档的对话会被拒绝：先在 Harness 里取消归档，或新开对话。对话正忙时，`mode` 为 `followup` 会排在当前回合之后，`steer` 会插进正在跑的回合；不传时跟随 Harness 自己的设置（设置 → 繁忙时的发送行为：排队发送或插话发送），读不到设置时按 `followup`。返回里的 `mode_source` 说明用的是哪种。`model` 只在用户点名模型时传（如“DeepSeek-V4 Pro”“v4-pro”；`reasoning_effort` 同理）：按 Harness 自己的模型列表匹配，不分大小写，忽略空格、连字符和开头的 DeepSeek，所以 Harness 以后上线的模型（如 V4.1 Pro）一出现在列表里就能用；匹配不到或匹配到多个时，发送直接失败、什么都不创建，并列出可用模型（用 `provider/model` 指定其一）。模型在消息发出前设到该对话上，Harness 的默认模型会恢复原样（Harness 会把对话里选的模型同时存成默认）。不传时，续接的对话沿用它自己的模型，新对话用插件页的转交默认模型，没设就用 Harness 默认模型。返回值的 `model` 和 `model_source`（`requested`、`handover_default`、`default` 或 `session`）写明用的是哪个；转交默认模型用不上，或 Harness 的默认模型和上一次新开转交时不一样时，`model_note` 会说明。`team`（需要 Harness 0.2.2-rc.2 及以上）：`true` 在消息发出前为该对话打开智能体团队协作，`false` 关闭；Harness 版本太旧或传的是子智能体的对话时，直接拒绝、什么都不发 |
 | `dsh_status` | 查看运行进度：状态、最近的文字和工具调用、最终回复；回合结束但子智能体/后台任务还在跑时给出 `waiting_on`；中途有人在 Harness 界面里发消息时给出 `human_interjections`；被 Harness 重启打断的任务状态为 `interrupted`；以及这次运行发送时用的 `model`。用 `session_id` 代替 `run_id` 时：会话正在做什么、它的 Harness 目标，以及上一回合的回复 |
 | `dsh_wait` | 等运行结束；发消息时带了 `checks` 的，结束后会附上 `evidence`（改了哪些文件、测试结果）（或者等到它停下来问人，见 `dsh_answer`）：Codex 每次最多等 3540 秒（它对 dsh-baton 的工具超时减 60 秒；没设时 270 秒），其他客户端 50 秒。没做完会带 `timed_out`，只返回状态，再调用一次即可。能在后台等待的客户端改用 `dsh_send` 返回的 `wait_command`。`dsh_status` 只用来看一眼，不用来等待。发到带 Harness 目标的会话的任务会一直等到目标停下（要汇报进度时用 `until` 为 `turn` 和 `every_minutes`）。用 `session_id` 代替 `run_id` 时，不发任何消息，跟进这个会话的 Harness 目标（`until`、`cursor`、`every_minutes`；见“各客户端怎么等待”）。用 `run_ids` 时同时等多个任务，任何一个做完或提问就返回（`ended`、`still_running`） |
-| `dsh_answer` | 回答运行中途提出的问题（Harness 的 ask_user_question）：每道题可以填选项编号或选项文字、自由填写，或者跳过；单选题填了文字就以文字为准。运行一提问，`dsh_wait` 和 `wait_command` 就立刻返回，带上题目（`needs_input`、`question`；Harness 模型推荐的选项在 `harness_suggested`）和转给你时用的排版（`relay`、`question_tool`）。你让主 Agent 自己决定时，选项照原文正好合适它才选，否则用自己的话回答；要替你选某个选项时，第一次调用不会发出，它得先不看选项写出你想要的答案，两者一致才发。没让它决定时，它把题目转给你，开头先写它的建议，建议可以不在选项里；你选了这条建议，就只发这条答案。你也可以直接在 Harness 窗口里回答，谁先答就算谁的 |
+| `dsh_answer` | 把你对运行中途提问的回答发回去（Harness 的 ask_user_question）：每道题可以填选项编号或选项文字、自由填写，或者跳过；单选题填了文字就以文字为准。运行一提问，`dsh_wait` 和 `wait_command` 就立刻返回，带上题目（`needs_input`、`question`；Harness 模型推荐的选项在 `harness_suggested`），由主 Agent 问你并把你的回答发回去。你也可以直接在 Harness 窗口里回答，谁先答就算谁的 |
 | `dsh_session_activity` | Codex 里经 `dsh_call` 调用。对话此刻在做什么：正在跑的回合、子智能体（任意层级）、后台任务；已归档的对话会带 `archived: true` |
 | `dsh_update_queued` | Codex 里经 `dsh_call` 调用。按 `run_id` 修改还在忙碌对话队列里等待的消息：`edit` 改文字，`remove` 撤回，`steer` 立刻插进正在跑的回合。消息一旦进入对话就改不了了 |
 | `dsh_cancel` | 按 `run_id` 或 `session_id` 停掉整个对话的工作：当前回合、子智能体、后台任务。Harness 会同时清掉队列里等待的消息，这些运行记为 `cancelled` |
@@ -339,7 +339,7 @@ Harness 插件连不上时：
 
 **`npx -y dsh-baton-mcp setup`** 在终端里做同样的注册：用于插件没能注册的情况，或者从 MCP 目录过来的用户。插件已经注册过时它什么都不改；插件没装的话，它会提示去添加。
 
-**更新**。Harness 0.2.2 及以上：插件 → dsh-baton-host → 版本一栏里的 **更新到 x.y.z**；如果还显示已是最新版本，先点 **重新检查**。Harness 0.2.1 没有这个插件的更新按钮：**卸载**，再**添加插件** → `dsh-baton-host`。新版本发布后大约一天内，Harness 会装上一个版本（pnpm 的 `minimumReleaseAge` 会暂缓刚发布的版本，安装弹窗里会说明）；想马上用新版，输入带版本号的名字：`dsh-baton-host@x.y.z`。预发布版必须写确切版本号添加，比如 `dsh-baton-host@0.6.0-next.0`：Harness 会把 `@next` 解析成一个坏掉的占位包。只输入 `dsh-baton-host` 装的是最新正式版。重新启用后，插件会把 MCP 服务器也更新到同一版本，新开的对话就会用上。万一两边版本对不上，第一次发现不一致的工具调用会提示，并写明哪一边旧、另一边的确切版本号。
+**更新**。Harness 0.2.1-rc.5 及以上：插件 → dsh-baton-host → 版本一栏里的 **更新到 x.y.z**；如果还显示已是最新版本，先点 **重新检查**。更早的 0.2.1 没有这个按钮的话：**卸载**，再**添加插件** → `dsh-baton-host`。新版本发布后大约一天内，Harness 装的是上一个版本（pnpm 的 `minimumReleaseAge` 会暂缓刚发布的版本，安装弹窗里会说明）；想马上用新版，输入带版本号的名字：`dsh-baton-host@x.y.z`。预发布版必须写确切版本号添加，比如 `dsh-baton-host@0.6.0-next.0`：Harness 会把 `@next` 解析成一个坏掉的占位包。只输入 `dsh-baton-host` 装的是最新正式版。重新启用后，插件会把 MCP 服务器也更新到同一版本，新开的对话就会用上。万一两边版本对不上，第一次发现不一致的工具调用会提示，并写明哪一边旧、另一边的确切版本号。
 
 **卸载**。Harness → 插件 → dsh-baton-host → **卸载**，再运行 `npx -y dsh-baton-mcp setup --remove`。插件分不清"被卸载"和"Harness 退出"，所以 MCP 注册交给这条命令删，它也会删掉 `~/.dsh-baton/app`；运行记录留在 `~/.dsh-baton`，不需要的话自己删掉。
 

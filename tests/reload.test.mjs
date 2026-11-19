@@ -221,3 +221,4 @@ test('the shell exits once the client closes stdin', async () => {
   assert.equal(code, 0)
   fs.rmSync(dir, { recursive: true, force: true })
 })
+

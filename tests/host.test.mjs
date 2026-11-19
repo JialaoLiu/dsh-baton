@@ -22,7 +22,7 @@ process.env.DSH_BATON_AUTO_REGISTER = '0'
 // goal: sessionId -> the goal projection's wire value (Harness's values.goal);
 // log: sessionId -> the session's event log as inspect returns it; goals / agents: Harness's
 // goals and agents services, reached through inject.
-function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web, settings, queue = false, recheckMs = 300, models, account, goal, log, goals, agents, agentTeams } = {}) {
+function startHost({ activity = () => [], sessions = [], workspaces = [], archived = [], sock: sockPath, home, web, settings, queue = false, recheckMs = 300, models, account, goal, log, goals, agents, agentTeams, promptGate } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-'))
   // Run records go to the bridge home: keep them out of the real ~/.dsh-baton.
   const homeDir = home ?? path.join(dir, 'bridge')
@@ -32,7 +32,7 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
   const logs = []
   const handlers = {}
   const disposers = []
-  const calls = { prompt: [], create: [], cancel: [], stop: [], rename: [], updateQueue: [] }
+  const calls = { prompt: [], create: [], cancel: [], stop: [], rename: [], updateQueue: [], events: [] }
   // Harness's inbox per session, as its projections report it (queue: true turns it on).
   const inbox = {}
   const pending = (id) => (inbox[id] ??= { 'next-turn': [], 'next-step': [] })
@@ -67,6 +67,7 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
         // Harness lists every visible session; here that is the given rows plus the logged ones.
         list: async () => ({ items: [...sessions.map((s) => ({ cwd: '/w', ...s })), ...Object.keys(log ?? {}).filter((id) => !sessions.some((s) => s.sessionId === id)).map((sessionId) => ({ sessionId, cwd: '/w' }))] }),
         events: async ({ address, throughSeq, beforeSeq }) => {
+          calls.events.push({ sessionId: address.sessionId, beforeSeq })
           const all = (log?.[address.sessionId] ?? []).map((e, i) => ({ seq: i, ...e }))
           const cut = throughSeq ?? all.length - 1
           const upto = all.filter((e) => e.seq <= cut && (beforeSeq === undefined || e.seq < beforeSeq))
@@ -80,6 +81,7 @@ function startHost({ activity = () => [], sessions = [], workspaces = [], archiv
       create: async (r) => { calls.create.push(r); return { sessionId: `new-${calls.create.length}` } },
       prompt: async (r) => {
         calls.prompt.push(r)
+        if (promptGate) await promptGate
         if (queue) pending(r.sessionId)[r.mode === 'steer' ? 'next-step' : 'next-turn'].push({ id: `m${calls.prompt.length}`, content: r.content, source: { kind: 'user', rpcId: r.requestId } })
         return { accepted: true }
       },
@@ -215,7 +217,7 @@ test('send with cwd registers the folder as a workspace before creating the sess
 })
 
 test('a hand-over to a folder inside the conversation folder joins its workspace', async (t) => {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-home-')))
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-home-')))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
   const coding = path.join(root, 'Coding')
   const app = path.join(coding, 'app')
@@ -244,7 +246,7 @@ test('a hand-over to a folder inside the conversation folder joins its workspace
 })
 
 test('folders made per conversation share one workspace', async (t) => {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-home-')))
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-home-')))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
   const chat = path.join(root, 'Documents', 'Codex', '2026-11-17', 'new-chat')
   const scratch = path.join(root, 'Claude', 'scratch-workspaces', 'a1', 'b2', 'scratch-2026-11-17-ab12cd')
@@ -279,7 +281,7 @@ test('folders made per conversation share one workspace', async (t) => {
 })
 
 test('a linked Git worktree inside the conversation folder, or a folder that is a workspace already, is not grouped into the parent', async (t) => {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-group-')))
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-group-')))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
   const wt = path.join(root, 'wt')
   const app = path.join(root, 'app')
@@ -472,7 +474,7 @@ test('run eviction keeps active runs', async (t) => {
 })
 
 test('list_sessions cwd filter follows symlinks', async (t) => {
-  const real = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-real-')))
+  const real = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-real-')))
   const link = `${real}-link`
   fs.symlinkSync(real, link, IS_WIN ? 'junction' : undefined) // a junction needs no admin rights on Windows
   t.after(() => { fs.unlinkSync(link); fs.rmSync(real, { recursive: true, force: true }) })
@@ -574,6 +576,121 @@ test('run records survive a host restart; an interrupted run is marked as such',
   const lost = await h2.call('status', { run_id: live.run_id })
   assert.equal(lost.state, 'interrupted'); assert.match(lost.error, /restarted/)
   assert.equal((await h2.call('wait', { run_id: live.run_id, timeout_s: 5 })).state, 'interrupted')
+})
+
+test('a run whose session is still at work when the plugin is reloaded is taken up again and finishes as usual', async (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-home-'))
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }))
+  const h1 = startHost({ home }); await h1.ready
+  const live = await h1.call('send', { session_id: 'B', message: 'long' })
+  const queued = await h1.call('send', { session_id: 'C', message: 'sub-agents only' })
+  const b = S('B'); const c = S('C')
+  h1.emit(...b.turnStart()); h1.emit(...b.userMessage(h1.calls.prompt[0].requestId)); h1.emit(...b.text('half way'))
+  h1.emit(...c.turnStart()); h1.emit(...c.userMessage(h1.calls.prompt[1].requestId))
+  h1.close() // switched off (or updated) while Harness goes on
+  // B's turn still runs; C's turn ended unseen and one sub-agent is left.
+  let bBusy = true
+  let cBusy = true
+  const h2 = startHost({ home, activity: (id) => (id === 'B' && bBusy ? [{ kind: 'turn', items: [{ id: 't' }] }] : id === 'C' && cBusy ? [{ kind: 'agent', items: [{ id: 'sub' }] }] : []) })
+  t.after(h2.close); await h2.ready
+  await new Promise((r) => setTimeout(r, 50))
+  const st = await h2.call('status', { run_id: live.run_id })
+  assert.notEqual(st.state, 'interrupted')
+  assert.ok(st.recent_events.some((e) => e.type === 'plugin_reloaded'))
+  const b2 = S('B')
+  h2.emit(...b2.text('all done')); bBusy = false; h2.emit(...b2.turnEnd())
+  h2.emit('agent/status', { agent: { id: 'B' }, status: 'idle' })
+  cBusy = false
+  const [wb, wc] = await Promise.all([h2.call('wait', { run_id: live.run_id, timeout_s: 10 }), h2.call('wait', { run_id: queued.run_id, timeout_s: 10 })])
+  assert.equal(wc.state, 'completed', 'C ends once its last sub-agent is done, though its turn end was missed')
+  assert.equal(wb.state, 'completed')
+  assert.equal(wb.final_text, 'all done')
+})
+
+test('a send Harness is slow to take in comes back after the admission wait; Harness refusing it later fails the run', async (t) => {
+  process.env.DSH_BATON_ADMIT_WAIT_MS = '300'
+  t.after(() => { delete process.env.DSH_BATON_ADMIT_WAIT_MS })
+  let refuse
+  const promptGate = new Promise((_, reject) => { refuse = reject })
+  promptGate.catch(() => {})
+  const h = startHost({ promptGate }); t.after(h.close); await h.ready
+  const t0 = Date.now()
+  const r = await h.call('send', { session_id: 's1', message: 'hi' })
+  assert.ok(Date.now() - t0 < 5000, `send came back while Harness had not answered (${Date.now() - t0} ms)`)
+  assert.equal(r.admission_pending, true)
+  assert.equal(r.state, 'queued')
+  refuse(new Error('Harness refused the prompt'))
+  const w = await h.call('wait', { run_id: r.run_id, timeout_s: 5 })
+  assert.equal(w.state, 'failed')
+  assert.match(w.error, /refused the prompt/)
+})
+
+test('a run taken up after a reload is not marked interrupted while Harness cannot say yet whether its session is busy', async (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-home-'))
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }))
+  const h1 = startHost({ home }); await h1.ready
+  const live = await h1.call('send', { session_id: 'B', message: 'long' })
+  const b = S('B')
+  h1.emit(...b.turnStart()); h1.emit(...b.userMessage(h1.calls.prompt[0].requestId))
+  h1.close()
+  let reads = 0
+  const h2 = startHost({ home, activity: () => { reads++; if (reads === 1) throw new Error('not ready'); return [{ kind: 'turn', items: [{ id: 't' }] }] } })
+  t.after(h2.close); await h2.ready
+  await new Promise((r) => setTimeout(r, 3500))
+  const st = await h2.call('status', { run_id: live.run_id })
+  assert.notEqual(st.state, 'interrupted', 'the first read failed; the second found the session busy')
+  assert.ok(st.recent_events.some((e) => e.type === 'plugin_reloaded'))
+})
+
+test('a run whose message Harness had not taken in at a reload is looked for a while, then ends interrupted and wakes a wait', async (t) => {
+  process.env.DSH_BATON_ADMIT_WAIT_MS = '100'
+  process.env.DSH_BATON_TAKE_UP_ADMIT_MS = '1500'
+  t.after(() => { delete process.env.DSH_BATON_ADMIT_WAIT_MS; delete process.env.DSH_BATON_TAKE_UP_ADMIT_MS })
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-home-'))
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }))
+  const h1 = startHost({ home, promptGate: new Promise(() => {}) }); await h1.ready
+  const r = await h1.call('send', { session_id: 'Q', message: 'cold start' })
+  assert.equal(r.admission_pending, true)
+  h1.close()
+  const h2 = startHost({ home }); t.after(h2.close); await h2.ready
+  const t0 = Date.now()
+  const w = await h2.call('wait', { run_id: r.run_id, timeout_s: 30 })
+  assert.equal(w.state, 'interrupted')
+  assert.match(w.error, /never arrived/)
+  assert.ok(Date.now() - t0 < 10_000, `the wait woke when the run ended (${Date.now() - t0} ms)`)
+})
+
+test('a question open when the plugin reloaded is left to the Harness window: the wait says so', async (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-home-'))
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }))
+  const h1 = startHost({ home }); await h1.ready
+  const r = await h1.call('send', { session_id: 'W', message: 'ask me' })
+  const w1 = S('W')
+  h1.emit(...w1.turnStart()); h1.emit(...w1.userMessage(h1.calls.prompt[0].requestId))
+  h1.ask('W', [{ id: 'f', question: 'Which?', options: [{ label: 'a' }, { label: 'b' }] }])
+  assert.ok((await h1.call('status', { run_id: r.run_id })).question)
+  h1.close()
+  const h2 = startHost({ home, activity: () => [{ kind: 'turn', items: [{ id: 't' }] }] }); t.after(h2.close); await h2.ready
+  await new Promise((res) => setTimeout(res, 100))
+  const st = await h2.call('wait', { run_id: r.run_id, timeout_s: 2 })
+  assert.equal(st.needs_input, 'harness-ui')
+  assert.equal(st.question, undefined)
+  await assert.rejects(h2.call('answer', { run_id: r.run_id, answers: [{ choose: [1] }] }), /question left open when the plugin reloaded.*answer it in the Harness window/)
+})
+
+test('a queued run whose message reached the conversation while the plugin was reloading is claimed from the log', async (t) => {
+  if (process.env.DSHB_TEST_PAGED !== '1') return t.skip('reads the paged log (host-paged.test.mjs)')
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-home-'))
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }))
+  const log = { Q: [] }
+  const h1 = startHost({ home, log }); await h1.ready
+  const r = await h1.call('send', { session_id: 'Q', message: 'later' })
+  h1.close() // the message had not shown up in the conversation yet
+  log.Q.push({ type: 'user/message', data: { source: { kind: 'user', rpcId: h1.calls.prompt[0].requestId }, content: [{ type: 'text', text: 'later' }] } })
+  const h2 = startHost({ home, log, activity: () => [{ kind: 'turn', items: [{ id: 't' }] }] }); t.after(h2.close); await h2.ready
+  await new Promise((res) => setTimeout(res, 300))
+  const st = await h2.call('status', { run_id: r.run_id })
+  assert.equal(st.state, 'running', 'claimed: its message is in the session log')
 })
 
 test('per-session state is dropped once a session has no active runs', async (t) => {
@@ -749,6 +866,34 @@ test('a question ends the wait at once, carries the questions, and dsh_answer re
   assert.equal(st.question, undefined)
   assert.ok(st.recent_events.some((e) => e.type === 'question_answered' && e.by === 'dsh-baton'))
   await assert.rejects(h.call('answer', { run_id: run.run_id, answers: [{ skip: true }] }), /no open question/)
+})
+
+test('an option chosen by a cleaned label matches one with the mark inside its brackets ("Markdown（.md，推荐）")', async (t) => {
+  const h = startHost(); t.after(h.close); await h.ready
+  const s = S('s1')
+  const run = await h.call('send', { session_id: 's1', message: 'go' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.emit(...s.status('running'))
+  const waiting = h.call('wait', { run_id: run.run_id, timeout_s: 30 })
+  await sleep(20)
+  const reply = h.ask('s1', [{ id: 'f', question: '格式？', options: [{ label: '纯文本（.txt）' }, { label: 'Markdown（.md，推荐）' }] }])
+  await waiting
+  const done = await h.call('answer', { run_id: run.run_id, answers: [{ id: 'f', choose: ['Markdown (.md)'] }] })
+  assert.equal(done.submitted, true)
+  assert.deepEqual(await reply, { answers: [{ id: 'f', selected: ['Markdown（.md，推荐）'] }] })
+})
+
+test('an option chosen by its label head ("md") matches "md (Markdown)" when no other option starts that way', async (t) => {
+  const h = startHost(); t.after(h.close); await h.ready
+  const s = S('s1')
+  const run = await h.call('send', { session_id: 's1', message: 'go' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId)); h.emit(...s.status('running'))
+  const waiting = h.call('wait', { run_id: run.run_id, timeout_s: 30 })
+  await sleep(20)
+  const reply = h.ask('s1', [{ id: 'f', question: '格式？', options: [{ label: 'md (Markdown)' }, { label: 'txt (纯文本)' }] }])
+  await waiting
+  const done = await h.call('answer', { run_id: run.run_id, answers: [{ id: 'f', choose: ['md'] }] })
+  assert.equal(done.submitted, true)
+  assert.deepEqual(await reply, { answers: [{ id: 'f', selected: ['md (Markdown)'] }] })
 })
 
 test('free text replaces a single choice, skip works, and the Harness UI can answer first', async (t) => {
@@ -1390,6 +1535,25 @@ test('a run in a session with an active goal ends with its own round and says th
   assert.equal('goal' in w2, false)
 })
 
+test('a session log read again walks back only to the events it already has (paged history), and a shorter log is read whole', async (t) => {
+  if (process.env.DSHB_TEST_PAGED !== '1') return t.skip('paged history only (host-paged.test.mjs)')
+  const log = { s1: [...round(1, { round: 1, text: 'r1' }), ...round(2, { round: 2, text: 'r2' }), ...round(3, { round: 3, text: 'r3' })] }
+  const h = startHost({ log }); t.after(h.close); await h.ready
+  const first = await h.call('read_session', { session_id: 's1' })
+  const whole = h.calls.events.length
+  assert.ok(whole > 3, `the first read walks the whole log (${whole} pages)`)
+  log.s1.push(...round(4, { round: 4, text: 'r4' }))
+  const again = await h.call('read_session', { session_id: 's1' })
+  assert.ok(h.calls.events.length - whole <= 3, `a read after new events takes only the newest pages (${h.calls.events.length - whole})`)
+  assert.deepEqual(again.messages.slice(0, first.messages.length), first.messages)
+  assert.match(JSON.stringify(again.messages.at(-1)), /r4/)
+  // A log rewritten shorter no longer holds the last event read: read whole, nothing stale kept.
+  log.s1.splice(0, log.s1.length, ...round(1, { round: 1, text: 'fresh' }))
+  const reset = await h.call('read_session', { session_id: 's1' })
+  assert.doesNotMatch(JSON.stringify(reset.messages), /r4/)
+  assert.match(JSON.stringify(reset.messages), /fresh/)
+})
+
 test('following a goal: nothing to follow without one; until goal returns when the goal stops, with every round since', async (t) => {
   const goal = { s1: goalValue() }
   const log = { s1: [...round(1, { round: 1, text: 'r1' })] }
@@ -1800,3 +1964,4 @@ test('the settings route after review: a save from another machine is refused, a
   const saved = await old.request('POST', { approvals: 'ask' })
   assert.deepEqual([saved.code, saved.body.supported, saved.body.approvals], [200, false, 'ask'])
 })
+

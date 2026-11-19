@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Live end-to-end check against a running DeepSeek Harness with the
 // dsh-baton-host plugin. It only touches the workspace folder you pass (by default
-// ~/dsh-baton-live, the same one every time, so test runs do not pile up workspaces in the
-// sidebar) and the sessions it creates there.
+// ~/dsh-baton-live, or C:\temp\dshb-test on Windows: the same one every time, so test runs do
+// not pile up workspaces in the sidebar) and the sessions it creates there.
 //
 //   node tests/live.mjs [workspace-folder]
 //
@@ -13,7 +13,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { api, hostCall } from '../src/core.mjs'
 
-const dir = path.resolve(process.argv[2] ?? path.join(os.homedir(), 'dsh-baton-live'))
+const dir = path.resolve(process.argv[2] ?? (process.platform === 'win32' ? 'C:\\temp\\dshb-test' : path.join(os.homedir(), 'dsh-baton-live')))
 process.env.DSH_BATON_BACKEND = 'host'
 const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'host', 'package.json'), 'utf8'))
 const results = []
@@ -45,7 +45,8 @@ await check('plugin reachable, version matches', async () => {
 })
 
 await check('create workspace (idempotent)', async () => {
-  const a = await api.create_workspace({ path: dir, title: 'dsh-baton live test' })
+  // Titled after its folder, so test workspaces on one machine never share a name.
+  const a = await api.create_workspace({ path: dir, title: path.basename(dir) })
   const b = await api.create_workspace({ path: dir })
   expect(a.id === b.id && b.created === false, 'second call should return the same workspace')
 })
@@ -110,19 +111,19 @@ await check('subfolder joins the conversation folder\'s workspace', async () => 
   fs.mkdirSync(sub, { recursive: true })
   const run = await api.send({ cwd: sub, conversation_folder: dir, message: 'Reply with the single word: ok' })
   const ws = (await api.workspaces()).find((w) => w.id === run.workspace?.id)
-  expect(ws?.path === fs.realpathSync(dir), `workspace ${ws?.path} is not ${dir}`)
-  expect(run.work_folder === fs.realpathSync(sub), `work_folder ${run.work_folder}`)
-  expect(!(await api.workspaces()).some((w) => w.path === fs.realpathSync(sub)), 'the subfolder got a workspace of its own')
+  expect(ws?.path === fs.realpathSync.native(dir), `workspace ${ws?.path} is not ${dir}`)
+  expect(run.work_folder === fs.realpathSync.native(sub), `work_folder ${run.work_folder}`)
+  expect(!(await api.workspaces()).some((w) => w.path === fs.realpathSync.native(sub)), 'the subfolder got a workspace of its own')
   const done = await wait(run)
   expect(done.state === 'completed', `state ${done.state}`)
 })
 
 await check('rename session and workspace', async () => {
   const s = await api.rename_session({ session_id: session, title: 'dsh-baton live test session' })
-  const w = await api.rename_workspace({ path: dir, title: 'dsh-baton live test' })
+  const w = await api.rename_workspace({ path: dir, title: path.basename(dir) })
   const listed = await api.list_sessions({ cwd: dir, limit: 50 })
   expect(listed.some((x) => x.session_id === session && x.title === s.title), 'renamed session not listed with its new title')
-  expect(w.title === 'dsh-baton live test', 'workspace title not updated')
+  expect(w.title === path.basename(dir), 'workspace title not updated')
   expect(!listed.some((x) => x.title?.startsWith('Sub-agent')), 'sub-agent sessions should be hidden')
 })
 

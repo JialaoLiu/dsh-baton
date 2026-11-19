@@ -103,17 +103,17 @@ async function main() {
           ? self(`wait ${rest[0]} --until ${f.until} --cursor ${f.cursor}${f.until === 'turn' ? ` --every ${every_s}s` : ''}`)
           : undefined
         print({ ...f, ...(again ? { follow_command: again, hint: `${f.hint} To go on following, run follow_command in the background (not dsh_wait).` } : {}) })
-        process.exitCode = f.state === 'needs_input' ? 3 : 0
+        // 0 even when a person is needed: the output says so, and Claude Code showed exit 3 as a
+        // red "failed" background command (Windows, 2026-11-18).
+        process.exitCode = 0
         return
       }
       if (st.needs_input && st.question) {
         const { run_id, state, session_id, needs_input, question } = st
         print(core.asking({ run_id, state, session_id, needs_input, question }, core.askHint(question.count ?? question.questions?.length ?? 1, 'dsh_answer (or dsh-baton answer)', 'wait again')))
-        process.exitCode = 3
         return
       }
       print({
-        ...(st.decided_for_user ? { hint: `${core.DECIDED_HINT} ${core.endedHint(st)}`, decided_for_user: st.decided_for_user } : {}),
         run_id: st.run_id, state: st.state, session_id: st.session_id, timed_out: !!st.timed_out, error: st.error, final_text: st.final_text,
         // A goal goes on after this run: the hint says so and how to follow it.
         ...(st.goal ? { goal: st.goal, ...(st.goal.phase === 'active' ? { follow_command: self(`follow ${st.session_id}`) } : {}) } : {}),
@@ -121,7 +121,7 @@ async function main() {
         ...(st.evidence ? { evidence: st.evidence } : {}),
         // Approvals this plugin allowed during the run (the plugin page's default): the client says what was let through.
         ...(st.approvals_allowed?.length ? { approvals_allowed: st.approvals_allowed } : {}),
-        ...(st.state === 'completed' && !st.decided_for_user ? { hint: core.endedHint(st) } : {}),
+        ...(st.state === 'completed' ? { hint: core.endedHint(st) } : {}),
         // Stopped by the user, cancelled, or cut off by a Harness restart: say so, or the client
         // takes it for a failure in the work and sends it again.
         ...(st.harness_down ? { harness_down: true, hint: core.harnessDownHint('run this same wait command again') } : {}),
@@ -147,7 +147,12 @@ async function main() {
     case 'queued':
       return print(await core.api.update_queued({ run_id: rest[0], action: rest[1], ...(rest[1] === 'edit' ? { message: rest.slice(2).join(' ') } : {}) }))
     case 'answer':
-      return print(await core.api.answer({ run_id: rest[0], answers: JSON.parse(rest.slice(1).join(' ')) }))
+    {
+      // The answers, or { answers } as dsh_answer takes them.
+      if (!rest[0] || /^[[{]/.test(rest[0])) throw new Error(`Usage: dsh-baton answer <run_id> '<answers JSON>'`)
+      const given = JSON.parse(rest.slice(1).join(' '))
+      return print(await core.api.answer({ ...(Array.isArray(given) ? { answers: given } : given), run_id: rest[0] }))
+    }
     case 'rename':
       return print(await core.api.rename_session({ session_id: rest[0], title: rest.slice(1).join(' ') }))
     case 'rename-workspace':

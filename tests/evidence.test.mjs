@@ -213,7 +213,7 @@ test('a Git worktree the run made in the folder is reported from git, not as a c
   assert.deepEqual(ev.changes.created.map((f) => f.path), ['top.txt'], 'the checkout copy is left out')
   assert.equal(ev.worktrees.length, 1)
   const w = ev.worktrees[0]
-  assert.equal(fs.realpathSync(w.path), fs.realpathSync(wt))
+  assert.equal(fs.realpathSync.native(w.path), fs.realpathSync.native(wt))
   assert.equal(w.branch, 'wt-sub')
   assert.equal(w.commits, 1)
   assert.deepEqual(w.changes, { created: ['notes.md', 'sub.js'], modified: ['add.js'], deleted: ['old.js'] })
@@ -245,7 +245,7 @@ test('a record with no commit of its own (sent by an older dsh-baton) still gets
 
 test('worktree evidence: a submodule is not a worktree, one made outside the work folder is found, non-ASCII names stay readable, and with no base commit the uncommitted changes show', (t) => {
   const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@localhost', '-c', 'protocol.file.allow=always', ...args], { encoding: 'utf8' })
-  const tmp = fs.realpathSync(os.tmpdir())
+  const tmp = fs.realpathSync.native(os.tmpdir())
   const home = fs.mkdtempSync(path.join(tmp, 'dshb-ev-home-'))
   const repo = fs.mkdtempSync(path.join(tmp, 'dshb-ev-repo-'))
   const lib = fs.mkdtempSync(path.join(tmp, 'dshb-ev-lib-'))
@@ -289,7 +289,7 @@ test('worktree evidence: a submodule is not a worktree, one made outside the wor
 
 test('a recheck before any collect runs in the worktree git lists as new since dsh_send', (t) => {
   const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@localhost', ...args], { encoding: 'utf8' })
-  const tmp = fs.realpathSync(os.tmpdir())
+  const tmp = fs.realpathSync.native(os.tmpdir())
   const home = fs.mkdtempSync(path.join(tmp, 'dshb-ev-home-'))
   const repo = fs.mkdtempSync(path.join(tmp, 'dshb-ev-re-'))
   t.after(() => { fs.rmSync(home, { recursive: true, force: true }); fs.rmSync(repo, { recursive: true, force: true }) })
@@ -302,7 +302,7 @@ test('a recheck before any collect runs in the worktree git lists as new since d
 
 test('a later send to a session already in a worktree: its changes stay in changes, and the evidence says it is a worktree', (t) => {
   const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@localhost', ...args], { encoding: 'utf8' })
-  const tmp = fs.realpathSync(os.tmpdir())
+  const tmp = fs.realpathSync.native(os.tmpdir())
   const home = fs.mkdtempSync(path.join(tmp, 'dshb-ev-home-'))
   const repo = fs.mkdtempSync(path.join(tmp, 'dshb-ev-again-'))
   t.after(() => { fs.rmSync(home, { recursive: true, force: true }); fs.rmSync(repo, { recursive: true, force: true }) })

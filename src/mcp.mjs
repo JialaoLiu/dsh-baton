@@ -142,7 +142,7 @@ async function waitInChunks({ run_id }, progress, signal, meta) {
         run_id, state: st.state, timed_out: true,
         ...(st.waiting_on ? { waiting_on: st.waiting_on } : {}),
         hint: st.state === 'waiting'
-          ? 'The run is still waiting for a person (see dsh_status for its question). Answer it with dsh_answer if you may, or tell the user; then call dsh_wait again.'
+          ? 'The run is still waiting for a person (see dsh_status for its question). Ask the user and submit their answer with dsh_answer; then call dsh_wait again.'
           : `Still ${st.state}. Call dsh_wait again with the same run_id, with no progress check or progress note in between (work the user asked you to do meanwhile is fine).`,
       }
     }
@@ -411,7 +411,7 @@ const TOOLS = [
   {
     name: 'dsh_answer',
     annotations: annotations('Answer question', hints(false, false, false)),
-    description: `Answer the questions a waiting run asked (needs_input in dsh_wait or dsh_status). ${core.ASKED} Per question: choose (option numbers or labels), text (your own answer, complete on its own), or skip. It reaches Harness once every question has an answer (submitted: true; remaining lists the rest); then wait again. If the user already answered in Harness, it says there is no open question.`,
+    description: `Submit the user's answer to the questions a waiting run asked (needs_input in dsh_wait or dsh_status). ${core.ASKED} Per question: choose (option numbers or labels), text (an answer in words), or skip. It reaches Harness once every question has an answer (submitted: true; remaining lists the rest); then wait again. If the user already answered in Harness, it says there is no open question.`,
     inputSchema: {
       type: 'object', required: ['answers'], properties: {
         run_id: str('Run id that is waiting (needs_input: answer)'),
@@ -421,25 +421,17 @@ const TOOLS = [
             type: 'object', properties: {
               id: str('Question id from question.questions[].id; may be left out when there is one question'),
               choose: { type: 'array', items: { type: ['integer', 'string'] }, description: 'Option numbers (1 = first) or labels; one for a single-choice question' },
-              text: str('Your own answer in words'),
+              text: str('An answer in words'),
               skip: { type: 'boolean', description: 'Skip this question' },
             },
           },
         },
-        reason: str('Required when the user let you decide: one sentence on why you chose this, from your own judgment of the question and the task; it is returned for you to tell the user and not sent to Harness'),
       },
     },
     run: async (a) => {
       const st = await core.api.answer(a)
-      // The second look at an option chosen for the user: nothing was sent, its hint says what next.
-      if (st.check) return st
-      if (!a.run_id) return { ...st, hint: `${st.reason ? 'Tell the user what you chose and this reason. ' : ''}Then call dsh_wait again as before (the same run_id or session_id), with the same until and the last cursor.` }
-      return {
-        ...st,
-        hint: st.reason
-          ? 'Tell the user what you chose and this reason. Then wait for the run again.'
-          : 'If you chose on the user\'s behalf, tell them what you chose and why, from your own judgment of the task (that the asker suggested it is not a reason); next time pass reason. Then wait for the run again.',
-      }
+      if (st.submitted === false && st.hint) return st
+      return { ...st, hint: a.run_id ? 'Then wait for the run again.' : 'Then call dsh_wait again as before (the same run_id or session_id), with the same until and the last cursor.' }
     },
   },
   {

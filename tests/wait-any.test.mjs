@@ -109,7 +109,7 @@ test('a run that stops to ask a person returns at once, and its question is not 
   const { result } = await call(host, { run_ids: ['hrun-fe', 'hrun-be'] }).finally(host.close)
   assert.equal(result.ended.length, 1)
   assert.equal(result.ended[0].needs_input, 'harness-ui')
-  assert.match(result.ended[0].hint, /only a person can do in the Harness UI/)
+  assert.match(result.ended[0].hint, /only a person can do in the Harness UI: an approval, or a question left open when the plugin reloaded/)
   assert.deepEqual(result.still_running.map((r) => r.run_id), ['hrun-be'])
 })
 
