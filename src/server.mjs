@@ -141,7 +141,10 @@ async function reloadIfInstalled() {
     current = next
     currentStamp = now
     currentVersion = init?.serverInfo?.version ?? null
-    note = `dsh-baton was updated from ${before} to ${currentVersion} without a restart; this call already used ${currentVersion}.` +
+    // The same version with changed files (a reinstall, or files copied by hand) says so plainly.
+    note = (before && before === currentVersion
+      ? `dsh-baton ${currentVersion} was reloaded with changed files without a restart; this call already used them.`
+      : `dsh-baton was updated from ${before} to ${currentVersion} without a restart; this call already used ${currentVersion}.`) +
       (added.length ? ` New in this version: ${added.join(', ')}. If this conversation does not show them, call them through dsh_call {name, arguments}.` : '')
     if (lastTools !== null && JSON.stringify(tools) !== lastTools) {
       lastTools = JSON.stringify(tools)

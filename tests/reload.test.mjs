@@ -222,3 +222,22 @@ test('the shell exits once the client closes stdin', async () => {
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
+
+test('the same version with changed files says it was reloaded, not updated from x to x', async () => {
+  const { dir, root } = app()
+  const s = start(root)
+  try {
+    const init = await s.call('initialize', { protocolVersion: '2025-06-18', clientInfo: { name: 'claude-code' } })
+    const version = init.result.serverInfo.version
+    await s.tool('dsh_list_workspaces')
+    // Files copied by hand: the same version; package.json is written again, so its time changes.
+    await new Promise((r) => setTimeout(r, 20))
+    upgrade(root, version)
+    const probe = await s.tool('dsh_probe')
+    assert.match(texts(probe)[1], new RegExp(`dsh-baton ${version.replace(/\./g, '\\.')} was reloaded with changed files without a restart`))
+    assert.doesNotMatch(texts(probe)[1], /updated from/)
+  } finally {
+    await s.stop()
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})

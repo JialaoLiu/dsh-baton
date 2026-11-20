@@ -129,6 +129,8 @@ const norm = (p) => {
   const r = path.resolve(p.replace(/^~(?=$|[\\/])/, os.homedir()))
   return process.platform === 'win32' || process.platform === 'darwin' ? r.toLowerCase() : r
 }
+// A folder as compared with another one (case-insensitive where the file system is).
+export const folderId = (p) => norm(p)
 // True when folder is the conversation's folder or inside it.
 export function within(folder, conversation) {
   const r = path.relative(norm(conversation), norm(folder))

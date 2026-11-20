@@ -6,8 +6,9 @@ import path from 'node:path'
 import * as core from './core.mjs'
 import { stableNodePath } from './setup.mjs'
 import { codexConfigPath, readCodexToolTimeout, codexTimeoutNoteFile, codexWaitSeconds, codexConfigReadAt, codexProcessStartedAtAsync } from './register.mjs'
-import { conversationFolder, within } from './folder.mjs'
+import { conversationFolder, within, folderId } from './folder.mjs'
 import { threadOf, delivered } from './codex-hook.mjs'
+import { waitingInBackground } from './waiters.mjs'
 
 const SERVER = { name: 'dsh-baton', version: core.VERSION }
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
@@ -117,6 +118,40 @@ const FOLLOW_COMMAND_HINT = ' Your client wakes you when a background command ex
 // wait returned (measured 2026-11-08: a result read 3 minutes late, its rework sent late).
 const PARALLEL_HINT = 'If you are sending several parts in parallel, send them all first, then wait for them together: one dsh_wait with run_ids set to all their run_ids, never one run after another.'
 
+// Sessions this conversation sent to, so that a new task for the same folder continues the
+// session it used there before, when that one is idle, rather than starting a session per task
+// (2026-11-19: three tasks in one project, one after another, went to three new sessions).
+// Kept per conversation: Codex and Antigravity run one server for several conversations and
+// send the conversation's id with each call; Claude Code runs one server per conversation.
+// Kept in memory only: after a server restart (an update) the next task starts one more session.
+const AG_META = 'antigravity.google/'
+const conversationKey = (meta) => threadOf(meta) ?? meta?.[`${AG_META}root_conversation_id`] ?? meta?.[`${AG_META}conversation_id`] ?? 'this'
+const usedSessions = new Map()
+const folderKey = (a) => (a.workspace_id ? `workspace:${a.workspace_id}` : a.cwd ? `folder:${folderId(a.cwd)}` : null)
+function rememberSession(meta, sessionId, folder) {
+  if (!sessionId) return
+  const key = conversationKey(meta)
+  if (!usedSessions.has(key)) usedSessions.set(key, new Map())
+  const mine = usedSessions.get(key)
+  const known = mine.get(sessionId)
+  if (folder || known) mine.set(sessionId, { folder: folder ?? known.folder, at: Date.now() })
+}
+// The session this conversation last used for folder, if it is idle now: no turn, no run of
+// ours, no question, no goal going on, not archived. A busy one is never taken, so parts sent
+// in parallel still get a session each.
+async function idleSessionFor(meta, folder) {
+  const mine = usedSessions.get(conversationKey(meta))
+  if (!mine || !folder) return null
+  const candidates = [...mine].filter(([, v]) => v.folder === folder).sort((x, y) => y[1].at - x[1].at)
+  for (const [sid] of candidates) {
+    const st = await core.api.status({ session_id: sid }).catch(() => null)
+    if (!st || st.archived) { mine.delete(sid); continue }
+    if (st.busy || st.turn_running || st.bridge_runs?.length || st.needs_input || st.goal?.phase === 'active') continue
+    return sid
+  }
+  return null
+}
+
 // Wait in short chunks, reporting progress between them (clients that support it can
 // show it or reset their timer). An unfinished wait returns only the state, not the run's
 // recent events, so the client has nothing to summarise and simply waits again.
@@ -148,6 +183,22 @@ async function waitInChunks({ run_id }, progress, signal, meta) {
     }
     progress?.(Math.round((Date.now() - started) / 1000), `run ${run_id} is ${st.state}`)
   }
+}
+
+// Runs a background wait_command of this machine already waits for (waiters.mjs): dsh_wait says
+// so at once instead of waiting a second time in the foreground. Only for clients that wait in
+// the background, and only while none of the runs has ended or asks (then the ordinary wait
+// returns it at once).
+const BACKGROUND_WAIT_HINT = (n) => `A background wait_command already waits for ${n > 1 ? 'these runs' : 'this run'} and wakes you when ${n > 1 ? 'each' : 'it'} ends or stops to ask the user something, so dsh_wait did not wait. Do not call dsh_wait for ${n > 1 ? 'them' : 'it'}: go on with other work, or end your turn if there is none.`
+const STOPPED = new Set(['completed', 'failed', 'cancelled', 'interrupted', 'waiting'])
+async function waitedInBackground(ids) {
+  if (!backgroundWaits() || !ids.length || !ids.every((id) => waitingInBackground(id))) return null
+  const states = await Promise.all(ids.map((id) => core.api.status({ run_id: id, tail: 1 }).catch(() => null)))
+  if (states.some((st) => !st || STOPPED.has(st.state) || st.needs_input)) return null
+  const hint = BACKGROUND_WAIT_HINT(ids.length)
+  return ids.length === 1
+    ? { run_id: ids[0], state: states[0].state, waiting_in_background: true, hint }
+    : { run_ids: ids, still_running: states.map((st, i) => ({ run_id: ids[i], state: st.state, session_id: st.session_id })), waiting_in_background: true, hint }
 }
 
 // Several runs (dsh_wait run_ids): returns as soon as any of them ends or stops to ask a person,
@@ -298,8 +349,8 @@ const TOOLS = [
   {
     name: 'dsh_send',
     annotations: annotations('Send message', hints(false, false, false)),
-    description: 'Hand a task to DeepSeek Harness, or continue a session: returns at once with a run_id and a hint saying how to wait for the reply; follow it. Call it directly, no need to list anything first. A new session starts in the folder this conversation works in, or in cwd or workspace_id (a new cwd is registered first); session_id continues that session. message arrives verbatim as a user message, and Harness does not see this conversation: make it self-contained, in the user\'s language, the full, explicit spec, asking for tests that cover each requirement. Keep a leading /goal (it sets a Harness goal) and the user\'s goal text as written. For a large task, write a concrete spec (goal, modules and the files each owns, level of detail, acceptance criteria) rather than passing the user\'s words on, and send independent parts to separate sessions in parallel, each owning its own files; wait for them together (dsh_wait run_ids), review each as it returns and send its fixes at once. With checks, a short request for a sub-agent review table is appended. To a busy session, mode followup queues the message and steer adds it to the running turn; left out, the Harness setting decides.',
-    inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), cwd: str('Workspace folder for a new session; leave out to use the folder this conversation works in'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: "followup queues after the current turn; steer injects into a running turn. Omit to follow Harness's busy-send setting" }, model: str('Only when the user names a model for this run (e.g. "DeepSeek-V4 Pro"); else the session keeps its own; a new one takes the plugin page\'s default. Matched ignoring case, spaces, hyphens and a leading DeepSeek; no match or several fails the send with the list (provider/model picks one). Sets this session only'), team: { type: 'boolean', description: 'Only when the user asks for Agent Teams: true turns them on for this session, false off' }, reasoning_effort: str('Only when the user names a reasoning effort, e.g. high; one of the efforts dsh_list_models shows for the model'), checks: { type: 'array', items: { type: 'string' }, description: 'The project\'s own test commands, e.g. npm test, or python -m pytest (a bare pytest is often not on PATH, on Windows especially); never check scripts you write yourself. dsh-baton runs them in the folder when the run ends and returns exit codes and the last output lines as evidence.' } } },
+    description: 'Hand a task to DeepSeek Harness, or continue a session: returns at once with a run_id and a hint saying how to wait for the reply; follow it. Call it directly, no need to list anything first. A new session starts in the folder this conversation works in, or in cwd or workspace_id (a new cwd is registered first); session_id continues that session. Without session_id, a task for a folder where this conversation already has an idle Harness session continues that session, so it keeps the earlier context (continued_session in the result says so; new_session: true starts a fresh one); a busy session is never reused, so parts sent in parallel still get a session each. message arrives verbatim as a user message, and Harness does not see this conversation: make it self-contained, in the user\'s language, the full, explicit spec, asking for tests that cover each requirement. Keep a leading /goal (it sets a Harness goal) and the user\'s goal text as written. For a large task, write a concrete spec (goal, modules and the files each owns, level of detail, acceptance criteria) rather than passing the user\'s words on, and send independent parts to separate sessions in parallel, each owning its own files; wait for them together (dsh_wait run_ids), review each as it returns and send its fixes at once. With checks, a short request for a sub-agent review table is appended. To a busy session, mode followup queues the message and steer adds it to the running turn; left out, the Harness setting decides.',
+    inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), new_session: { type: 'boolean', description: 'Start a new session even though this conversation has an idle session in that folder: only for an unrelated task, or one that must not see the earlier work' }, cwd: str('Workspace folder for a new session; leave out to use the folder this conversation works in'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: "followup queues after the current turn; steer injects into a running turn. Omit to follow Harness's busy-send setting" }, model: str('Only when the user names a model for this run (e.g. "DeepSeek-V4 Pro"); else the session keeps its own; a new one takes the plugin page\'s default. Matched ignoring case, spaces, hyphens and a leading DeepSeek; no match or several fails the send with the list (provider/model picks one). Sets this session only'), team: { type: 'boolean', description: 'Only when the user asks for Agent Teams: true turns them on for this session, false off' }, reasoning_effort: str('Only when the user names a reasoning effort, e.g. high; one of the efforts dsh_list_models shows for the model'), checks: { type: 'array', items: { type: 'string' }, description: 'The project\'s own test commands, e.g. npm test, or python -m pytest (a bare pytest is often not on PATH, on Windows especially); never check scripts you write yourself. dsh-baton runs them in the folder when the run ends and returns exit codes and the last output lines as evidence.' } } },
     run: async (a, { meta } = {}) => {
       // A new session goes to this conversation's folder unless the call names another one;
       // a different folder is allowed but said back, so a wrong guess does not go unnoticed.
@@ -318,12 +369,19 @@ const TOOLS = [
         ? { folder_note: `This conversation works in ${here}; the new session was started in ${a.cwd} as asked. If that was not intended, cancel it and send again without cwd.` }
         : filled ? { cwd: here } : {}
       // The conversation's folder goes along, so a hand-over to a folder inside it joins its workspace.
-      const args = { ...a, ...(filled ? { cwd: here } : {}), ...(here && !a.workspace_id ? { conversation_folder: here } : {}) }
-      const sent = await core.api.send({ ...args, sender: core.senderOf(core.setting('SENDER') || clientName) })
+      const { new_session: fresh, ...given } = a
+      const args = { ...given, ...(filled ? { cwd: here } : {}), ...(here && !a.workspace_id ? { conversation_folder: here } : {}) }
+      // A new task for a folder this conversation already has an idle session in continues it.
+      const folderOf = a.session_id ? null : folderKey(args)
+      const reused = a.session_id || fresh ? null : await idleSessionFor(meta, folderOf)
+      const { cwd: _cwd, workspace_id: _ws, conversation_folder: _cf, ...rest } = args
+      const sent = await core.api.send({ ...(reused ? { ...rest, session_id: reused } : args), sender: core.senderOf(core.setting('SENDER') || clientName) })
+      rememberSession(meta, sent.session_id, folderOf)
       // Only when it waits behind a turn (queued_behind; a plugin before 0.6.14 says only
       // other_active_runs): every run starts out queued until Harness takes its prompt.
       const behind = a.session_id && sent.state === 'queued' && sent.mode === 'followup' && (sent.queued_behind || sent.other_active_runs?.length)
-      const st = { ...sent, ...folder, ...(behind ? { queue_hint: QUEUE_HINT() } : {}) }
+      const continued = reused ? { continued_session: reused, session_note: `Continued session ${reused}, which this conversation used for this folder before and which is idle now, so Harness keeps that context. For an unrelated task that must not see the earlier work, send with new_session: true.` } : {}
+      const st = { ...sent, ...(reused ? {} : folder), ...continued, ...(behind ? { queue_hint: QUEUE_HINT() } : {}) }
       // Codex has no wake-on-exit for shell commands: offered wait_command, it runs it in a
       // terminal and polls that, so it gets dsh_wait only.
       if (isCodex()) {
@@ -346,7 +404,7 @@ const TOOLS = [
       return {
         ...st,
         wait_command: waitCommand(st.run_id),
-        hint: `Run started. If you can run a shell command in the background and are woken when it exits (Claude Code: Bash with run_in_background), run wait_command that way: it ends when the run ends, or stops to ask the user something, and prints the reply or the questions, with no polling (several runs: one background wait_command each, so whichever ends first wakes you). Otherwise call dsh_wait with this run_id (several runs: one dsh_wait with run_ids). ${GOAL_WAIT_HINT('--until turn --every 10m on wait_command')}`,
+        hint: `Run started. If you can run a shell command in the background and are woken when it exits (Claude Code: Bash with run_in_background), run wait_command that way: it ends when the run ends, or stops to ask the user something, and prints the reply or the questions, with no polling (several runs: one background wait_command each, so whichever ends first wakes you). Then do not also call dsh_wait for it: go on with other work, or end your turn if there is none. Otherwise call dsh_wait with this run_id (several runs: one dsh_wait with run_ids). ${GOAL_WAIT_HINT('--until turn --every 10m on wait_command')}`,
       }
     },
   },
@@ -363,7 +421,7 @@ const TOOLS = [
   {
     name: 'dsh_wait',
     annotations: annotations('Wait for run'),
-    description: () => `Wait for a run sent with dsh_send to end and return its state and final reply.${backgroundWaits() ? ' Prefer the background wait_command from dsh_send if your client wakes you when a background command exits: it costs no turns.' : ''} It also returns at once when the run stops to ask a person: needs_input answer (reply with dsh_answer) or harness-ui (an approval in the Harness window). Each call waits up to ${waitSeconds()} s${isCodex() && waitSeconds() > 270 ? ' (270 s in a conversation that was already open when dsh-baton set Codex\'s tool timeout)' : ''}; if it returns timed_out: true, call dsh_wait again with the same run_id, without a progress note. Parallel runs: all ids in run_ids, never one by one; returns once any ends or asks (ended; the rest in still_running); then wait again with the rest plus your fixes. A run in a session with a Harness goal is followed on until the goal stops, with every round since the run began. With session_id instead of run_id it follows that session's Harness goal (see until) without sending anything; it also returns when Harness needs a person or will not go on by itself. Pass back the cursor each result gives.${isCodex() ? ` ${NO_POLL} ${codeModeYield()}` : ''}`,
+    description: () => `Wait for a run sent with dsh_send to end and return its state and final reply.${backgroundWaits() ? ' Prefer the background wait_command from dsh_send if your client wakes you when a background command exits: it costs no turns. For a run a background wait_command already waits for, dsh_wait returns at once without waiting: do not call it for that run.' : ''} It also returns at once when the run stops to ask a person: needs_input answer (reply with dsh_answer) or harness-ui (an approval in the Harness window). Each call waits up to ${waitSeconds()} s${isCodex() && waitSeconds() > 270 ? ' (270 s in a conversation that was already open when dsh-baton set Codex\'s tool timeout)' : ''}; if it returns timed_out: true, call dsh_wait again with the same run_id, without a progress note. Parallel runs: all ids in run_ids, never one by one; returns once any ends or asks (ended; the rest in still_running); then wait again with the rest plus your fixes. A run in a session with a Harness goal is followed on until the goal stops, with every round since the run began. With session_id instead of run_id it follows that session's Harness goal (see until) without sending anything; it also returns when Harness needs a person or will not go on by itself. Pass back the cursor each result gives.${isCodex() ? ` ${NO_POLL} ${codeModeYield()}` : ''}`,
     inputSchema: {
       type: 'object', properties: {
         run_id: str('Run id from dsh_send'),
@@ -376,6 +434,8 @@ const TOOLS = [
     },
     run: async (a, { progress, signal, meta }) => {
       const ids = [...new Set([...(Array.isArray(a.run_ids) ? a.run_ids : []), ...(a.run_id ? [a.run_id] : [])].filter((id) => typeof id === 'string' && id))]
+      const background = await waitedInBackground(ids)
+      if (background) return background
       if (ids.length > 1) {
         const r = await waitAnyInChunks(ids, progress, signal, meta)
         return r.cancelled || r.timed_out ? r : anyResult(r)

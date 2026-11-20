@@ -5,6 +5,7 @@ import path from 'node:path'
 import * as core from './core.mjs'
 import { setup, stableNodePath } from './setup.mjs'
 import { runHook, parseHookInput } from './codex-hook.mjs'
+import { markWaiting } from './waiters.mjs'
 
 const USAGE = `Usage: dsh-baton <command> [args]
 
@@ -88,6 +89,8 @@ async function main() {
     case 'status':
       return print(await core.api.status(rest[0]?.startsWith('session') || flags.session ? { session_id: flags.session ?? rest[0] } : { run_id: rest[0] }))
     case 'wait': {
+      // So that dsh_wait in the same client knows this run is waited for already.
+      markWaiting(rest[0])
       const total_s = Number(flags.timeout) || 24 * 3600
       const waitStarted = Date.now()
       const st = await core.api.wait({ run_id: rest[0], timeout_s: total_s })
