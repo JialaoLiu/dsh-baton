@@ -171,7 +171,7 @@ test('Codex is told to wait for parallel runs together', async () => {
   const wait = tools.find((t) => t.name === 'dsh_wait')
   assert.equal(wait.inputSchema.properties.run_ids.type, 'array')
   assert.match(wait.description, /all ids in run_ids, never one by one/)
-  assert.match(tools.find((t) => t.name === 'dsh_send').description, /wait for them together \(dsh_wait run_ids\), review each as it returns and send its fixes at once/)
+  assert.match(tools.find((t) => t.name === 'dsh_send').description, /wait for them together as each send's hint says, review each as it returns and send its fixes at once/)
 })
 
 test('a question that comes after the wait returned is kept for the next wait', () => tries(async () => {

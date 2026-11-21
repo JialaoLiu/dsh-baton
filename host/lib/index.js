@@ -65,8 +65,11 @@ function normalizePath(p) {
 // one more in the sidebar for each subfolder or throw-away folder. Instead it joins:
 // - the conversation's own folder (base), when the target is inside it: a Claude Code chat in
 //   Coding handing over Coding/app joins the Coding workspace;
+// - for a target outside it, the nearest workspace around the target, else the conversation's
+//   own folder: a chat in Coding handing over a folder on another disk joins the Coding workspace;
 // - for folders clients make per conversation, one shared folder: Codex chats without a project
-//   (Documents/Codex/<date>/<chat>), Claude scratch folders (…/scratch-workspaces/…), Claude
+//   (Documents/Codex/<date>/<chat>), Claude scratch folders (…/scratch-workspaces/…, Claude
+//   Code's <tmp>/claude-<uid>/…/scratchpad), Antigravity's scratch and brain folders, Claude
 //   worktrees (<project>/.claude/worktrees/<name>, joined to the project) and Codex worktrees
 //   (~/.codex/worktrees/…).
 // The session then starts in that folder and the message names the target folder.
@@ -86,7 +89,15 @@ function sharedFolder(dir) {
     if (same(at, 'worktrees') && i >= 2 && same(parts[i - 1], '.claude')) return { path: upto(i + 1), title: 'Claude worktrees' }
     if (same(at, 'worktrees') && same(parts[i - 1], '.codex')) return { path: upto(i + 1), title: 'Codex worktrees' }
     if (same(at, 'scratch-workspaces')) return { path: upto(i + 1), title: 'Claude scratch' }
+    // Antigravity: chats outside a project work in <data>/scratch, artifacts sit in <data>/brain/<id>.
+    if ((same(at, 'scratch') || same(at, 'brain')) && /^antigravity/i.test(parts[i - 1] ?? '') && same(parts[i - 2] ?? '', '.gemini')) return { path: upto(i + 1), title: 'Antigravity scratch' }
     if (same(at, 'Codex') && same(parts[i - 1], 'Documents') && DAY.test(parts[i + 1] ?? '')) return { path: upto(i + 1), title: 'Codex chats' }
+  }
+  // Claude Code's per-conversation scratchpad: <tmp>/claude[-<uid>]/<project>/<session>/scratchpad;
+  // every conversation's goes to the claude[-<uid>] folder (2026-11-20: a paper review gave each
+  // reviewer its own scratchpad subfolder, five workspaces).
+  for (let s = parts.length - 1; s >= 3; s--) {
+    if (same(parts[s], 'scratchpad') && /^claude(-\d+)?$/i.test(parts[s - 3])) return { path: upto(s - 2), title: 'Claude scratch' }
   }
   return null
 }
@@ -98,16 +109,29 @@ function isLinkedWorktree(dir) {
     return text.startsWith('gitdir:') && /[\\/]worktrees[\\/]/.test(text)
   } catch { return false }
 }
-function sessionHome(target, base) {
+// known: the folders that are workspaces already.
+function sessionHome(target, base, known = []) {
   const usable = (dir) => dir && !same(dir, os.homedir()) && dir !== path.parse(dir).root && isDirectory(dir)
-  if (base && !isLinkedWorktree(target)) {
-    let b = normalizePath(base)
-    const shared = sharedFolder(b)
-    if (shared && isDirectory(shared.path)) b = shared.path
-    if (usable(b) && isInside(target, b)) return { path: b, ...(shared && same(b, shared.path) && shared.title ? { title: shared.title } : {}) }
+  const linked = isLinkedWorktree(target)
+  let b
+  let baseShared = null
+  if (base && !linked) {
+    b = normalizePath(base)
+    baseShared = sharedFolder(b)
+    if (baseShared && isDirectory(baseShared.path)) b = baseShared.path
+    if (usable(b) && isInside(target, b)) return { path: b, ...(baseShared && same(b, baseShared.path) && baseShared.title ? { title: baseShared.title } : {}) }
   }
   const shared = sharedFolder(target)
   if (shared && usable(shared.path)) return shared
+  if (b) {
+    // A folder outside the conversation's folder (2026-11-20: a chat in Coding gave each reviewer
+    // a folder of its own on another disk, one workspace each): the nearest workspace around it,
+    // else the conversation's own folder. Not a chat's throw-away folder (a Codex chat without
+    // a project): a project handed over from there keeps a workspace of its own.
+    const around = known.filter((dir) => dir && usable(dir) && isInside(target, dir)).sort((x, y) => y.length - x.length)[0]
+    if (around) return { path: around }
+    if (b && !baseShared && usable(b)) return { path: b }
+  }
   return { path: target }
 }
 
@@ -1600,17 +1624,58 @@ export function apply(ctx) {
   const TEAMS_UNSUPPORTED = 'this DeepSeek Harness cannot turn Agent Teams on per session; that needs Harness 0.2.2-rc.2 or later: update Harness, or send without team'
   async function setTeam(sessionId, enabled) {
     if (typeof teamsService?.setEnabled !== 'function') throw new Error(TEAMS_UNSUPPORTED)
-    // The exact live Agent from Harness's registry, as its own UI lookup takes it: Team rejects
-    // any other object ("subagent tree access requires the exact live caller"). A session not
-    // loaded yet is loaded first.
+    const agent = await liveAgent(sessionId)
+    // A finished sub-agent's session is never loaded again: name the likely cause.
+    if (!agent) throw new Error(`session ${sessionId} is not loaded in Harness; if it is a sub-agent's (teammate's) session, change Team mode on its root session instead`)
+    await teamsService.setEnabled(agent, enabled)
+  }
+
+  // The exact live Agent from Harness's registry, as its own UI lookup takes it: Team and goals
+  // reject any other object ("subagent tree access requires the exact live caller"). A session
+  // not loaded yet is loaded first. undefined when it cannot be loaded.
+  async function liveAgent(sessionId) {
     let agent = agentsService?.get?.(sessionId)
     if (!agent && typeof controller.resolveAgent === 'function') {
       await controller.resolveAgent(sessionId)
       agent = agentsService?.get?.(sessionId)
     }
-    // A finished sub-agent's session is never loaded again: name the likely cause.
-    if (!agent) throw new Error(`session ${sessionId} is not loaded in Harness; if it is a sub-agent's (teammate's) session, change Team mode on its root session instead`)
-    await teamsService.setEnabled(agent, enabled)
+    return agent
+  }
+
+  // --- /goal ------------------------------------------------------------------------
+  // Harness runs /goal as a composer command (commands.execute), not as text for the model:
+  // sent as a prompt it set no goal (Windows rc.2 on 11-17, Mac rc.5 on 11-21). So a leading
+  // "/goal <objective>" sets the goal through Harness's goals service, as the command does, and
+  // the objective goes in as the run's message. The goal is set once Harness has taken that
+  // message in, so its round driver sees a queued prompt and waits: the run's own turn comes
+  // first, then Harness goes on with the goal's rounds by itself.
+  const GOAL_UNSUPPORTED = 'this DeepSeek Harness cannot set a goal from a plugin (no goals service); type /goal in the Harness window, or update Harness'
+  function goalCommand(message) {
+    const m = /^\/goal(?:\s+([^]*))?$/i.exec(message.trim())
+    if (!m) return null
+    const rest = (m[1] ?? '').trim()
+    const word = rest.toLowerCase()
+    if (!rest || ['clear', 'pause', 'resume', 'edit'].includes(word)) return { kind: 'control', word: word || 'show' }
+    if (/^edit\s/i.test(rest)) return { kind: 'edit', objective: rest.slice(4).trim() }
+    return { kind: 'create', objective: rest }
+  }
+  const GOAL_NOTE = '(This message also set a Harness goal for this session, with the text above as its objective. When all of it is done and verified, mark the goal complete; if work remains, leave it active and Harness starts the next goal round after this turn.)'
+
+  async function setGoal(run, cmd, objective) {
+    try {
+      const agent = await liveAgent(run.sessionId)
+      if (!agent) throw new Error(`session ${run.sessionId} is not loaded in Harness`)
+      const current = goalsService.get(agent)
+      const view = cmd.kind === 'edit' && current && current.phase !== 'complete'
+        ? goalsService.edit(agent, { id: current.id, revision: current.revision }, { objective })
+        : goalsService.create(agent, { objective })
+      run.goalSet = { id: view.id, phase: view.phase, max_rounds: view.maxGoalRounds ?? null }
+      pushEvent(run, { type: 'goal_set', goal_id: view.id, edited: cmd.kind === 'edit' && view.revision > 1 })
+    } catch (error) {
+      run.goalError = String(error?.message ?? error)
+      pushEvent(run, { type: 'goal_failed', error: run.goalError })
+      logError('set goal', error)
+    }
   }
 
   async function send({ message, session_id, cwd, workspace_id, conversation_folder, mode: asked, sender, model, reasoning_effort, team }) {
@@ -1632,6 +1697,14 @@ export function apply(ctx) {
       throw new Error(`Session ${sessionId} is archived. Unarchive it in Harness, or start a new session with cwd or workspace_id.`)
     }
     if (!sessionId && !cwd && !workspace_id) throw new Error('A new session needs cwd or workspace_id. Pass session_id to continue an existing one.')
+    const goalCmd = goalCommand(message)
+    if (goalCmd?.kind === 'control') throw new Error(`Nothing was sent: dsh_send takes "/goal <objective>" or "/goal edit <objective>"; /goal ${goalCmd.word === 'show' ? '' : goalCmd.word} works only in the Harness window. dsh_status with session_id shows a session's goal.`)
+    if (goalCmd && (typeof goalsService?.create !== 'function' || typeof agentsService?.get !== 'function')) throw new Error(`Nothing was sent: ${GOAL_UNSUPPORTED}`)
+    if (goalCmd?.kind === 'create' && sessionId) {
+      const current = await goalOf(sessionId)
+      if (current && current.phase !== 'complete') throw new Error(`No message was sent: session ${sessionId} already has a goal (${current.phase}: ${current.objective}). Send "/goal edit <objective>" to replace its objective, or clear it in the Harness window first.`)
+    }
+    if (goalCmd) message = goalCmd.objective
     // A missing folder is not created: a mistyped path, or a project on a drive that is not
     // connected, would get an empty folder (under /Volumes, even). Checked before the registry,
     // which answers a bare ENOENT, or nothing at all for a folder registered while it was there.
@@ -1672,7 +1745,7 @@ export function apply(ctx) {
         const target = normalizePath(cwd)
         // A folder that is a workspace already (sessions from before 0.6.15) keeps it.
         const own = await registry.resolveByPath(target).catch(() => undefined)
-        const home = own ? { path: target } : sessionHome(target, conversation_folder)
+        const home = own ? { path: target } : sessionHome(target, conversation_folder, registry.list().map((w) => w.path))
         workspace = await createWorkspace({ path: home.path, title: home.title, create_dir: false })
         if (!same(home.path, target)) {
           workFolder = target
@@ -1740,9 +1813,10 @@ export function apply(ctx) {
     // session after a restart) that took 2 min 35 s, and the client sat in dsh_send all along
     // (Mac, 2026-11-18). So the reply waits at most admitWaitMs() (10 s); Harness's answer still settles
     // the run when it comes (a refusal fails it, and dsh_wait says so).
-    const admitted = controller.prompt({ sessionId, requestId: run.requestId, content: [{ type: 'text', text: message }], mode }, signal())
-      .then(() => {
+    const admitted = controller.prompt({ sessionId, requestId: run.requestId, content: [{ type: 'text', text: goalCmd ? `${message}\n\n${GOAL_NOTE}` : message }], mode }, signal())
+      .then(async () => {
         run.admitted = true // in Harness's queue (or conversation) now
+        if (goalCmd) await setGoal(run, goalCmd, message)
         if (drift) rememberDefault(drift.now)
         return true
       }, (error) => {
@@ -1763,6 +1837,7 @@ export function apply(ctx) {
       ...(pagePart.length ? { handover_default: pagePart } : {}),
       ...(modelNotes.length ? { model_note: modelNotes.join(' ') } : {}),
       ...(team != null ? { team } : {}),
+      ...(goalCmd && answered ? (run.goalSet ? { goal_set: run.goalSet } : { goal_error: run.goalError ?? 'not set' }) : {}),
       ...(ahead.length ? { other_active_runs: ahead } : {}),
       ...(queuedBehind ? { queued_behind: true } : {}),
       ...(workspace ? { workspace } : {}),

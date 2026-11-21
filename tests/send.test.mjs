@@ -137,6 +137,18 @@ test('Antigravity folder lookup: a damaged database or an unknown id gives undef
   }
 })
 
+test('Claude Code is told to wait in the background only; the Claude desktop chat keeps the choice', async () => {
+  const project = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-ccproj-')))
+  const cc = await sendFrom({ clientName: 'claude-code', cwd: project, args: { message: 'hi' } })
+  assert.match(cc.reply.wait_command, / wait hrun-1$/)
+  assert.match(cc.reply.hint, /^Run started\. Run wait_command now with Bash run_in_background: true/)
+  assert.match(cc.reply.hint, /Do not call dsh_wait for it\. Several runs: one background wait_command each, never one dsh_wait for all/)
+  assert.doesNotMatch(cc.reply.hint, /Otherwise call dsh_wait/)
+  // claude-ai (the desktop chat, no shell) is also sender claude, but keeps the hedged hint.
+  const chat = await sendFrom({ clientName: 'claude-ai', cwd: project, args: { message: 'hi' } })
+  assert.match(chat.reply.hint, /^Run started\. If you can run a shell command in the background[^]*Otherwise call dsh_wait/)
+})
+
 test('Antigravity: no cwd means the conversation\'s project folder; without a project it asks', async () => {
   const project = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-agproj-')))
   const ag = antigravityData([

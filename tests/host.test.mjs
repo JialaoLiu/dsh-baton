@@ -230,17 +230,15 @@ test('a hand-over to a folder inside the conversation folder joins its workspace
   assert.equal(r.work_folder, app)
   const esc = (p) => p.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
   assert.match(h.calls.prompt[0].content[0].text, new RegExp(`^\\(Working folder for this task: ${esc(app)}\\. Run every command there[^]*\\)\\n\\nhi$`))
-  // A leading /goal stays first; the note goes into the goal text.
-  await h.call('send', { cwd: app, conversation_folder: coding, message: '/goal make it pass' })
-  assert.match(h.calls.prompt[1].content[0].text, new RegExp(`^/goal \\(Working folder for this task: ${esc(app)}\\.[^]*\\)\\n\\nmake it pass$`))
   // The conversation folder itself: as before, no note.
   const same = await h.call('send', { cwd: coding, conversation_folder: coding, message: 'hi' })
   assert.equal(same.work_folder, undefined)
-  assert.equal(h.calls.prompt[2].content[0].text, 'hi')
-  // Outside the conversation folder, or no conversation folder (an older MCP server): its own workspace.
+  assert.equal(h.calls.prompt[1].content[0].text, 'hi')
+  // Outside the conversation folder: the conversation's workspace too (since 2026-11-20), with the note.
   const out = await h.call('send', { cwd: other, conversation_folder: coding, message: 'hi' })
-  assert.equal(out.workspace.path, other)
-  assert.equal(out.work_folder, undefined)
+  assert.equal(out.workspace.id, 'w1')
+  assert.equal(out.work_folder, other)
+  // No conversation folder (an older MCP server): its own workspace.
   const old = await h.call('send', { cwd: app, message: 'hi' })
   assert.equal(old.workspace.path, app)
 })
@@ -278,6 +276,61 @@ test('folders made per conversation share one workspace', async (t) => {
   const f = await h.call('send', { cwd: proj, conversation_folder: chat, message: 'hi' })
   assert.equal(f.workspace.path, proj)
   assert.equal(f.work_folder, undefined)
+})
+
+test('Claude Code scratchpads and Antigravity scratch folders share one workspace each', async (t) => {
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-home-')))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const tmp = path.join(root, 'claude-501')
+  const pad = (session, ...sub) => path.join(tmp, '-Users-me-Coding', session, 'scratchpad', ...sub)
+  const proj = path.join(root, 'Coding')
+  const ag = path.join(root, '.gemini', 'antigravity')
+  const dirs = [pad('s1', 'dshws', 'g1_dsh_1'), pad('s1', 'dshws', 'g1_dsh_2'), pad('s2'), path.join(ag, 'scratch', 'demo'), path.join(ag, 'brain', 'c-1'), proj]
+  for (const d of dirs) fs.mkdirSync(d, { recursive: true })
+  const h = startHost(); t.after(h.close); await h.ready
+  // The 2026-11-20 case: a conversation in Coding gives each independent reviewer its own scratchpad subfolder.
+  const [a, b, c] = []
+    .concat(await h.call('send', { cwd: dirs[0], conversation_folder: proj, message: 'hi' }))
+    .concat(await h.call('send', { cwd: dirs[1], conversation_folder: proj, message: 'hi' }))
+    .concat(await h.call('send', { cwd: dirs[2], conversation_folder: dirs[2], message: 'hi' }))
+  assert.equal(a.workspace.path, tmp)
+  assert.equal(a.workspace.title, 'Claude scratch')
+  assert.equal(a.work_folder, dirs[0])
+  assert.equal(b.workspace.id, a.workspace.id)
+  assert.equal(b.work_folder, dirs[1])
+  assert.equal(c.workspace.id, a.workspace.id, 'another conversation\'s scratchpad joins too')
+  const d = await h.call('send', { cwd: dirs[3], message: 'hi' })
+  assert.equal(d.workspace.path, path.join(ag, 'scratch'))
+  assert.equal(d.workspace.title, 'Antigravity scratch')
+  const e = await h.call('send', { cwd: dirs[4], message: 'hi' })
+  assert.equal(e.workspace.path, path.join(ag, 'brain'))
+  // A real project is untouched.
+  const f = await h.call('send', { cwd: proj, conversation_folder: proj, message: 'hi' })
+  assert.equal(f.workspace.path, proj)
+})
+
+test('folders outside the conversation folder join the nearest workspace, else the conversation folder', async (t) => {
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-out-')))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const coding = path.join(root, 'Coding')
+  const day = path.join(root, 'DevData', 'paper', 'reviews', '2026-11-20')
+  const known = path.join(root, 'DevData', 'app')
+  const dirs = [path.join(day, 'g4'), path.join(day, 'g5'), path.join(known, 'sub'), coding]
+  for (const d of dirs) fs.mkdirSync(d, { recursive: true })
+  const h = startHost({ workspaces: [{ id: 'w-coding', path: coding, title: 'Coding' }, { id: 'w-app', path: known, title: 'app' }] }); t.after(h.close); await h.ready
+  // The 2026-11-20 case: a chat in Coding gives each reviewer a folder on another disk.
+  const a = await h.call('send', { cwd: dirs[0], conversation_folder: coding, message: 'hi' })
+  const b = await h.call('send', { cwd: dirs[1], conversation_folder: coding, message: 'hi' })
+  assert.equal(a.workspace.id, 'w-coding')
+  assert.equal(a.work_folder, dirs[0])
+  assert.equal(b.workspace.id, 'w-coding')
+  assert.equal(b.work_folder, dirs[1])
+  const c = await h.call('send', { cwd: dirs[2], conversation_folder: coding, message: 'hi' })
+  assert.equal(c.workspace.id, 'w-app', 'a folder inside another workspace joins that one')
+  assert.equal(c.work_folder, dirs[2])
+  // No conversation folder: the folder itself, as before.
+  const d = await h.call('send', { cwd: dirs[0], message: 'hi' })
+  assert.equal(d.workspace.path, dirs[0])
 })
 
 test('a linked Git worktree inside the conversation folder, or a folder that is a workspace already, is not grouped into the parent', async (t) => {
@@ -1509,6 +1562,75 @@ const round = (turn, { round: r, text, tools = [], open = false, at = Date.now()
   ...(open ? [] : [{ type: 'turn/end', time: at, data: { turn, reason: { kind: 'completed' } } }]),
 ]
 const logged = (h, id, type) => h.emit('session/event', { id }, { type, data: {} })
+
+// Harness's goals service as the /goal command uses it: one goal per live agent.
+function fakeGoals() {
+  const byAgent = new Map()
+  const calls = []
+  return {
+    calls,
+    get: (agent) => byAgent.get(agent.id),
+    create: (agent, { objective }) => {
+      calls.push(['create', agent.id, objective])
+      const cur = byAgent.get(agent.id)
+      if (cur && cur.phase !== 'complete') throw Object.assign(new Error(`goal "${cur.id}" already exists with phase "${cur.phase}"`), { code: 'GOAL_ALREADY_EXISTS' })
+      const g = { id: `goal-${calls.length}`, revision: 1, objective, phase: 'active', maxGoalRounds: 256, activation: 'armed' }
+      byAgent.set(agent.id, g)
+      return g
+    },
+    edit: (agent, ref, { objective }) => {
+      calls.push(['edit', agent.id, objective])
+      const g = { ...byAgent.get(agent.id), objective, revision: ref.revision + 1 }
+      byAgent.set(agent.id, g)
+      return g
+    },
+  }
+}
+
+test('a leading /goal sets the goal through the goals service and sends the objective', async (t) => {
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-goal-')))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const app = path.join(root, 'app')
+  fs.mkdirSync(app)
+  const goals = fakeGoals()
+  const agents = new Map()
+  const h = startHost({ workspaces: [{ id: 'w1', path: root, title: 'Root' }], goal: {}, goals, agents: { get: (id) => (agents.has(id) ? agents.get(id) : (agents.set(id, { id }), agents.get(id))) } }); t.after(h.close); await h.ready
+  const r = await h.call('send', { cwd: app, conversation_folder: root, message: '/goal make it pass' })
+  // The objective goes in as the message, after the working-folder note, with the goal note.
+  const text = h.calls.prompt[0].content[0].text
+  assert.ok(!text.startsWith('/goal'))
+  assert.match(text, /^\(Working folder for this task: [^]*\)\n\nmake it pass\n\n\(This message also set a Harness goal/)
+  // The goal is set once the message is in, with the same objective (note included).
+  assert.equal(goals.calls.length, 1)
+  assert.equal(goals.calls[0][0], 'create')
+  assert.equal(goals.calls[0][1], r.session_id)
+  assert.match(goals.calls[0][2], /\)\n\nmake it pass$/)
+  assert.deepEqual(r.goal_set, { id: 'goal-1', phase: 'active', max_rounds: 256 })
+  // /goal edit replaces the objective of the goal there is.
+  const e = await h.call('send', { session_id: r.session_id, message: '/goal edit make it fast' })
+  assert.equal(goals.calls[1][0], 'edit')
+  assert.equal(goals.calls[1][2], 'make it fast')
+  assert.equal(e.goal_set.id, 'goal-1')
+  assert.equal(h.calls.prompt[1].content[0].text.split('\n\n')[0], 'make it fast')
+  // Control words are left to the Harness window; nothing is sent.
+  for (const m of ['/goal', '/goal pause', '/goal clear']) {
+    await assert.rejects(h.call('send', { session_id: r.session_id, message: m }), /Nothing was sent: dsh_send takes "\/goal <objective>"/)
+  }
+  assert.equal(h.calls.prompt.length, 2)
+  // A path is not a command.
+  await h.call('send', { session_id: r.session_id, message: '/goals.md is wrong' })
+  assert.equal(h.calls.prompt[2].content[0].text, '/goals.md is wrong')
+  assert.equal(goals.calls.length, 2)
+})
+
+test('a /goal into a session whose goal is still active, or to a Harness without goals, sends nothing', async (t) => {
+  const h = startHost({ goal: { s1: goalValue() }, goals: fakeGoals(), agents: { get: (id) => ({ id }) } }); t.after(h.close); await h.ready
+  await assert.rejects(h.call('send', { session_id: 's1', message: '/goal ship it' }), /No message was sent: session s1 already has a goal \(active: finish the app\)/)
+  assert.equal(h.calls.prompt.length, 0)
+  const bare = startHost(); t.after(bare.close); await bare.ready
+  await assert.rejects(bare.call('send', { session_id: 's1', message: '/goal ship it' }), /Nothing was sent: this DeepSeek Harness cannot set a goal/)
+  assert.equal(bare.calls.prompt.length, 0)
+})
 
 test('a run in a session with an active goal ends with its own round and says the goal goes on', async (t) => {
   const h = startHost({ goal: { s1: goalValue() } }); t.after(h.close); await h.ready

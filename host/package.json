@@ -1,6 +1,6 @@
 {
   "name": "dsh-baton-host",
-  "version": "0.6.17",
+  "version": "0.6.18",
   "description": "Hand coding tasks from Claude Code, Codex or Antigravity to DeepSeek Harness: they run live in the Harness window and come back with the changed files and test results. 让 Claude Code、Codex 和 Antigravity 把编码任务交给 DeepSeek Harness：在 Harness 窗口里实时跑，做完带着改动文件和测试结果交回。",
   "type": "module",
   "main": "lib/index.js",
@@ -24,7 +24,7 @@
     "docs"
   ],
   "dependencies": {
-    "dsh-baton-mcp": "0.6.17"
+    "dsh-baton-mcp": "0.6.18"
   },
   "license": "MIT",
   "dsh": {

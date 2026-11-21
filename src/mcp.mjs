@@ -33,6 +33,8 @@ const listsHidden = () => ['claude', 'antigravity'].includes(core.senderOf(clien
 // Codex (no wake-on-exit), and not Antigravity on Windows: its terminal is sandboxed there and
 // may not open Harness's named pipe (EPERM), while this server, started outside it, can.
 const backgroundWaits = () => !isCodex() && !(process.platform === 'win32' && core.senderOf(clientName) === 'antigravity')
+// Claude Code itself (not the Claude desktop chat, claude-ai, which has no shell).
+const isClaudeCode = () => /^claude-code/i.test(String(clientName ?? ''))
 let codexTimeout = { mtime: null, value: null }
 function codexToolTimeout() {
   try {
@@ -349,7 +351,7 @@ const TOOLS = [
   {
     name: 'dsh_send',
     annotations: annotations('Send message', hints(false, false, false)),
-    description: 'Hand a task to DeepSeek Harness, or continue a session: returns at once with a run_id and a hint saying how to wait for the reply; follow it. Call it directly, no need to list anything first. A new session starts in the folder this conversation works in, or in cwd or workspace_id (a new cwd is registered first); session_id continues that session. Without session_id, a task for a folder where this conversation already has an idle Harness session continues that session, so it keeps the earlier context (continued_session in the result says so; new_session: true starts a fresh one); a busy session is never reused, so parts sent in parallel still get a session each. message arrives verbatim as a user message, and Harness does not see this conversation: make it self-contained, in the user\'s language, the full, explicit spec, asking for tests that cover each requirement. Keep a leading /goal (it sets a Harness goal) and the user\'s goal text as written. For a large task, write a concrete spec (goal, modules and the files each owns, level of detail, acceptance criteria) rather than passing the user\'s words on, and send independent parts to separate sessions in parallel, each owning its own files; wait for them together (dsh_wait run_ids), review each as it returns and send its fixes at once. With checks, a short request for a sub-agent review table is appended. To a busy session, mode followup queues the message and steer adds it to the running turn; left out, the Harness setting decides.',
+    description: 'Hand a task to DeepSeek Harness, or continue a session: returns at once with a run_id and a hint saying how to wait for the reply; follow it. Call it directly, no need to list anything first. A new session starts in the folder this conversation works in, or in cwd or workspace_id (a new cwd is registered first); session_id continues that session. Without session_id, a task for a folder where this conversation already has an idle Harness session continues that session, so it keeps the earlier context (continued_session in the result says so; new_session: true starts a fresh one); a busy session is never reused, so parts sent in parallel still get a session each. message arrives verbatim as a user message, and Harness does not see this conversation: make it self-contained, in the user\'s language, the full, explicit spec, asking for tests that cover each requirement. Keep a leading /goal (it sets a Harness goal) and the user\'s goal text as written. For a large task, write a concrete spec (goal, modules and the files each owns, level of detail, acceptance criteria) rather than passing the user\'s words on, and send independent parts to separate sessions in parallel, each owning its own files; wait for them together as each send\'s hint says, review each as it returns and send its fixes at once. With checks, a short request for a sub-agent review table is appended. To a busy session, mode followup queues the message and steer adds it to the running turn; left out, the Harness setting decides.',
     inputSchema: { type: 'object', required: ['message'], properties: { message: str('The task or reply to send'), session_id: str('Existing session to continue'), new_session: { type: 'boolean', description: 'Start a new session even though this conversation has an idle session in that folder: only for an unrelated task, or one that must not see the earlier work' }, cwd: str('Workspace folder for a new session; leave out to use the folder this conversation works in'), workspace_id: str('Harness workspace for a new session (from dsh_list_workspaces)'), mode: { type: 'string', enum: ['followup', 'steer'], description: "followup queues after the current turn; steer injects into a running turn. Omit to follow Harness's busy-send setting" }, model: str('Only when the user names a model for this run (e.g. "DeepSeek-V4 Pro"); else the session keeps its own; a new one takes the plugin page\'s default. Matched ignoring case, spaces, hyphens and a leading DeepSeek; no match or several fails the send with the list (provider/model picks one). Sets this session only'), team: { type: 'boolean', description: 'Only when the user asks for Agent Teams: true turns them on for this session, false off' }, reasoning_effort: str('Only when the user names a reasoning effort, e.g. high; one of the efforts dsh_list_models shows for the model'), checks: { type: 'array', items: { type: 'string' }, description: 'The project\'s own test commands, e.g. npm test, or python -m pytest (a bare pytest is often not on PATH, on Windows especially); never check scripts you write yourself. dsh-baton runs them in the folder when the run ends and returns exit codes and the last output lines as evidence.' } } },
     run: async (a, { meta } = {}) => {
       // A new session goes to this conversation's folder unless the call names another one;
@@ -366,7 +368,7 @@ const TOOLS = [
       }
       const filled = here && !a.cwd && !a.workspace_id
       const folder = here && a.cwd && !within(a.cwd, here)
-        ? { folder_note: `This conversation works in ${here}; the new session was started in ${a.cwd} as asked. If that was not intended, cancel it and send again without cwd.` }
+        ? { folder_note: `This conversation works in ${here}; the task runs in ${a.cwd} as asked. If that was not intended, cancel it and send again without cwd.` }
         : filled ? { cwd: here } : {}
       // The conversation's folder goes along, so a hand-over to a folder inside it joins its workspace.
       const { new_session: fresh, ...given } = a
@@ -399,6 +401,16 @@ const TOOLS = [
           ...st,
           wait_command: waitCommand(st.run_id),
           hint: `Run started. Run wait_command now as a background terminal command and end your turn: Antigravity wakes you when it exits, which is when the run ends or stops to ask the user something; it prints the reply or the questions, with no polling and no turns spent meanwhile. Do not call dsh_wait for it. Several runs: one background wait_command each, so whichever ends first wakes you. ${GOAL_WAIT_HINT('--until turn --every 10m on wait_command')}`,
+        }
+      }
+      // Claude Code: told plainly as well. Offered "otherwise dsh_wait", a conversation that sent
+      // 12 runs at once took one dsh_wait for all of them, timing out and calling again every
+      // 50 s (2026-11-21), where a background wait costs nothing until a run ends.
+      if (isClaudeCode()) {
+        return {
+          ...st,
+          wait_command: waitCommand(st.run_id),
+          hint: `Run started. Run wait_command now with Bash run_in_background: true, then go on with other work, or end your turn if there is none: Claude Code wakes you when it exits, which is when the run ends or stops to ask the user something; it prints the reply or the questions, with no polling and no turns spent meanwhile. Do not call dsh_wait for it. Several runs: one background wait_command each, never one dsh_wait for all, so whichever ends first wakes you. ${GOAL_WAIT_HINT('--until turn --every 10m on wait_command')}`,
         }
       }
       return {

@@ -191,6 +191,6 @@ test('the dsh_send hint tells Claude Code not to also call dsh_wait', async () =
   const project = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-proj-')))
   try {
     const [a] = await session(host, { cwd: project }, [send({})])
-    assert.match(a.hint, /do not also call dsh_wait for it/)
+    assert.match(a.hint, /Do not call dsh_wait for it\./)
   } finally { host.close(); rm(project) }
 })
