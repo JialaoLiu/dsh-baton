@@ -17,6 +17,14 @@ const SKIP_FILES = new Set(['.DS_Store', 'Thumbs.db'])
 const MAX_ENTRIES = 100_000
 const MAX_READ = 3000
 const MAX_TEXT = 512 * 1024
+// Reading is also cut off by time: dsh_send waits for the snapshot, and a slow disk or network
+// folder must not hold it up (the rest keep size and time only).
+const READ_BUDGET_MS = 5000
+// A file whose content is not on this disk: an iCloud Drive (or other cloud) placeholder, with a
+// size but no blocks. Reading it downloads it first, seconds per file: a Desktop folder synced
+// with iCloud held dsh_send for minutes (Mac, 2026-11-22) and pulled the files back down. Such a
+// file is compared by size and time only. Windows reports no blocks, so it is never marked there.
+const notOnDisk = (st) => process.platform !== 'win32' && st.size > 0 && st.blocks === 0
 const CHECK_TIMEOUT_MS = 120_000
 const CHECKS_TOTAL_MS = 180_000
 const TAIL_LINES = 15
@@ -112,7 +120,7 @@ function walk(dir) {
       if (!e.isFile() || SKIP_FILES.has(e.name)) continue
       try {
         const st = fs.statSync(abs)
-        out.push({ rel: path.relative(dir, abs).split(path.sep).join('/'), abs, m: st.mtimeMs, s: st.size })
+        out.push({ rel: path.relative(dir, abs).split(path.sep).join('/'), abs, m: st.mtimeMs, s: st.size, ...(notOnDisk(st) ? { cloud: true } : {}) })
       } catch { /* gone or unreadable: left out */ }
     }
   }
@@ -139,7 +147,11 @@ function snapshot(dir) {
   const { list, truncated } = walk(dir)
   const files = {}
   for (const f of list) files[f.rel] = { m: f.m, s: f.s }
-  for (const f of [...list].sort((a, b) => b.m - a.m).slice(0, MAX_READ)) Object.assign(files[f.rel], readFile(f.abs, f.s) ?? {})
+  const deadline = Date.now() + READ_BUDGET_MS
+  for (const f of [...list].filter((x) => !x.cloud).sort((a, b) => b.m - a.m).slice(0, MAX_READ)) {
+    if (Date.now() > deadline) break
+    Object.assign(files[f.rel], readFile(f.abs, f.s) ?? {})
+  }
   return { files, truncated }
 }
 
@@ -239,7 +251,8 @@ export function collect(home, runId) {
   // At most MAX_READ files are read here too (a run that writes thousands of files gets their
   // paths, not their line counts).
   let reads = 0
-  const read = (f, whole = false) => (reads++ < MAX_READ ? readFile(f.abs, whole ? 0 : f.s) : null)
+  const readUntil = Date.now() + READ_BUDGET_MS
+  const read = (f, whole = false) => (!f.cloud && reads++ < MAX_READ && Date.now() <= readUntil ? readFile(f.abs, whole ? 0 : f.s) : null)
   for (const f of after.list) {
     seen.add(f.rel)
     const b = before[f.rel]

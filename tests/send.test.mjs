@@ -279,3 +279,10 @@ test('checks run in the work folder of a session that opened in a folder contain
   assert.equal(cwdOf('hrun-2'), sub)
   rm(dir); rm(project)
 })
+
+test('a run that completed with a background job still running says so in its hint', async () => {
+  const core = await import('../src/core.mjs')
+  const hint = core.endedHint({ state: 'completed', left_running: [{ kind: 'job', count: 1, labels: ['grep -rl x ~'] }] })
+  assert.match(hint, /left_running: grep -rl x ~/)
+  assert.doesNotMatch(core.endedHint({ state: 'completed' }), /left_running/)
+})

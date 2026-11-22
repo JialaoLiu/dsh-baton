@@ -573,9 +573,11 @@ const APPROVALS_HINT = (list) => ` dsh-baton allowed ${list.length} approval(s) 
 const WORKTREE_HINT = (trees) => (trees.every((w) => w.changes_in === 'changes')
   ? ` The session works in a Git worktree (${trees.map((w) => `${w.path}${w.branch ? `, branch ${w.branch}` : ''}`).join('; ')}): evidence.changes and the checks are from that worktree. Merging that branch is the user's call.`
   : ` The session worked in a new Git worktree (${trees.map((w) => `${w.path}${w.branch ? `, branch ${w.branch}` : ''}`).join('; ')}): its changes are in evidence.worktrees, not evidence.changes, and checks ran in the last one. Merging that branch is the user's call.${trees.some((w) => w.incomplete) ? ' git could not list every change in a worktree marked incomplete: a file missing from its list proves nothing.' : ''}`)
+// A run that completed while a background job of its session still ran (past the host's limit).
+const LEFT_RUNNING_HINT = (left) => ` The run completed while background work it started was still running (left_running: ${left.flatMap((g) => g.labels ?? []).slice(0, 3).join('; ')}): its output is not in final_text. Go on with the reply; only if the task needs that output, look at the session later with dsh_status session_id.`
 export function endedHint(st) {
   const checks = st?.evidence?.checks
-  const shared = (st?.evidence?.same_folder_runs?.length ? SHARED_HINT(st.evidence.same_folder_runs) : '') + (st?.evidence?.changes?.truncated ? TRUNCATED_HINT : '') + (st?.evidence?.worktrees?.length ? WORKTREE_HINT(st.evidence.worktrees) : '') + (st?.approvals_allowed?.length ? APPROVALS_HINT(st.approvals_allowed) : '')
+  const shared = (st?.left_running?.length ? LEFT_RUNNING_HINT(st.left_running) : '') + (st?.evidence?.same_folder_runs?.length ? SHARED_HINT(st.evidence.same_folder_runs) : '') + (st?.evidence?.changes?.truncated ? TRUNCATED_HINT : '') + (st?.evidence?.worktrees?.length ? WORKTREE_HINT(st.evidence.worktrees) : '') + (st?.approvals_allowed?.length ? APPROVALS_HINT(st.approvals_allowed) : '')
   const hint = !checks?.length ? NO_CHECKS_HINT + shared : ENDED_HINT + (checks.some((c) => !c.passed && MISSING_TOOL.test(c.output_tail ?? '')) ? ENV_HINT : '') + shared
   return st?.goal ? `${goalHint(st.goal, st.session_id)} ${hint}` : hint
 }

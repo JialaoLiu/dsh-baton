@@ -24,7 +24,7 @@ Newline-delimited JSON: request `{"id", "method", "params"}`, reply `{"id", "res
 | `answer` | `run_id`, `answers` (`[{ id?, choose?, text?, skip? }]`) |
 | `update_queued` | `run_id`, `action` (`edit` \| `remove` \| `steer`), `message?` (for `edit`) |
 
-`DSH_BATON_SOCKET` / `DSH_BATON_HOME` in the Harness process environment move the socket. `DSH_BATON_AUTO_REGISTER=0` turns off the MCP registration.
+`DSH_BATON_SOCKET` / `DSH_BATON_HOME` in the Harness process environment move the socket. `DSH_BATON_AUTO_REGISTER=0` turns off the MCP registration. A run whose turn has ended waits for its sub-agents until they end, and for background jobs and reminders at most `DSH_BATON_JOB_WAIT_MS` (default 5 minutes); past that it completes with `left_running` (what still runs). Text from a later turn that only a job or reminder started is added after the run's reply instead of replacing it.
 
 The Plugins page reads the registration outcome from `GET /dsh-baton/status` on the Harness web server.
 

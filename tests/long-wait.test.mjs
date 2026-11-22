@@ -332,7 +332,7 @@ test('wait_command prints the evidence its hint points at', async () => {
   const sock = path.join(dir, 'h.sock')
   const server = net.createServer((c) => c.on('data', (d) => {
     const req = JSON.parse(String(d).split('\n')[0])
-    const result = req.method === 'wait' ? { run_id: 'hrun-e', state: 'completed', final_text: 'done' } : { version: '0' }
+    const result = req.method === 'wait' ? { run_id: 'hrun-e', state: 'completed', final_text: 'done', left_running: [{ kind: 'job', count: 1, labels: ['sleep 600'] }] } : { version: '0' }
     c.end(JSON.stringify({ id: req.id, result }) + '\n')
   }))
   await new Promise((r) => server.listen(socketEndpoint(sock), r))
@@ -349,6 +349,8 @@ test('wait_command prints the evidence its hint points at', async () => {
     const st = JSON.parse(out)
     assert.deepEqual(st.evidence.changes.created, [{ path: 'made.py', lines: 1 }])
     assert.match(st.hint, /sent without checks/)
+    assert.deepEqual(st.left_running, [{ kind: 'job', count: 1, labels: ['sleep 600'] }], 'the field its hint names')
+    assert.match(st.hint, /left_running: sleep 600/)
   } finally {
     server.close()
     rm(dir)

@@ -316,3 +316,23 @@ test('a later send to a session already in a worktree: its changes stay in chang
   assert.deepEqual(ev.worktrees, [{ path: wt, branch: 'wt-x', changes_in: 'changes' }])
   assert.equal(ev.checks[0].output_tail, wt)
 })
+
+// A file with a size but no blocks stands in for an iCloud Drive placeholder (a sparse file
+// made with truncate has none on APFS): reading one downloads it, so it is never read.
+test('a file whose content is not on disk (cloud placeholder) is compared by size and time only, not read', { skip: process.platform === 'win32' }, () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-ev-home-'))
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'dshb-ev-cwd-'))
+  fs.writeFileSync(path.join(cwd, 'note.md'), 'a\nb\n')
+  const cloud = path.join(cwd, 'font.ttf')
+  fs.writeFileSync(cloud, '')
+  fs.truncateSync(cloud, 4096)
+  if (fs.statSync(cloud).blocks !== 0) { fs.rmSync(home, { recursive: true, force: true }); fs.rmSync(cwd, { recursive: true, force: true }); return }
+  evidence.prepare(home, { run_id: 'hrun-c', cwd })
+  const snap = JSON.parse(fs.readFileSync(path.join(home, 'evidence', 'hrun-c.before.json'), 'utf8'))
+  assert.equal(snap.files['font.ttf'].hash, undefined, 'not read')
+  assert.equal(snap.files['font.ttf'].s, 4096, 'still listed by size')
+  assert.equal(snap.files['note.md'].lines, 2, 'a file on disk is read as before')
+  const ev = evidence.collect(home, 'hrun-c')
+  assert.deepEqual(ev.changes.modified, [], 'left as it was: not counted')
+  fs.rmSync(home, { recursive: true, force: true }); fs.rmSync(cwd, { recursive: true, force: true })
+})

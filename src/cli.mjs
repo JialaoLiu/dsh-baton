@@ -124,6 +124,8 @@ async function main() {
         ...(st.evidence ? { evidence: st.evidence } : {}),
         // Approvals this plugin allowed during the run (the plugin page's default): the client says what was let through.
         ...(st.approvals_allowed?.length ? { approvals_allowed: st.approvals_allowed } : {}),
+        // Background work still running when the run completed past the host's limit: the hint names it.
+        ...(st.left_running?.length ? { left_running: st.left_running } : {}),
         ...(st.state === 'completed' ? { hint: core.endedHint(st) } : {}),
         // Stopped by the user, cancelled, or cut off by a Harness restart: say so, or the client
         // takes it for a failure in the work and sends it again.

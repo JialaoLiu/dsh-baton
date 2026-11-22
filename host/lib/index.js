@@ -28,6 +28,10 @@ const ACTIVITY_MAX_ERRORS = 10
 // A run taken up after a plugin reload whose message Harness had not admitted yet.
 const TAKE_UP_RETRY_MS = 3000
 const takeUpAdmitMs = () => Number(process.env.DSH_BATON_TAKE_UP_ADMIT_MS) || 5 * 60_000
+// How long a run whose own turn ended waits for background jobs or reminders (not sub-agents,
+// which are part of the task) before it completes anyway, saying what is left (left_running).
+// A search over the whole home folder held a reply back for 15 minutes (Mac, 2026-11-22).
+const jobWaitMs = () => Number(process.env.DSH_BATON_JOB_WAIT_MS) || 5 * 60_000
 const MAX_REQUEST_BYTES = 4 * 1024 * 1024
 const MAX_WAIT_S = 24 * 3600
 const MAX_HUMAN_INPUTS = 10
@@ -257,6 +261,7 @@ export function apply(ctx) {
     ...(run.sender ? { sender: run.sender } : {}),
     ...(run.model ? { model: run.model } : {}),
     ...(run.waitingOn ? { waiting_on: run.waitingOn } : {}),
+    ...(run.leftRunning ? { left_running: run.leftRunning } : {}),
     ...(run.supersededBy ? { superseded_by: run.supersededBy } : {}),
     ...(run.humanInputs?.length ? { human_interjections: run.humanInputs } : {}),
     ...(run.approvalsAllowed?.length ? { approvals_allowed: run.approvalsAllowed } : {}),
@@ -547,7 +552,12 @@ export function apply(ctx) {
       // completed one ends it only once the session is quiet (no sub-agents or jobs
       // left), because Harness wakes the agent again when those report back.
       const reason = data.reason ?? null
-      for (const run of receivers) { run.turnEnd = reason; persist(run) }
+      for (const run of receivers) {
+        // The reply of the run's own turn, kept apart from what later wake-up turns say.
+        if (!run.turnEnd && (!reason?.kind || reason.kind === 'completed')) run.turnText = run.finalText ?? null
+        run.turnEnd = reason
+        persist(run)
+      }
       if (reason?.kind && reason.kind !== 'completed') for (const run of receivers) settle(run, 'failed')
       else scheduleQuietCheck(session.id, 1000)
       turns.delete(session.id)
@@ -597,8 +607,16 @@ export function apply(ctx) {
     // Closed runs: the running turn belongs to a newer run, so only their
     // background work (sub-agents, jobs, reminders) keeps them open.
     const background = items.filter((g) => g.kind !== 'turn')
+    // Only jobs or reminders left, past the limit since the run's own turn ended: done anyway.
+    const outlasted = (run) => {
+      if (!background.length || items.some((g) => g.kind === 'turn' || g.kind === 'subagent')) { delete run.jobsSince; return false }
+      run.jobsSince ??= Date.now()
+      return Date.now() - run.jobsSince >= jobWaitMs()
+    }
     for (const run of receivers.filter((r) => r.outputClosed)) {
-      if (background.length === 0) settle(run, 'completed', { waitingOn: null, error: null })
+      noteWaited(run, background)
+      if (background.length === 0) finishQuiet(run)
+      else if (outlasted(run)) finishQuiet(run, { leftRunning: summary(background) })
       else { run.waitingOn = summary(background); persist(run) }
     }
     // A run whose own turn has not ended (and that has not seen the agent idle) is not done yet.
@@ -615,12 +633,32 @@ export function apply(ctx) {
         return
       }
       quietSinceBySession.delete(sessionId)
-      for (const run of open) settle(run, 'completed', { waitingOn: null, error: null })
+      for (const run of open) finishQuiet(run)
       return
     }
     quietSinceBySession.delete(sessionId)
-    for (const run of open) run.waitingOn = items.length ? summary(items) : run.waitingOn
+    for (const run of open) noteWaited(run, items)
+    const late = open.filter((r) => r.turnEnd && outlasted(r))
+    for (const run of late) finishQuiet(run, { leftRunning: summary(background) })
+    for (const run of open.filter((r) => !late.includes(r))) run.waitingOn = items.length ? summary(items) : run.waitingOn
     if (receiversFor(sessionId).length) scheduleQuietCheck(sessionId, 3000)
+  }
+
+  // The kinds of background work a run has waited for, to tell what its later turns are about.
+  function noteWaited(run, list) {
+    const kinds = list.map((g) => g.kind).filter((k) => k !== 'turn' && !(run.waitedKinds ?? []).includes(k))
+    if (kinds.length) run.waitedKinds = [...(run.waitedKinds ?? []), ...kinds]
+  }
+  // A run that waited for sub-agents ends with their summary turn as its reply. One that waited
+  // only for jobs or reminders keeps its own turn's reply, with what the later turns said after it:
+  // a turn woken by a job is about that job, and replacing the reply with it lost a whole
+  // review (Antigravity, 2026-11-22).
+  function finishQuiet(run, extra = {}) {
+    const reply = run.turnText
+    const later = run.finalText
+    const kinds = run.waitedKinds ?? []
+    const keep = reply && later && later !== reply && kinds.length && !kinds.includes('subagent')
+    settle(run, 'completed', { waitingOn: null, error: null, ...(keep ? { finalText: `${reply}\n\n${later}` } : {}), ...extra })
   }
 
   ctx.effect(() => () => { for (const t of quietTimers.values()) clearTimeout(t) }, 'dsh-baton-host quiet timers')

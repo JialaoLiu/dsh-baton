@@ -426,6 +426,63 @@ test('a run waits for sub-agents before completing', async (t) => {
   assert.equal(done.final_text, 'all children done')
 })
 
+// A background job (a test run, a build, a search) wakes the agent when it ends for a turn that
+// is about the job, not about the task: that turn's text goes after the reply, not in its place.
+test('a run that waited only on a background job keeps its reply; the job follow-up comes after it', async (t) => {
+  let busyUntil = Date.now() + 2500
+  const h = startHost({ activity: () => (Date.now() < busyUntil ? [{ kind: 'job', items: [{ id: 'j', label: 'npm test' }] }] : []) })
+  t.after(h.close); await h.ready
+  const s = S('s1')
+  const run = await h.call('send', { session_id: 's1', message: 'review it' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId))
+  h.emit(...s.text('the full review')); h.emit(...s.turnEnd()); h.emit(...s.status('idle'))
+  await sleep(500)
+  const mid = await h.call('status', { run_id: run.run_id })
+  assert.equal(mid.state, 'running')
+  assert.equal(mid.waiting_on[0].kind, 'job')
+  setTimeout(() => { h.emit(...s.status('running')); h.emit(...s.text('that job ended')); h.emit(...s.turnEnd()); h.emit(...s.status('idle')) }, 2600)
+  const done = await h.call('wait', { run_id: run.run_id, timeout_s: 10 })
+  assert.equal(done.state, 'completed')
+  assert.equal(done.final_text, 'the full review\n\nthat job ended')
+})
+
+// A job that does not end (a search over the whole home folder ran for 15 minutes, Mac,
+// 2026-11-22) must not hold the reply back: past the limit the run completes, saying what is left.
+test('a background job still running long after the turn ended does not hold the run open', async (t) => {
+  process.env.DSH_BATON_JOB_WAIT_MS = '1500'
+  t.after(() => { delete process.env.DSH_BATON_JOB_WAIT_MS })
+  const h = startHost({ activity: () => [{ kind: 'job', items: [{ id: 'j', label: 'grep -rl x ~' }] }] })
+  t.after(h.close); await h.ready
+  const s = S('s1')
+  const run = await h.call('send', { session_id: 's1', message: 'review it' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId))
+  h.emit(...s.text('the full review')); h.emit(...s.turnEnd()); h.emit(...s.status('idle'))
+  const done = await h.call('wait', { run_id: run.run_id, timeout_s: 15 })
+  assert.equal(done.state, 'completed')
+  assert.equal(done.final_text, 'the full review')
+  assert.deepEqual(done.left_running, [{ kind: 'job', count: 1, labels: ['grep -rl x ~'] }])
+  assert.equal(done.waiting_on, undefined)
+})
+
+// Sub-agents are part of the task: the run waits for them however long they take.
+test('sub-agents still running are waited for past the job limit', async (t) => {
+  process.env.DSH_BATON_JOB_WAIT_MS = '500'
+  t.after(() => { delete process.env.DSH_BATON_JOB_WAIT_MS })
+  let busyUntil = Date.now() + 3500
+  const h = startHost({ activity: () => (Date.now() < busyUntil ? [{ kind: 'subagent', items: [{ id: 'c', label: 'child' }] }] : []) })
+  t.after(h.close); await h.ready
+  const s = S('s1')
+  const run = await h.call('send', { session_id: 's1', message: 'fan out' })
+  h.emit(...s.turnStart()); h.emit(...s.userMessage(h.calls.prompt[0].requestId))
+  h.emit(...s.text('started children')); h.emit(...s.turnEnd()); h.emit(...s.status('idle'))
+  await sleep(2000)
+  assert.equal((await h.call('status', { run_id: run.run_id })).state, 'running')
+  setTimeout(() => { h.emit(...s.status('running')); h.emit(...s.text('all children done')); h.emit(...s.turnEnd()); h.emit(...s.status('idle')) }, 1700)
+  const done = await h.call('wait', { run_id: run.run_id, timeout_s: 10 })
+  assert.equal(done.final_text, 'all children done', 'a sub-agent summary is the reply')
+  assert.equal(done.left_running, undefined)
+})
+
 test('a failed turn fails the run', async (t) => {
   const h = startHost(); t.after(h.close); await h.ready
   const s = S('s1')
